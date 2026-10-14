@@ -101,7 +101,7 @@ function buildEnumMarkdownDocs(): string {
     '- **Tự động điền Bot khi bắt đầu trận hoặc hết thời gian chờ (`game_start` / `matchmaking_timeout` / `fill_bots_and_start`):** Mặc định `autoFillBots: true, minPlayers: 4` (hoặc truyền `botCount: 3`). Nếu phòng chỉ có 1 người chơi, Server tự động thêm **3 AI Bot** để đủ bàn 4 người và broadcast `bots_auto_filled` (`SYS_MATCHMAKING_BOTS_FILLED`).',
     '- **Chủ phòng thêm Bot thủ công (`add_bot`):** Emit `{ roomId, difficulty: "EASY" | "NORMAL" | "HARD", botName?, avatar? }` ➔ Broadcast `bot_added` & `user_joined` (`SYS_BOT_JOINED_ROOM`).',
     '- **Chủ phòng xóa Bot (`remove_bot` hoặc `kick_player`):** Emit `{ roomId, botSocketId? }` ➔ Broadcast `bot_removed` & `user_left` (`SYS_BOT_REMOVED_FROM_ROOM`).',
-    '- **Hành vi thông minh của Bot:** Luôn `isReady: true`, mỗi Bot tự động tạo/chọn **một sound biến thể riêng biệt** (cùng luồng chủ đề/từ khóa/thời lượng với sound gốc trên CDN kèm hệ số `botPitch` & `botSpeed`, tuyệt đối không phát lại y nguyên file gốc) theo độ khó (`EASY`: 50-73đ, `NORMAL`: 68-88đ, `HARD`: 82-97đ), tự động đồng ý skip Showdown và tự động Ready qua vòng mới.'
+    '- **Hành vi thông minh của Bot:** Luôn `isReady: true`, mỗi Bot lấy **chính `targetSound` (sound gốc)** và biến đổi theo 3 mode (`EASY` / Yếu: biến đổi nhiều + nhiều tạp âm/rè mic/hụt hơi, `NORMAL` / Thông thường: biến đổi vừa + tạp âm nền tự nhiên, `HARD` / Khó: biến đổi rất ít + tạp âm cực thấp bám sát bản gốc), lưu Buffer WAV vào `audioStore` (`/api/attempts/:roomId/:socketId`), trả kèm `botAudioEffects` và chấm điểm qua `evaluateMimicAttempt` như 1 User thông thường.'
   ].join('\n');
 }
 

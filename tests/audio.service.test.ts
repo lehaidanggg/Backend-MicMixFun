@@ -6,7 +6,9 @@ import {
   getAllDownloadedSounds,
   getSoundDuration,
   getSoundUrl,
-  resolveSoundFile
+  normalizeBotDifficulty,
+  resolveSoundFile,
+  transformTargetSoundForBot
 } from '../src/services/audio.service';
 
 test('Audio Service — Matrix Test: getSoundUrl', () => {
@@ -152,4 +154,36 @@ test('Audio Service — Matrix Test: getAllDownloadedSounds & getSoundDuration',
       assert.equal(dur, 4.0, `[Matrix Fail] ${row.caseName}`);
     }
   }
+});
+
+test('Audio Service — Matrix Test: normalizeBotDifficulty & transformTargetSoundForBot (EASY / NORMAL / HARD)', () => {
+  assert.equal(normalizeBotDifficulty('WEAK'), 'EASY');
+  assert.equal(normalizeBotDifficulty('YEU'), 'EASY');
+  assert.equal(normalizeBotDifficulty('EASY'), 'EASY');
+  assert.equal(normalizeBotDifficulty('NORMAL'), 'NORMAL');
+  assert.equal(normalizeBotDifficulty('THONG_THUONG'), 'NORMAL');
+  assert.equal(normalizeBotDifficulty('HARD'), 'HARD');
+  assert.equal(normalizeBotDifficulty('KHO'), 'HARD');
+
+  const easy = transformTargetSoundForBot('animals/cat-two.mp3', 'animals', 'EASY', 101);
+  const normal = transformTargetSoundForBot('animals/cat-two.mp3', 'animals', 'NORMAL', 202);
+  const hard = transformTargetSoundForBot('animals/cat-two.mp3', 'animals', 'HARD', 303);
+
+  // All modes transform the exact original targetSound (not a different sound file)
+  assert.equal(easy.sound.relativePath, 'animals/cat-two.mp3');
+  assert.equal(normal.sound.relativePath, 'animals/cat-two.mp3');
+  assert.equal(hard.sound.relativePath, 'animals/cat-two.mp3');
+
+  // Noise & distortion scale strictly from HARD < NORMAL < EASY
+  assert.ok(hard.effects.noiseLevel < normal.effects.noiseLevel, 'HARD should have less noise than NORMAL');
+  assert.ok(normal.effects.noiseLevel < easy.effects.noiseLevel, 'NORMAL should have less noise than EASY');
+  assert.ok(hard.effects.distortion < normal.effects.distortion, 'HARD should have less distortion than NORMAL');
+  assert.ok(normal.effects.distortion < easy.effects.distortion, 'NORMAL should have less distortion than EASY');
+  assert.ok(hard.effects.startDelayMs < normal.effects.startDelayMs);
+  assert.ok(normal.effects.startDelayMs < easy.effects.startDelayMs);
+
+  // Valid WAV buffer & RIFF header generated for each bot
+  assert.equal(easy.audioBuffer.subarray(0, 4).toString('ascii'), 'RIFF');
+  assert.equal(normal.audioBuffer.subarray(0, 4).toString('ascii'), 'RIFF');
+  assert.equal(hard.audioBuffer.subarray(0, 4).toString('ascii'), 'RIFF');
 });

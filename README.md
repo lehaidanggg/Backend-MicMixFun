@@ -37,6 +37,8 @@ backend/
 ├── server.js                       # Entry point chính khởi chạy Server
 ├── API_DOCS.md                     # Tài liệu chi tiết REST API & Socket.IO Events
 ├── CLIENT_OPTIMIZATION_GUIDE.md    # Hướng dẫn tối ưu tải & bảo mật cho Client (Android)
+├── ENUM_LOCALIZATION_GUIDE.md      # Bảng tra cứu mã Enum đa ngôn ngữ (VI / EN)
+├── BOT_SOUND_GENERATION_PLAN.md    # Kế hoạch thiết kế & đối chiếu cơ chế tạo âm thanh AI Bot
 └── package.json                    # Khai báo dependencies & scripts
 ```
 

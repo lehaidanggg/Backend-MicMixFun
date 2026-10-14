@@ -85,6 +85,24 @@ export interface EvaluationResult {
   remark: string;
 }
 
+export type BotDifficulty = 'EASY' | 'NORMAL' | 'HARD';
+
+export type BotNoiseType = 'clean_mic' | 'room_ambience' | 'mic_static_and_breath';
+
+export interface BotAudioEffects {
+  difficulty: BotDifficulty;
+  baseSoundUrl: string;
+  pitch: number;
+  speed: number;
+  noiseLevel: number;
+  noiseType: BotNoiseType;
+  distortion: number;
+  tremoloDepth: number;
+  dropoutCount: number;
+  startDelayMs: number;
+  bandpassHz: [number, number];
+}
+
 export interface PlayerAttempt {
   audioUrl: string | null;
   audioStreamUrl?: string | null;
@@ -93,11 +111,10 @@ export interface PlayerAttempt {
   botSoundFileName?: string | null;
   botPitch?: number | null;
   botSpeed?: number | null;
+  botAudioEffects?: BotAudioEffects | null;
   evaluation: EvaluationResult;
   submittedAt?: number;
 }
-
-export type BotDifficulty = 'EASY' | 'NORMAL' | 'HARD';
 
 export interface GamePlayer {
   socketId: string;

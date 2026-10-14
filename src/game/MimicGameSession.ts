@@ -1,5 +1,11 @@
 import { Server } from 'socket.io';
-import { getSoundDuration, resolveSoundFile, getSoundUrl, pickBotVariantSound } from '../services/audio.service';
+import {
+  getSoundDuration,
+  resolveSoundFile,
+  getSoundUrl,
+  normalizeBotDifficulty,
+  transformTargetSoundForBot
+} from '../services/audio.service';
 import { AiRemarkCode, ErrorCode, GameMessageCode } from '../config/messages';
 import { GAME_STATES, STATE_LABELS, SOUND_PACKS, AI_REMARKS } from './soundPacks';
 import {
@@ -62,7 +68,7 @@ export class MimicGameSession {
     userId: string | null = null,
     isAuthenticated = false,
     isBot = false,
-    botDifficulty: BotDifficulty | null = null
+    botDifficulty: BotDifficulty | string | null = null
   ): { restored: boolean; totalScore: number } {
     const savedState = (!isBot && userId && isAuthenticated) ? this.disconnectedPlayers.get(userId) : null;
 
@@ -100,7 +106,7 @@ export class MimicGameSession {
         avatar: avatar || (isBot ? '🤖' : '🎧'),
         role,
         isBot: Boolean(isBot),
-        botDifficulty: isBot ? (botDifficulty || 'NORMAL') : null,
+        botDifficulty: isBot ? normalizeBotDifficulty(botDifficulty) : null,
         totalScore: 0,
         isReady: isBot
           ? true
@@ -512,111 +518,72 @@ export class MimicGameSession {
   }
 
   /**
-   * Mô phỏng bài dự thi nhại âm cho AI Bot dựa trên độ khó (EASY / NORMAL / HARD)
-   * Mỗi Bot sẽ tự chọn 1 sound biến thể riêng biệt (flow theo cùng chủ đề/từ khóa/thời lượng với sound gốc, KHÔNG dùng lại y nguyên sound gốc)
+   * Mô phỏng bài dự thi nhại âm cho AI Bot dựa trên 3 mode độ khó (EASY: Yếu / NORMAL: Thông thường / HARD: Khó)
+   * Bot lấy chính `targetSound` (sound gốc) rồi biến đổi cao độ, tốc độ, trộn tạp âm/tiếng ồn, lưu vào `audioStore`
+   * và chấm điểm qua `evaluateMimicAttempt` giống hệt 1 User thông thường.
    */
   simulateBotAttempt(
     bot: GamePlayer,
-    excludeRelativePaths: Set<string> = new Set(),
+    _excludeRelativePaths: Set<string> = new Set(),
     botIndex = 0
   ): EvaluationResult {
-    const difficulty = bot.botDifficulty || 'NORMAL';
-    let minScore = 68;
-    let maxScore = 88;
-    if (difficulty === 'EASY') {
-      minScore = 50;
-      maxScore = 73;
-    } else if (difficulty === 'HARD') {
-      minScore = 82;
-      maxScore = 97;
-    }
-
-    const randInRange = (min: number, max: number): number =>
-      Math.floor(min + Math.random() * (max - min + 1));
-
-    const pitchScore = Math.min(99, Math.max(35, randInRange(minScore - 3, maxScore + 2)));
-    const rhythmScore = Math.min(98, Math.max(35, randInRange(minScore - 2, maxScore + 1)));
-    const energyScore = Math.min(100, Math.max(35, randInRange(minScore - 2, maxScore + 3)));
-    const totalScore = Math.round(pitchScore * 0.4 + rhythmScore * 0.35 + energyScore * 0.25);
-
-    let grade = 'B';
-    let remark = '';
-    if (totalScore >= 90) {
-      grade = 'S';
-      remark = AI_REMARKS.legendary[Math.floor(Math.random() * AI_REMARKS.legendary.length)];
-    } else if (totalScore >= 75) {
-      grade = 'A';
-      remark = AI_REMARKS.good[Math.floor(Math.random() * AI_REMARKS.good.length)];
-    } else if (totalScore >= 55) {
-      grade = 'B';
-      remark = AI_REMARKS.funny[Math.floor(Math.random() * AI_REMARKS.funny.length)];
-    } else {
-      grade = 'C';
-      remark = AI_REMARKS.funny[Math.floor(Math.random() * AI_REMARKS.funny.length)];
-    }
-
-    const evaluation: EvaluationResult = {
-      totalScore,
-      pitchScore,
-      rhythmScore,
-      energyScore,
-      grade,
-      remark
-    };
+    const difficulty = normalizeBotDifficulty(bot.botDifficulty);
+    bot.botDifficulty = difficulty;
 
     const baseSound = this.targetSound || SOUND_PACKS[0].sounds[0];
     const basePackId = (this.selectedPack && this.selectedPack.id) || SOUND_PACKS[0].id;
     const seed =
-      botIndex * 17 +
-      this.currentRound * 31 +
+      (botIndex + 1) * 37 +
+      this.currentRound * 53 +
       Array.from(bot.socketId).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
 
-    const variant = pickBotVariantSound(
+    const transformed = transformTargetSoundForBot(
       baseSound.relativePath || baseSound.fileName,
       basePackId,
       difficulty,
-      excludeRelativePaths,
       seed
     );
-    if (variant.sound && variant.sound.relativePath) {
-      excludeRelativePaths.add(variant.sound.relativePath);
-    }
 
-    const botAudioUrl = variant.sound ? variant.sound.url : this.getTargetSoundUrl(baseSound);
+    // Lưu Buffer âm thanh đã biến đổi của Bot vào audioStore giống hệt người chơi thật
+    this.audioStore.set(bot.socketId, {
+      buffer: transformed.audioBuffer,
+      mimeType: transformed.mimeType,
+      updatedAt: Date.now()
+    });
+
+    // Chấm điểm bằng chính hàm evaluateMimicAttempt như 1 user thông thường
+    const evaluation = this.evaluateMimicAttempt(transformed.audioBase64, transformed.metrics);
+
+    const streamUrl = `/api/attempts/${encodeURIComponent(this.roomId)}/${encodeURIComponent(bot.socketId)}?r=${this.currentRound}`;
+    const attemptAudioUrl = `${streamUrl}&b=${botIndex}&t=${Date.now()}`;
+
     bot.roundScore = evaluation.totalScore;
     bot.totalScore += evaluation.totalScore;
     bot.currentAttempt = {
-      audioUrl: botAudioUrl || null,
-      audioStreamUrl: botAudioUrl || null,
-      mimeType: 'audio/mpeg',
-      botSoundId: variant.sound ? variant.sound.id : null,
-      botSoundFileName: variant.sound ? variant.sound.fileName : null,
-      botPitch: variant.pitch,
-      botSpeed: variant.speed,
+      audioUrl: attemptAudioUrl,
+      audioStreamUrl: streamUrl,
+      mimeType: transformed.mimeType,
+      botSoundId: transformed.sound.id,
+      botSoundFileName: transformed.sound.fileName,
+      botPitch: transformed.pitch,
+      botSpeed: transformed.speed,
+      botAudioEffects: transformed.effects,
       evaluation,
       submittedAt: Date.now()
     };
 
     console.log(
-      `[MimicGame:${this.roomId}] 🤖 ${bot.userName} (${difficulty}) nộp sound biến thể "${variant.sound?.relativePath}" (pitch=${variant.pitch}, speed=${variant.speed}): ${evaluation.totalScore}đ (${evaluation.grade})`
+      `[MimicGame:${this.roomId}] 🤖 ${bot.userName} (${difficulty}) nộp bản biến đổi từ sound gốc "${transformed.sound.relativePath}" (pitch=${transformed.pitch}, speed=${transformed.speed}, noise=${transformed.effects.noiseLevel}): ${evaluation.totalScore}đ (${evaluation.grade})`
     );
     return evaluation;
   }
 
   simulateAllBotsAttempts(): void {
-    const usedBotPaths = new Set<string>();
-    for (const player of this.players.values()) {
-      if (player.isBot && player.currentAttempt && player.currentAttempt.botSoundFileName) {
-        const resolved = resolveSoundFile(player.currentAttempt.botSoundFileName);
-        if (resolved) usedBotPaths.add(resolved.relativePath);
-      }
-    }
-
     let idx = 0;
     for (const player of this.players.values()) {
       if (player.isBot) {
         if (player.currentAttempt === null) {
-          this.simulateBotAttempt(player, usedBotPaths, idx);
+          this.simulateBotAttempt(player, new Set(), idx);
         }
         idx++;
       }
@@ -793,6 +760,7 @@ export class MimicGameSession {
       botSoundFileName: (p.currentAttempt && p.currentAttempt.botSoundFileName) || null,
       botPitch: (p.currentAttempt && p.currentAttempt.botPitch) || null,
       botSpeed: (p.currentAttempt && p.currentAttempt.botSpeed) || null,
+      botAudioEffects: (p.currentAttempt && p.currentAttempt.botAudioEffects) || null,
       evaluation: p.currentAttempt ? p.currentAttempt.evaluation : null
     })).sort((a, b) => b.roundScore - a.roundScore);
 

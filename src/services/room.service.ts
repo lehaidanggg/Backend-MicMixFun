@@ -2,6 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { ROOM_CLEANUP_DELAY_MS, CHALLENGE_TTL_MS, MAX_MEMBERS_PER_ROOM } from '../config/constants';
 import { ErrorCode, RoomCloseReasonCode, SystemMessageCode } from '../config/messages';
 import { challengeNonces } from './auth.service';
+import { normalizeBotDifficulty } from './audio.service';
 import { MimicGameSession } from '../game/MimicGameSession';
 import { BotDifficulty, MatchmakingQueueEntry, RoomData, RoomMember } from '../types';
 
@@ -59,7 +60,7 @@ export function isBotMember(member?: Partial<RoomMember> | null): boolean {
  */
 export function addBotToRoom(
   roomId: string,
-  options: { difficulty?: BotDifficulty; botName?: string; avatar?: string } = {}
+  options: { difficulty?: BotDifficulty | string; botName?: string; avatar?: string } = {}
 ): {
   success: boolean;
   code?: ErrorCode;
@@ -87,9 +88,7 @@ export function addBotToRoom(
     };
   }
 
-  const rawDiff = String(options.difficulty || 'NORMAL').toUpperCase();
-  const difficulty: BotDifficulty =
-    rawDiff === 'EASY' || rawDiff === 'HARD' ? (rawDiff as BotDifficulty) : 'NORMAL';
+  const difficulty: BotDifficulty = normalizeBotDifficulty(options.difficulty);
 
   const existingNames = new Set(Array.from(room.members.values()).map(m => m.userName));
   const availablePreset =
@@ -232,7 +231,7 @@ export function fillRoomWithBots(
   options: {
     botCount?: number;
     minPlayers?: number;
-    difficulty?: BotDifficulty;
+    difficulty?: BotDifficulty | string;
   } = {}
 ): {
   botsAdded: number;
@@ -261,10 +260,9 @@ export function fillRoomWithBots(
   }
 
   for (let i = 0; i < countToAdd; i++) {
-    const diff: BotDifficulty =
-      options.difficulty && ['EASY', 'NORMAL', 'HARD'].includes(String(options.difficulty).toUpperCase())
-        ? (String(options.difficulty).toUpperCase() as BotDifficulty)
-        : difficultiesCycle[i % difficultiesCycle.length];
+    const diff: BotDifficulty = options.difficulty
+      ? normalizeBotDifficulty(options.difficulty)
+      : difficultiesCycle[i % difficultiesCycle.length];
 
     const res = addBotToRoom(targetId, { difficulty: diff });
     if (!res.success || !res.bot) break;

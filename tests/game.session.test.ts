@@ -337,7 +337,7 @@ test('MimicGameSession — AI Bot Lifecycle & Difficulty Scoring Matrix (EASY / 
   assert.ok(normAttempt && normAttempt.evaluation.totalScore >= 63 && normAttempt.evaluation.totalScore <= 92);
   assert.ok(hardAttempt && hardAttempt.evaluation.totalScore >= 78 && hardAttempt.evaluation.totalScore <= 99);
 
-  // Verify each bot generated a DIFFERENT sound flowing with the target sound (not the exact original target sound, and all 3 bots have distinct sounds)
+  // Verify each bot transformed the original target sound, saved its buffer to audioStore like a real user, and has distinct stream URLs & effects
   const targetUrl = game.getTargetSoundUrl(game.targetSound);
   assert.notEqual(easyAttempt?.audioUrl, targetUrl, 'Bot Easy must not reuse exact target sound URL');
   assert.notEqual(normAttempt?.audioUrl, targetUrl, 'Bot Normal must not reuse exact target sound URL');
@@ -345,6 +345,17 @@ test('MimicGameSession — AI Bot Lifecycle & Difficulty Scoring Matrix (EASY / 
   const uniqueBotUrls = new Set([easyAttempt?.audioUrl, normAttempt?.audioUrl, hardAttempt?.audioUrl]);
   assert.equal(uniqueBotUrls.size, 3, 'All 3 bots must have distinct sound URLs');
   assert.ok(typeof easyAttempt?.botPitch === 'number' && typeof easyAttempt?.botSpeed === 'number');
+  assert.equal(easyAttempt?.botAudioEffects?.baseSoundUrl, targetUrl);
+  assert.equal(normAttempt?.botAudioEffects?.baseSoundUrl, targetUrl);
+  assert.equal(hardAttempt?.botAudioEffects?.baseSoundUrl, targetUrl);
+  assert.ok(
+    hardAttempt!.botAudioEffects!.noiseLevel < normAttempt!.botAudioEffects!.noiseLevel &&
+      normAttempt!.botAudioEffects!.noiseLevel < easyAttempt!.botAudioEffects!.noiseLevel,
+    'Noise level must scale HARD < NORMAL < EASY'
+  );
+  assert.ok(game.getAttemptAudio('bot_easy')?.buffer.length, 'Bot Easy audio buffer stored in audioStore');
+  assert.ok(game.getAttemptAudio('bot_norm')?.buffer.length, 'Bot Normal audio buffer stored in audioStore');
+  assert.ok(game.getAttemptAudio('bot_hard')?.buffer.length, 'Bot Hard audio buffer stored in audioStore');
 
   // 3. When the single human player submits, all players have submitted -> jumps immediately to AI_SCORING
   const sampleAudio = 'data:audio/webm;base64,' + crypto.randomBytes(800).toString('base64');
