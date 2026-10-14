@@ -83,10 +83,13 @@ Khi văn bản mô tả chứa `{key}`, Client thay thế `{key}` bằng giá tr
 | `GAME_ALREADY_SUBMITTED_THIS_ROUND` | _Không_ | Bạn đã nộp bài trong vòng này rồi! | You have already submitted your recording for this round. | Nộp bài thu âm lần 2 trong cùng 1 vòng |
 | `GAME_NOT_IN_SHOWDOWN_PHASE` | _Không_ | Chưa tới giai đoạn Showdown Reveal! | Not currently in the Showdown Reveal phase. | `confirm_showdown_skip` ngoài pha `SHOWDOWN_REVEAL` |
 | `GAME_NOT_IN_READY_PHASE` | _Không_ | Chưa tới giai đoạn xác nhận sẵn sàng qua vòng! | Not currently in the Round Result or Game Over ready phase. | `confirm_next_round_ready` ngoài pha `ROUND_RESULT`/`GAME_OVER` |
+| `BOT_HOST_ONLY_MANAGE` | _Không_ | Chỉ có Chủ phòng mới có quyền thêm hoặc xóa Bot AI! | Only the room Host can add or remove AI Bots. | `add_bot` hoặc `remove_bot` bởi người không phải Host |
+| `BOT_CANNOT_MANAGE_IN_PROGRESS` | _Không_ | Không thể thêm hoặc xóa Bot khi trận đấu đang diễn ra! | Cannot add or remove AI Bots while a match is in progress. | `add_bot` hoặc `remove_bot` khi state khác `IDLE`/`GAME_OVER` |
+| `BOT_NOT_FOUND` | _Không_ | Không tìm thấy Bot AI trong phòng! | AI Bot not found in the room. | `remove_bot` khi phòng không có Bot |
 
 ---
 
-## 3. Bảng Mapping `SystemMessageCode` (10 mã thông báo phòng)
+## 3. Bảng Mapping `SystemMessageCode` (12 mã thông báo phòng)
 
 | Enum Code | Sự kiện Socket | Tham số (`params`) | Tiếng Việt (`vi`) | Tiếng Anh (`en`) |
 | :--- | :--- | :--- | :--- | :--- |
@@ -100,6 +103,9 @@ Khi văn bản mô tả chứa `{key}`, Client thay thế `{key}` bằng giá tr
 | `SYS_SOUND_TRIGGERED` | `receive_message` (`type="sound_trigger"`) | `{ soundId: string, soundName: string }` | đã phát âm thanh "{soundName}" | played sound "{soundName}" |
 | `SYS_AUDIO_CLIP_SHARED` | `receive_message` (`type="audio_share"`) | _Không_ | đã chia sẻ một đoạn ghi âm giọng nói 🎙️ | shared a voice recording clip 🎙️ |
 | `SYS_GAME_CONFIG_UPDATED` | `game_config_changed` | `{ totalRounds: number, recordDuration: number }` | ⚙️ Chủ phòng đã cập nhật: {totalRounds} vòng, thời gian nhại {recordDuration}s! | ⚙️ Host updated config: {totalRounds} rounds, {recordDuration}s recording time! |
+| `SYS_BOT_JOINED_ROOM` | `bot_added` & `user_joined` | `{ botName: string, difficulty: "EASY" \| "NORMAL" \| "HARD" }` | 🤖 Bot {botName} đã tham gia phòng đấu! | 🤖 Bot {botName} joined the room! |
+| `SYS_BOT_REMOVED_FROM_ROOM` | `bot_removed` & `user_left` | `{ botName: string }` | 🤖 Bot {botName} đã rời khỏi phòng. | 🤖 Bot {botName} was removed from the room. |
+| `SYS_MATCHMAKING_BOTS_FILLED` | `bots_auto_filled` | `{ botsAdded: number, totalPlayers: number }` | 🤖 Không tìm thấy người chơi khác — Hệ thống đã tự động thêm {botsAdded} Bot AI vào phòng để bắt đầu trận đấu! | 🤖 No other players found — Automatically added {botsAdded} AI Bots to start the match! |
 
 ---
 
@@ -221,6 +227,9 @@ object ServerEnumLocalizer {
         "GAME_ALREADY_SUBMITTED_THIS_ROUND" to "Bạn đã nộp bài trong vòng này rồi!",
         "GAME_NOT_IN_SHOWDOWN_PHASE" to "Chưa tới giai đoạn Showdown Reveal!",
         "GAME_NOT_IN_READY_PHASE" to "Chưa tới giai đoạn xác nhận sẵn sàng qua vòng!",
+        "BOT_HOST_ONLY_MANAGE" to "Chỉ có Chủ phòng mới có quyền thêm hoặc xóa Bot AI!",
+        "BOT_CANNOT_MANAGE_IN_PROGRESS" to "Không thể thêm hoặc xóa Bot khi trận đấu đang diễn ra!",
+        "BOT_NOT_FOUND" to "Không tìm thấy Bot AI trong phòng!",
 
         // SystemMessageCode
         "SYS_HOST_JOINED_ROOM" to "👑 Chủ phòng {userName} đã tham gia phòng!",
@@ -233,6 +242,9 @@ object ServerEnumLocalizer {
         "SYS_SOUND_TRIGGERED" to "đã phát âm thanh \"{soundName}\"",
         "SYS_AUDIO_CLIP_SHARED" to "đã chia sẻ một đoạn ghi âm giọng nói 🎙️",
         "SYS_GAME_CONFIG_UPDATED" to "⚙️ Chủ phòng đã cập nhật: {totalRounds} vòng, thời gian nhại {recordDuration}s!",
+        "SYS_BOT_JOINED_ROOM" to "🤖 Bot {botName} đã tham gia phòng đấu!",
+        "SYS_BOT_REMOVED_FROM_ROOM" to "🤖 Bot {botName} đã rời khỏi phòng.",
+        "SYS_MATCHMAKING_BOTS_FILLED" to "🤖 Không tìm thấy người chơi khác — Hệ thống đã tự động thêm {botsAdded} Bot AI vào phòng để bắt đầu trận đấu!",
 
         // GameMessageCode
         "GAME_MSG_PREPARE_RECORDING" to "Lấy hơi! Chuẩn bị micro để nhại lại trong {countdown} giây...",
@@ -352,3 +364,129 @@ object ServerEnumLocalizer {
 | `crazy-whistle` | `SOUND_NAME_CRAZY_WHISTLE` | `SOUND_HINT_CRAZY_WHISTLE` | 😗 | Tiếng Huýt Sáo Vui Nhộn — Huýt sáo luyến láy lên xuống! | Crazy Whistle — Slide whistle up and down! |
 | `baby-giggle` | `SOUND_NAME_BABY_GIGGLE` | `SOUND_HINT_BABY_GIGGLE` | 👶 | Em Bé Cười Khúc Khích — Cười giọng cao "Hí hí ha ha"! | Baby Giggle — High-pitched innocent "Hehehe-hahaha"! |
 | `whip-crack` | `SOUND_NAME_WHIP_CRACK` | `SOUND_HINT_WHIP_CRACK` | 🤠 | Tiếng Quất Roi — Hít gió "Vút — CHÁT!" thật đanh! | Whip Crack — Fast whoosh followed by a sharp "CRACK!" |
+
+---
+
+## 11. 🤖 Giao thức Tích hợp Tính năng AI Bot (Khi tìm User không thấy / Phòng ít người)
+
+### 11.1. Tìm trận nhanh (`find_match` / `quick_match`) — Không thấy User khác ➔ Tự thêm 3 Bot & Bắt đầu ngay
+Khi Client tìm trận hoặc tìm người chơi khác (`find_match` hoặc `quick_match`):
+- Nếu đang có phòng chờ (`IDLE`) của người chơi khác ➔ Tự động ghép vào phòng đó (`matchedWithHumans: true`).
+- Nếu **KHÔNG tìm thấy người chơi nào khác** (`matchedWithHumans: false`) ➔ Server **tự động tạo phòng mới, thêm mặc định 3 AI Bot (tổng 4 người chơi với độ khó đa dạng `NORMAL`, `EASY`, `HARD`) và bắt đầu Gameplay ngay lập tức (`autoStarted: true`)**!
+
+```json
+// Client emit "find_match" (hoặc "quick_match"):
+{
+  "userName": "CaoThuNhaiGiong",
+  "avatar": "🎧",
+  "botCount": 3,
+  "autoStart": true
+}
+
+// Callback (và sự kiện "match_found" / "joined_room_success") trả về:
+{
+  "success": true,
+  "matchedWithHumans": false,
+  "botsAdded": 3,
+  "autoStarted": true,
+  "roomId": "K8X9P2",
+  "room": {
+    "id": "K8X9P2",
+    "hostId": "...",
+    "members": [ /* 1 User + 3 AI Bots */ ]
+  },
+  "gameState": { /* State THEME_SELECTION đang chạy vòng 1 */ }
+}
+```
+
+### 11.2. Hết thời gian tìm người trong phòng hoặc Bắt đầu trận khi ít người (`game_start` / `matchmaking_timeout` / `fill_bots_and_start`)
+Khi Chủ phòng đang đợi ở sảnh mà không tìm thấy thêm người chơi (hoặc hết thời gian tìm trận `matchmaking_timeout`), chỉ cần emit `game_start` (hoặc `matchmaking_timeout` / `fill_bots_and_start`):
+- Mặc định `minPlayers = 4`: Nếu phòng chỉ có 1 người chơi, Server tự động thêm **3 AI Bot** (nếu có 2 người thì thêm **2 AI Bot**, nếu có 3 người thì thêm **1 AI Bot**) để đủ bàn 4 người và bắt đầu vòng 1 ngay!
+- Đồng thời Server broadcast sự kiện `bots_auto_filled` kèm mã `SYS_MATCHMAKING_BOTS_FILLED`.
+
+```json
+// Client (Host) emit "game_start" (hoặc "matchmaking_timeout" / "fill_bots_and_start"):
+{
+  "roomId": "ROOM01",
+  "requireAllReady": false,
+  "autoFillBots": true,
+  "minPlayers": 4
+}
+
+// Callback trả về:
+{
+  "success": true,
+  "botsAdded": 3,
+  "totalPlayers": 4
+}
+```
+- Nếu muốn truyền số lượng Bot cố định: truyền `"botCount": 3`.
+- Nếu muốn tắt tự động thêm Bot: truyền `"autoFillBots": false`.
+
+### 11.3. Chủ phòng Thêm Bot thủ công tại sảnh (`add_bot`)
+```json
+// Client (Host) emit "add_bot":
+{
+  "roomId": "ROOM01",
+  "difficulty": "NORMAL",
+  "botName": "Bot Shib",
+  "avatar": "🐶"
+}
+
+// Server broadcast "bot_added" & "user_joined" tới cả phòng:
+{
+  "bot": {
+    "socketId": "bot_x8k2p",
+    "userId": "bot_x8k2p",
+    "userName": "Bot Shib",
+    "avatar": "🐶",
+    "role": "PLAYER",
+    "isReady": true,
+    "isBot": true,
+    "botDifficulty": "NORMAL"
+  },
+  "members": [ ... ],
+  "systemMessage": "SYS_BOT_JOINED_ROOM",
+  "messageCode": "SYS_BOT_JOINED_ROOM",
+  "messageParams": {
+    "botName": "Bot Shib",
+    "userName": "Bot Shib",
+    "difficulty": "NORMAL"
+  }
+}
+```
+
+### 11.4. Chủ phòng Xóa Bot (`remove_bot` hoặc `kick_player`)
+```json
+// Client (Host) emit "remove_bot" (nếu bỏ trống botSocketId sẽ xóa Bot vừa thêm gần nhất):
+{
+  "roomId": "ROOM01",
+  "botSocketId": "bot_x8k2p"
+}
+
+// Server broadcast "bot_removed" & "user_left" tới cả phòng:
+{
+  "removedBot": {
+    "socketId": "bot_x8k2p",
+    "userName": "Bot Shib",
+    "isBot": true
+  },
+  "members": [ ... ],
+  "systemMessage": "SYS_BOT_REMOVED_FROM_ROOM",
+  "messageCode": "SYS_BOT_REMOVED_FROM_ROOM",
+  "messageParams": {
+    "botName": "Bot Shib",
+    "userName": "Bot Shib"
+  }
+}
+```
+
+### 11.5. Đặc điểm của AI Bot trong các Giai đoạn Game
+1. **Nhận diện trên UI:** Mọi object member/player của Bot đều có `"isBot": true`, `"botDifficulty": "EASY" | "NORMAL" | "HARD"`, và `socketId` bắt đầu bằng `"bot_"`.
+2. **Không bao giờ chặn phòng:**
+   - Tại sảnh chờ (`IDLE`): Bot luôn `isReady: true`.
+   - Tại pha phát mẫu (`PLAYING_SAMPLE`): Bot tự động đánh dấu đã nghe xong mẫu.
+   - Tại pha thu âm (`USER_RECORDING`): Ngay khi tất cả người chơi thật nộp bài thu âm, Bot đã có sẵn điểm chấm mô phỏng theo độ khó (`EASY`: 50–73đ, `NORMAL`: 68–88đ, `HARD`: 82–97đ) và `audioUrl` trỏ về âm thanh mẫu trên R2 CDN để phát lại trong `SHOWDOWN_REVEAL`.
+   - Tại pha `SHOWDOWN_REVEAL`: Bot tự động vote skip (`showdownSkipVotes`), nên chỉ cần tất cả người chơi thật bấm Skip là chuyển thẳng sang bảng điểm.
+   - Tại pha `ROUND_RESULT` & `GAME_OVER`: Bot tự động `isReady: true`, nên chỉ cần người chơi thật bấm Sẵn sàng là đếm ngược 3s qua vòng mới ngay lập tức.
+   - Khi tất cả người chơi thật rời phòng: Toàn bộ Bot trong phòng sẽ tự động được dọn dẹp và giải phóng RAM.

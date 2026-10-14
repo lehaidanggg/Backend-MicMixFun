@@ -5,6 +5,8 @@ export const SOUNDS_DIR: string = path.join(SERVER_ROOT, 'sounds');
 
 export const PORT: number = Number(process.env.PORT) || 3000;
 export const MAX_MEMBERS_PER_ROOM = 12;
+export const DEFAULT_MIN_PLAYERS_WITH_BOTS = 4; // Mặc định ghép thêm Bot cho đủ 4 người chơi (1 người + 3 Bot)
+export const DEFAULT_MATCHMAKING_BOT_COUNT = 3; // Mặc định thêm 3 Bot khi tìm trận không có người chơi khác
 export const MAX_CHAT_HISTORY_SIZE = 50;
 export const MAX_USERNAME_LENGTH = 20;
 export const MAX_CONNECTIONS_PER_IP: number = Number(process.env.MAX_CONNECTIONS_PER_IP) || 15;

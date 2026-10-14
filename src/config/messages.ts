@@ -40,7 +40,12 @@ export enum ErrorCode {
   GAME_NOT_IN_RECORDING_PHASE = 'GAME_NOT_IN_RECORDING_PHASE',
   GAME_ALREADY_SUBMITTED_THIS_ROUND = 'GAME_ALREADY_SUBMITTED_THIS_ROUND',
   GAME_NOT_IN_SHOWDOWN_PHASE = 'GAME_NOT_IN_SHOWDOWN_PHASE',
-  GAME_NOT_IN_READY_PHASE = 'GAME_NOT_IN_READY_PHASE'
+  GAME_NOT_IN_READY_PHASE = 'GAME_NOT_IN_READY_PHASE',
+
+  // AI Bot Management
+  BOT_HOST_ONLY_MANAGE = 'BOT_HOST_ONLY_MANAGE',
+  BOT_CANNOT_MANAGE_IN_PROGRESS = 'BOT_CANNOT_MANAGE_IN_PROGRESS',
+  BOT_NOT_FOUND = 'BOT_NOT_FOUND'
 }
 
 export enum SystemMessageCode {
@@ -53,7 +58,10 @@ export enum SystemMessageCode {
   SYS_PLAYER_UNREADY = 'SYS_PLAYER_UNREADY',
   SYS_SOUND_TRIGGERED = 'SYS_SOUND_TRIGGERED',
   SYS_AUDIO_CLIP_SHARED = 'SYS_AUDIO_CLIP_SHARED',
-  SYS_GAME_CONFIG_UPDATED = 'SYS_GAME_CONFIG_UPDATED'
+  SYS_GAME_CONFIG_UPDATED = 'SYS_GAME_CONFIG_UPDATED',
+  SYS_BOT_JOINED_ROOM = 'SYS_BOT_JOINED_ROOM',
+  SYS_BOT_REMOVED_FROM_ROOM = 'SYS_BOT_REMOVED_FROM_ROOM',
+  SYS_MATCHMAKING_BOTS_FILLED = 'SYS_MATCHMAKING_BOTS_FILLED'
 }
 
 export enum RoomCloseReasonCode {
@@ -308,6 +316,24 @@ export const ERROR_CODE_DESCRIPTIONS: Record<ErrorCode, EnumDocItem> = {
     vi: 'Chưa tới giai đoạn xác nhận sẵn sàng qua vòng!',
     en: 'Not currently in the Round Result or Game Over ready phase.',
     context: 'Gọi confirmRoundReady khi game không ở trạng thái ROUND_RESULT hoặc GAME_OVER.'
+  },
+  [ErrorCode.BOT_HOST_ONLY_MANAGE]: {
+    code: ErrorCode.BOT_HOST_ONLY_MANAGE,
+    vi: 'Chỉ có Chủ phòng mới có quyền thêm hoặc xóa Bot AI!',
+    en: 'Only the room Host can add or remove AI Bots.',
+    context: 'Socket event add_bot hoặc remove_bot được gọi bởi người chơi không phải Host.'
+  },
+  [ErrorCode.BOT_CANNOT_MANAGE_IN_PROGRESS]: {
+    code: ErrorCode.BOT_CANNOT_MANAGE_IN_PROGRESS,
+    vi: 'Không thể thêm hoặc xóa Bot khi trận đấu đang diễn ra!',
+    en: 'Cannot add or remove AI Bots while a match is in progress.',
+    context: 'Socket event add_bot hoặc remove_bot khi trạng thái game khác IDLE và GAME_OVER.'
+  },
+  [ErrorCode.BOT_NOT_FOUND]: {
+    code: ErrorCode.BOT_NOT_FOUND,
+    vi: 'Không tìm thấy Bot AI trong phòng!',
+    en: 'AI Bot not found in the room.',
+    context: 'Socket event remove_bot khi phòng không có Bot nào hoặc botSocketId không tồn tại.'
   }
 };
 
@@ -377,9 +403,30 @@ export const SYSTEM_MESSAGE_DESCRIPTIONS: Record<SystemMessageCode, EnumDocItem>
   [SystemMessageCode.SYS_GAME_CONFIG_UPDATED]: {
     code: SystemMessageCode.SYS_GAME_CONFIG_UPDATED,
     vi: '⚙️ Chủ phòng đã cập nhật: {totalRounds} vòng, thời gian nhại {recordDuration}s!',
-    en: '⚙️ Host updated config: {totalRounds} rounds, {recordDuration}s recording time!',
+    en: '⚙️ Host updated config: {totalRounds} vòng, {recordDuration}s recording time!',
     params: ['totalRounds', 'recordDuration'],
     context: 'Broadcast sự kiện game_config_changed khi Host đổi cấu hình vòng đấu.'
+  },
+  [SystemMessageCode.SYS_BOT_JOINED_ROOM]: {
+    code: SystemMessageCode.SYS_BOT_JOINED_ROOM,
+    vi: '🤖 Bot {botName} đã tham gia phòng đấu!',
+    en: '🤖 Bot {botName} joined the room!',
+    params: ['botName', 'difficulty'],
+    context: 'Broadcast sự kiện bot_added / user_joined khi thêm AI Bot vào phòng.'
+  },
+  [SystemMessageCode.SYS_BOT_REMOVED_FROM_ROOM]: {
+    code: SystemMessageCode.SYS_BOT_REMOVED_FROM_ROOM,
+    vi: '🤖 Bot {botName} đã rời khỏi phòng.',
+    en: '🤖 Bot {botName} was removed from the room.',
+    params: ['botName'],
+    context: 'Broadcast sự kiện bot_removed / user_left khi xóa AI Bot khỏi phòng.'
+  },
+  [SystemMessageCode.SYS_MATCHMAKING_BOTS_FILLED]: {
+    code: SystemMessageCode.SYS_MATCHMAKING_BOTS_FILLED,
+    vi: '🤖 Không tìm thấy người chơi khác — Hệ thống đã tự động thêm {botsAdded} Bot AI vào phòng để bắt đầu trận đấu!',
+    en: '🤖 No other players found — Automatically added {botsAdded} AI Bots to start the match!',
+    params: ['botsAdded', 'totalPlayers'],
+    context: 'Broadcast sự kiện bots_auto_filled khi tìm trận không có người hoặc bắt đầu trận khi thiếu người.'
   }
 };
 

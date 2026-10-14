@@ -93,12 +93,16 @@ export interface PlayerAttempt {
   submittedAt?: number;
 }
 
+export type BotDifficulty = 'EASY' | 'NORMAL' | 'HARD';
+
 export interface GamePlayer {
   socketId: string;
   userId: string | null;
   userName: string;
   avatar: string;
   role: UserRole;
+  isBot?: boolean;
+  botDifficulty?: BotDifficulty | null;
   totalScore: number;
   isReady: boolean;
   roundScore: number;
@@ -125,6 +129,8 @@ export interface RoomMember {
   avatar: string;
   role?: UserRole;
   isReady?: boolean;
+  isBot?: boolean;
+  botDifficulty?: BotDifficulty | null;
   isAuthenticated?: boolean;
   joinedAt?: number;
 }

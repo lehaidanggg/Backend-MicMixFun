@@ -1,7 +1,8 @@
 import { Server } from 'socket.io';
+import { DEFAULT_MIN_PLAYERS_WITH_BOTS } from '../config/constants';
 import { ErrorCode, SystemMessageCode } from '../config/messages';
-import { rooms, gameSessions } from '../services/room.service';
-import { AuthenticatedSocket, SocketSessionState } from '../types';
+import { rooms, gameSessions, fillRoomWithBots, isBotMember } from '../services/room.service';
+import { AuthenticatedSocket, BotDifficulty, SocketSessionState } from '../types';
 
 export function registerGameHandlers(
   io: Server,
@@ -11,73 +12,107 @@ export function registerGameHandlers(
 ): void {
   const { currentUser } = sessionState;
 
-  // 1. BẮT ĐẦU TRẬN ĐẤU (game_start)
-  socket.on(
-    'game_start',
-    ({ roomId, requireAllReady = false }: Record<string, any> = {}, callback?: (res: Record<string, unknown>) => void) => {
-      const targetRoom = String(roomId || sessionState.currentRoomId || '').toUpperCase();
-      if (!targetRoom) {
-        if (callback) {
-          callback({
-            success: false,
-            code: ErrorCode.ROOM_NOT_JOINED,
-            message: ErrorCode.ROOM_NOT_JOINED
-          });
-        }
-        return;
+  // 1. BẮT ĐẦU TRẬN ĐẤU (game_start / fill_bots_and_start / matchmaking_timeout)
+  // Mặc định nếu không tìm thấy đủ người chơi, tự động thêm vài AI Bot (cho đủ 4 người chơi) để bắt đầu gameplay
+  const handleStartGameWithBots = (
+    {
+      roomId,
+      requireAllReady = false,
+      autoFillBots = true,
+      minPlayers = DEFAULT_MIN_PLAYERS_WITH_BOTS,
+      botCount,
+      botDifficulty
+    }: Record<string, any> = {},
+    callback?: (res: Record<string, unknown>) => void
+  ): void => {
+    const targetRoom = String(roomId || sessionState.currentRoomId || '').toUpperCase();
+    if (!targetRoom) {
+      if (callback) {
+        callback({
+          success: false,
+          code: ErrorCode.ROOM_NOT_JOINED,
+          message: ErrorCode.ROOM_NOT_JOINED
+        });
       }
-      const room = rooms.get(targetRoom);
-      if (!room) {
-        if (callback) {
-          callback({
-            success: false,
-            code: ErrorCode.ROOM_NOT_FOUND,
-            message: ErrorCode.ROOM_NOT_FOUND
-          });
-        }
-        return;
+      return;
+    }
+    const room = rooms.get(targetRoom);
+    if (!room) {
+      if (callback) {
+        callback({
+          success: false,
+          code: ErrorCode.ROOM_NOT_FOUND,
+          message: ErrorCode.ROOM_NOT_FOUND
+        });
       }
+      return;
+    }
 
-      if (room.hostId !== socket.id) {
-        socket.emit('game_error', {
+    if (room.hostId !== socket.id) {
+      socket.emit('game_error', {
+        code: ErrorCode.GAME_HOST_ONLY_START,
+        message: ErrorCode.GAME_HOST_ONLY_START
+      });
+      if (callback) {
+        callback({
+          success: false,
           code: ErrorCode.GAME_HOST_ONLY_START,
           message: ErrorCode.GAME_HOST_ONLY_START
         });
-        if (callback) {
-          callback({
-            success: false,
-            code: ErrorCode.GAME_HOST_ONLY_START,
-            message: ErrorCode.GAME_HOST_ONLY_START
-          });
-        }
+      }
+      return;
+    }
+
+    if (requireAllReady) {
+      const unreadyMembers = Array.from(room.members.values()).filter(
+        m => m.socketId !== room.hostId && !isBotMember(m) && !m.isReady
+      );
+      if (unreadyMembers.length > 0) {
+        const unreadyUserNames = unreadyMembers.map(m => m.userName);
+        const errPayload = {
+          code: ErrorCode.GAME_PLAYERS_NOT_READY,
+          message: ErrorCode.GAME_PLAYERS_NOT_READY,
+          messageParams: { unreadyPlayers: unreadyUserNames }
+        };
+        socket.emit('game_error', errPayload);
+        if (callback) callback({ success: false, ...errPayload });
         return;
       }
+    }
 
-      if (requireAllReady) {
-        const unreadyMembers = Array.from(room.members.values()).filter(
-          m => m.socketId !== room.hostId && !m.isReady
-        );
-        if (unreadyMembers.length > 0) {
-          const unreadyUserNames = unreadyMembers.map(m => m.userName);
-          const errPayload = {
-            code: ErrorCode.GAME_PLAYERS_NOT_READY,
-            message: ErrorCode.GAME_PLAYERS_NOT_READY,
-            messageParams: { unreadyPlayers: unreadyUserNames }
-          };
-          socket.emit('game_error', errPayload);
-          if (callback) callback({ success: false, ...errPayload });
-          return;
-        }
-      }
+    // Tự động điền thêm vài AI Bot nếu phòng chưa đủ người (mặc định đủ 4 người = 1 User + 3 Bot)
+    let botsAdded = 0;
+    const difficulty = botDifficulty ? (String(botDifficulty).toUpperCase() as BotDifficulty) : undefined;
+    if (typeof botCount === 'number' && botCount > 0) {
+      const filled = fillRoomWithBots(targetRoom, { botCount, difficulty });
+      botsAdded = filled.botsAdded;
+    } else if (autoFillBots !== false) {
+      const filled = fillRoomWithBots(targetRoom, {
+        minPlayers: Number(minPlayers) || DEFAULT_MIN_PLAYERS_WITH_BOTS,
+        difficulty
+      });
+      botsAdded = filled.botsAdded;
+    }
 
-      const game = gameSessions.get(targetRoom);
-      if (game) {
-        console.log(`[MimicParty] 🚀 Host ${socket.id} (${currentUser.userName}) khởi động trận đấu trong phòng ${targetRoom}`);
-        const started = game.startGame({ requireAllReady: Boolean(requireAllReady) });
-        if (callback) callback({ success: started });
+    const game = gameSessions.get(targetRoom);
+    if (game) {
+      console.log(
+        `[MimicParty] 🚀 Host ${socket.id} (${currentUser.userName}) khởi động trận đấu trong phòng ${targetRoom} (Tổng: ${room.members.size} người, đã tự thêm ${botsAdded} Bot)`
+      );
+      const started = game.startGame({ requireAllReady: Boolean(requireAllReady) });
+      if (callback) {
+        callback({
+          success: started,
+          botsAdded,
+          totalPlayers: room.members.size
+        });
       }
     }
-  );
+  };
+
+  socket.on('game_start', handleStartGameWithBots);
+  socket.on('fill_bots_and_start', handleStartGameWithBots);
+  socket.on('matchmaking_timeout', handleStartGameWithBots);
 
   // 2. CẬP NHẬT CẤU HÌNH TRẬN ĐẤU (game_update_config)
   socket.on(

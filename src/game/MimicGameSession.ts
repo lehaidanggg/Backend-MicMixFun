@@ -4,6 +4,7 @@ import { AiRemarkCode, ErrorCode, GameMessageCode } from '../config/messages';
 import { GAME_STATES, STATE_LABELS, SOUND_PACKS, AI_REMARKS } from './soundPacks';
 import {
   AudioStoreRecord,
+  BotDifficulty,
   ClientMetrics,
   DisconnectedPlayerRecord,
   EvaluationResult,
@@ -59,9 +60,11 @@ export class MimicGameSession {
     avatar: string,
     role: UserRole = 'PLAYER',
     userId: string | null = null,
-    isAuthenticated = false
+    isAuthenticated = false,
+    isBot = false,
+    botDifficulty: BotDifficulty | null = null
   ): { restored: boolean; totalScore: number } {
-    const savedState = (userId && isAuthenticated) ? this.disconnectedPlayers.get(userId) : null;
+    const savedState = (!isBot && userId && isAuthenticated) ? this.disconnectedPlayers.get(userId) : null;
 
     if (savedState && userId && (Date.now() - savedState.disconnectedAt < 120000)) {
       this.disconnectedPlayers.delete(userId);
@@ -71,6 +74,8 @@ export class MimicGameSession {
         userName,
         avatar: avatar || savedState.avatar || '🎧',
         role,
+        isBot: false,
+        botDifficulty: null,
         totalScore: savedState.totalScore || 0,
         isReady: (this.state === GAME_STATES.ROUND_RESULT || this.state === GAME_STATES.GAME_OVER)
           ? false
@@ -83,7 +88,7 @@ export class MimicGameSession {
     }
 
     if (!this.players.has(socketId)) {
-      const isMidRound = (
+      const isMidRound = !isBot && (
         this.state === GAME_STATES.USER_RECORDING ||
         this.state === GAME_STATES.AI_SCORING ||
         this.state === GAME_STATES.SHOWDOWN_REVEAL
@@ -92,12 +97,16 @@ export class MimicGameSession {
         socketId,
         userId,
         userName,
-        avatar: avatar || '🎧',
+        avatar: avatar || (isBot ? '🤖' : '🎧'),
         role,
+        isBot: Boolean(isBot),
+        botDifficulty: isBot ? (botDifficulty || 'NORMAL') : null,
         totalScore: 0,
-        isReady: (this.state === GAME_STATES.ROUND_RESULT || this.state === GAME_STATES.GAME_OVER)
-          ? false
-          : (role === 'HOST'),
+        isReady: isBot
+          ? true
+          : ((this.state === GAME_STATES.ROUND_RESULT || this.state === GAME_STATES.GAME_OVER)
+            ? false
+            : (role === 'HOST')),
         roundScore: 0,
         currentAttempt: null,
         joinedMidRound: isMidRound
@@ -110,7 +119,7 @@ export class MimicGameSession {
     this.hostId = newHostSocketId;
     for (const [sId, p] of this.players.entries()) {
       p.role = (sId === newHostSocketId) ? 'HOST' : 'PLAYER';
-      if (p.role === 'HOST' && this.state === GAME_STATES.IDLE) {
+      if ((p.role === 'HOST' || p.isBot) && this.state === GAME_STATES.IDLE) {
         p.isReady = true;
       }
     }
@@ -119,7 +128,7 @@ export class MimicGameSession {
   setPlayerReady(socketId: string, isReady: boolean): void {
     const p = this.players.get(socketId);
     if (p) {
-      p.isReady = isReady;
+      p.isReady = p.isBot ? true : isReady;
     }
   }
 
@@ -140,7 +149,12 @@ export class MimicGameSession {
 
   removePlayer(socketId: string): void {
     const leavingPlayer = this.players.get(socketId);
-    if (leavingPlayer && leavingPlayer.userId && (leavingPlayer.totalScore > 0 || leavingPlayer.currentAttempt)) {
+    if (
+      leavingPlayer &&
+      !leavingPlayer.isBot &&
+      leavingPlayer.userId &&
+      (leavingPlayer.totalScore > 0 || leavingPlayer.currentAttempt)
+    ) {
       this.disconnectedPlayers.set(leavingPlayer.userId, {
         ...leavingPlayer,
         disconnectedAt: Date.now()
@@ -151,7 +165,8 @@ export class MimicGameSession {
     this.showdownSkipVotes.delete(socketId);
     this.sampleDoneSockets.delete(socketId);
 
-    if (this.players.size === 0) {
+    const humanPlayers = Array.from(this.players.values()).filter(p => !p.isBot);
+    if (this.players.size === 0 || humanPlayers.length === 0) {
       this.stopTimer();
       this.state = GAME_STATES.IDLE;
       return;
@@ -171,6 +186,9 @@ export class MimicGameSession {
         this.startAiScoringState();
       }
     } else if (this.state === GAME_STATES.SHOWDOWN_REVEAL) {
+      for (const p of this.players.values()) {
+        if (p.isBot) this.showdownSkipVotes.add(p.socketId);
+      }
       const skipCount = this.showdownSkipVotes.size;
       const totalCount = this.players.size;
       const allSkipConfirmed = (totalCount > 0 && skipCount === totalCount);
@@ -188,6 +206,9 @@ export class MimicGameSession {
         this.startRoundResultState();
       }
     } else if (this.state === GAME_STATES.ROUND_RESULT || this.state === GAME_STATES.GAME_OVER) {
+      for (const p of this.players.values()) {
+        if (p.isBot) p.isReady = true;
+      }
       const readyPlayers = Array.from(this.players.values()).filter(p => p.isReady);
       const totalCount = this.players.size;
       const readyCount = readyPlayers.length;
@@ -202,6 +223,7 @@ export class MimicGameSession {
           userName: p.userName,
           avatar: p.avatar,
           role: p.role,
+          isBot: Boolean(p.isBot),
           isReady: p.isReady
         }))
       });
@@ -276,7 +298,9 @@ export class MimicGameSession {
         userName: p.userName,
         avatar: p.avatar,
         role: p.role || (p.socketId === this.hostId ? 'HOST' : 'PLAYER'),
-        isReady: p.isReady || (this.state === GAME_STATES.IDLE && p.role === 'HOST'),
+        isBot: Boolean(p.isBot),
+        botDifficulty: p.botDifficulty || null,
+        isReady: p.isBot || p.isReady || (this.state === GAME_STATES.IDLE && p.role === 'HOST'),
         totalScore: p.totalScore,
         roundScore: p.roundScore
       }))
@@ -288,7 +312,9 @@ export class MimicGameSession {
     if (this.players.size === 0) return false;
 
     if (options.requireAllReady) {
-      const unready = Array.from(this.players.values()).filter(p => p.role !== 'HOST' && !p.isReady);
+      const unready = Array.from(this.players.values()).filter(
+        p => !p.isBot && p.role !== 'HOST' && !p.isReady
+      );
       if (unready.length > 0) {
         return false;
       }
@@ -387,6 +413,11 @@ export class MimicGameSession {
 
     this.sampleFinishedHandled = false;
     this.sampleDoneSockets.clear();
+    for (const p of this.players.values()) {
+      if (p.isBot) {
+        this.sampleDoneSockets.add(p.socketId);
+      }
+    }
     this.sampleStartTime = Date.now();
 
     console.log(`[MimicGame:${this.roomId}] 🔊 Phát âm thanh mẫu: ${sound.name} (Độ dài: ${rawDuration}s | Timer: ${playDuration}s)`);
@@ -424,6 +455,11 @@ export class MimicGameSession {
     if (this.state !== GAME_STATES.PLAYING_SAMPLE || this.sampleFinishedHandled) return;
     if (!this.players.has(socketId)) return;
 
+    for (const p of this.players.values()) {
+      if (p.isBot) {
+        this.sampleDoneSockets.add(p.socketId);
+      }
+    }
     this.sampleDoneSockets.add(socketId);
     const elapsedSec = (Date.now() - this.sampleStartTime) / 1000;
     const isHostDone = (socketId === this.hostId && elapsedSec >= 0.8);
@@ -475,6 +511,77 @@ export class MimicGameSession {
     );
   }
 
+  /**
+   * Mô phỏng bài dự thi nhại âm cho AI Bot dựa trên độ khó (EASY / NORMAL / HARD)
+   */
+  simulateBotAttempt(bot: GamePlayer): EvaluationResult {
+    const difficulty = bot.botDifficulty || 'NORMAL';
+    let minScore = 68;
+    let maxScore = 88;
+    if (difficulty === 'EASY') {
+      minScore = 50;
+      maxScore = 73;
+    } else if (difficulty === 'HARD') {
+      minScore = 82;
+      maxScore = 97;
+    }
+
+    const randInRange = (min: number, max: number): number =>
+      Math.floor(min + Math.random() * (max - min + 1));
+
+    const pitchScore = Math.min(99, Math.max(35, randInRange(minScore - 3, maxScore + 2)));
+    const rhythmScore = Math.min(98, Math.max(35, randInRange(minScore - 2, maxScore + 1)));
+    const energyScore = Math.min(100, Math.max(35, randInRange(minScore - 2, maxScore + 3)));
+    const totalScore = Math.round(pitchScore * 0.4 + rhythmScore * 0.35 + energyScore * 0.25);
+
+    let grade = 'B';
+    let remark = '';
+    if (totalScore >= 90) {
+      grade = 'S';
+      remark = AI_REMARKS.legendary[Math.floor(Math.random() * AI_REMARKS.legendary.length)];
+    } else if (totalScore >= 75) {
+      grade = 'A';
+      remark = AI_REMARKS.good[Math.floor(Math.random() * AI_REMARKS.good.length)];
+    } else if (totalScore >= 55) {
+      grade = 'B';
+      remark = AI_REMARKS.funny[Math.floor(Math.random() * AI_REMARKS.funny.length)];
+    } else {
+      grade = 'C';
+      remark = AI_REMARKS.funny[Math.floor(Math.random() * AI_REMARKS.funny.length)];
+    }
+
+    const evaluation: EvaluationResult = {
+      totalScore,
+      pitchScore,
+      rhythmScore,
+      energyScore,
+      grade,
+      remark
+    };
+
+    const sampleAudioUrl = this.getTargetSoundUrl(this.targetSound || SOUND_PACKS[0].sounds[0]);
+    bot.roundScore = evaluation.totalScore;
+    bot.totalScore += evaluation.totalScore;
+    bot.currentAttempt = {
+      audioUrl: sampleAudioUrl || null,
+      audioStreamUrl: sampleAudioUrl || null,
+      mimeType: 'audio/mpeg',
+      evaluation,
+      submittedAt: Date.now()
+    };
+
+    console.log(`[MimicGame:${this.roomId}] 🤖 ${bot.userName} (${difficulty}) tự động nộp bài: ${evaluation.totalScore}đ (${evaluation.grade})`);
+    return evaluation;
+  }
+
+  simulateAllBotsAttempts(): void {
+    for (const player of this.players.values()) {
+      if (player.isBot && player.currentAttempt === null) {
+        this.simulateBotAttempt(player);
+      }
+    }
+  }
+
   startUserRecordingState(customDuration: number | null = null): void {
     const sound = this.targetSound || SOUND_PACKS[0].sounds[0];
     const soundRef = sound.relativePath || sound.fileName;
@@ -484,6 +591,9 @@ export class MimicGameSession {
     const audioUrl = this.getTargetSoundUrl(sound);
 
     console.log(`[MimicGame:${this.roomId}] 🎙️ Tới lượt user nhại lại - Thời gian nhại: ${exactDuration}s (Timer: ${duration}s)`);
+
+    // Tự động sinh bài thu âm nhại giọng cho tất cả AI Bots trong phòng
+    this.simulateAllBotsAttempts();
 
     this.transitionToState(
       GAME_STATES.USER_RECORDING,
@@ -574,6 +684,9 @@ export class MimicGameSession {
 
     console.log(`[MimicGame:${this.roomId}] 🎯 ${player.userName} nộp bài nhại: ${evaluation.totalScore}đ (${evaluation.grade})`);
 
+    // Đảm bảo mọi AI Bot đều đã có bài nộp trước khi kiểm tra hoàn tất vòng thu âm
+    this.simulateAllBotsAttempts();
+
     const activePlayers = Array.from(this.players.values()).filter(p => !p.joinedMidRound);
     const allSubmitted = activePlayers.length > 0 && activePlayers.every(p => p.currentAttempt !== null);
     if (allSubmitted && this.state === GAME_STATES.USER_RECORDING && this.timeRemaining > 1) {
@@ -589,6 +702,7 @@ export class MimicGameSession {
   }
 
   startAiScoringState(): void {
+    this.simulateAllBotsAttempts();
     const suspenseDuration = 5;
     console.log(`[MimicGame:${this.roomId}] 🤖 AI Voice Detector đang phân tích & chấm điểm hồi hộp (${suspenseDuration}s)...`);
 
@@ -606,6 +720,8 @@ export class MimicGameSession {
   }
 
   startShowdownRevealState(): void {
+    this.simulateAllBotsAttempts();
+
     for (const player of this.players.values()) {
       if (!player.currentAttempt) {
         player.currentAttempt = {
@@ -626,6 +742,7 @@ export class MimicGameSession {
       socketId: p.socketId,
       userName: p.userName,
       avatar: p.avatar,
+      isBot: Boolean(p.isBot),
       roundScore: p.roundScore,
       totalScore: p.totalScore,
       audioUrl: p.currentAttempt ? p.currentAttempt.audioUrl : null,
@@ -634,6 +751,11 @@ export class MimicGameSession {
     })).sort((a, b) => b.roundScore - a.roundScore);
 
     this.showdownSkipVotes.clear();
+    for (const player of this.players.values()) {
+      if (player.isBot) {
+        this.showdownSkipVotes.add(player.socketId);
+      }
+    }
 
     this.transitionToState(
       GAME_STATES.SHOWDOWN_REVEAL,
@@ -643,9 +765,9 @@ export class MimicGameSession {
         targetSound: this.targetSound,
         attempts: attemptsList,
         roundWinner: attemptsList[0] || null,
-        skipCount: 0,
+        skipCount: this.showdownSkipVotes.size,
         totalCount: this.players.size,
-        votedSockets: []
+        votedSockets: Array.from(this.showdownSkipVotes)
       },
       () => this.startRoundResultState()
     );
@@ -675,6 +797,12 @@ export class MimicGameSession {
         code: ErrorCode.PLAYER_NOT_IN_ROOM,
         message: ErrorCode.PLAYER_NOT_IN_ROOM
       };
+    }
+
+    for (const p of this.players.values()) {
+      if (p.isBot) {
+        this.showdownSkipVotes.add(p.socketId);
+      }
     }
 
     let isVoted = false;
@@ -735,7 +863,7 @@ export class MimicGameSession {
     this.clearRoundAudioData();
 
     for (const player of this.players.values()) {
-      player.isReady = false;
+      player.isReady = Boolean(player.isBot);
     }
 
     const leaderboard = Array.from(this.players.values())
@@ -744,12 +872,14 @@ export class MimicGameSession {
         userName: p.userName,
         avatar: p.avatar,
         role: p.role,
+        isBot: Boolean(p.isBot),
         roundScore: p.roundScore,
         totalScore: p.totalScore,
-        isReady: false
+        isReady: Boolean(p.isBot)
       }))
       .sort((a, b) => b.totalScore - a.totalScore);
 
+    const readyCount = leaderboard.filter(p => p.isReady).length;
     const isLastRound = this.currentRound >= this.totalRounds;
 
     this.transitionToState(
@@ -759,7 +889,7 @@ export class MimicGameSession {
         leaderboard,
         isLastRound,
         nextRound: isLastRound ? null : this.currentRound + 1,
-        readyCount: 0,
+        readyCount,
         totalCount: this.players.size,
         players: leaderboard
       },
@@ -771,7 +901,7 @@ export class MimicGameSession {
     this.clearRoundAudioData();
 
     for (const player of this.players.values()) {
-      player.isReady = false;
+      player.isReady = Boolean(player.isBot);
     }
 
     const finalRanking = Array.from(this.players.values())
@@ -780,11 +910,13 @@ export class MimicGameSession {
         userName: p.userName,
         avatar: p.avatar,
         role: p.role,
+        isBot: Boolean(p.isBot),
         totalScore: p.totalScore,
-        isReady: false
+        isReady: Boolean(p.isBot)
       }))
       .sort((a, b) => b.totalScore - a.totalScore);
 
+    const readyCount = finalRanking.filter(p => p.isReady).length;
     const champion = finalRanking[0] || null;
     const msgCode = champion
       ? GameMessageCode.GAME_MSG_GAME_OVER_CHAMPION
@@ -796,7 +928,7 @@ export class MimicGameSession {
       {
         finalRanking,
         champion,
-        readyCount: 0,
+        readyCount,
         totalCount: this.players.size,
         players: finalRanking,
         message: msgCode,
@@ -832,6 +964,11 @@ export class MimicGameSession {
       };
     }
 
+    for (const p of this.players.values()) {
+      if (p.isBot) {
+        p.isReady = true;
+      }
+    }
     player.isReady = true;
 
     const readyPlayers = Array.from(this.players.values()).filter(p => p.isReady);
@@ -852,6 +989,7 @@ export class MimicGameSession {
         userName: p.userName,
         avatar: p.avatar,
         role: p.role,
+        isBot: Boolean(p.isBot),
         isReady: p.isReady
       }))
     });

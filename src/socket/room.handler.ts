@@ -1,5 +1,9 @@
 import { Server } from 'socket.io';
-import { MAX_MEMBERS_PER_ROOM, MAX_CHAT_HISTORY_SIZE } from '../config/constants';
+import {
+  MAX_MEMBERS_PER_ROOM,
+  MAX_CHAT_HISTORY_SIZE,
+  DEFAULT_MATCHMAKING_BOT_COUNT
+} from '../config/constants';
 import { ErrorCode, RoomCloseReasonCode, SystemMessageCode } from '../config/messages';
 import { MimicGameSession } from '../game/MimicGameSession';
 import {
@@ -14,9 +18,14 @@ import {
   gameSessions,
   getRoomMembersArray,
   destroyRoomData,
-  leaveCurrentRoom
+  leaveCurrentRoom,
+  addBotToRoom,
+  removeBotFromRoom,
+  fillRoomWithBots,
+  findAvailableMatchmakingRoom,
+  isBotMember
 } from '../services/room.service';
-import { AuthenticatedSocket, RoomData, SocketSessionState } from '../types';
+import { AuthenticatedSocket, BotDifficulty, RoomData, SocketSessionState } from '../types';
 
 export function registerRoomHandlers(
   io: Server,
@@ -460,6 +469,14 @@ export function registerRoomHandlers(
         return;
       }
 
+      // Nếu mục tiêu bị kick là AI Bot thì xóa trực tiếp khỏi phòng
+      const targetMember = room.members.get(String(targetSocketId || ''));
+      if (targetMember && isBotMember(targetMember)) {
+        const res = removeBotFromRoom(targetRoom, targetMember.socketId);
+        if (callback) callback(res);
+        return;
+      }
+
       const targetSocket = io.sockets.sockets.get(String(targetSocketId || ''));
       if (targetSocket) {
         targetSocket.emit('kicked_from_room', {
@@ -479,4 +496,237 @@ export function registerRoomHandlers(
       }
     }
   );
+
+  // 7. THÊM AI BOT VÀO PHÒNG (add_bot)
+  socket.on(
+    'add_bot',
+    (
+      { roomId, difficulty, botName, avatar }: Record<string, any> = {},
+      callback?: (res: Record<string, unknown>) => void
+    ) => {
+      const targetRoom = String(roomId || sessionState.currentRoomId || '').trim().toUpperCase();
+      const room = rooms.get(targetRoom);
+      if (!room) {
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.ROOM_NOT_FOUND,
+            message: ErrorCode.ROOM_NOT_FOUND
+          });
+        }
+        return;
+      }
+
+      if (room.hostId !== socket.id) {
+        socket.emit('game_error', {
+          code: ErrorCode.BOT_HOST_ONLY_MANAGE,
+          message: ErrorCode.BOT_HOST_ONLY_MANAGE
+        });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.BOT_HOST_ONLY_MANAGE,
+            message: ErrorCode.BOT_HOST_ONLY_MANAGE
+          });
+        }
+        return;
+      }
+
+      const game = gameSessions.get(targetRoom);
+      if (game && game.state !== 'IDLE' && game.state !== 'GAME_OVER') {
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.BOT_CANNOT_MANAGE_IN_PROGRESS,
+            message: ErrorCode.BOT_CANNOT_MANAGE_IN_PROGRESS
+          });
+        }
+        return;
+      }
+
+      const res = addBotToRoom(targetRoom, { difficulty, botName, avatar });
+      if (callback) callback(res);
+    }
+  );
+
+  // 8. XÓA AI BOT KHỎI PHÒNG (remove_bot)
+  socket.on(
+    'remove_bot',
+    (
+      { roomId, botSocketId }: Record<string, any> = {},
+      callback?: (res: Record<string, unknown>) => void
+    ) => {
+      const targetRoom = String(roomId || sessionState.currentRoomId || '').trim().toUpperCase();
+      const room = rooms.get(targetRoom);
+      if (!room) {
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.ROOM_NOT_FOUND,
+            message: ErrorCode.ROOM_NOT_FOUND
+          });
+        }
+        return;
+      }
+
+      if (room.hostId !== socket.id) {
+        socket.emit('game_error', {
+          code: ErrorCode.BOT_HOST_ONLY_MANAGE,
+          message: ErrorCode.BOT_HOST_ONLY_MANAGE
+        });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.BOT_HOST_ONLY_MANAGE,
+            message: ErrorCode.BOT_HOST_ONLY_MANAGE
+          });
+        }
+        return;
+      }
+
+      const game = gameSessions.get(targetRoom);
+      if (game && game.state !== 'IDLE' && game.state !== 'GAME_OVER') {
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.BOT_CANNOT_MANAGE_IN_PROGRESS,
+            message: ErrorCode.BOT_CANNOT_MANAGE_IN_PROGRESS
+          });
+        }
+        return;
+      }
+
+      const res = removeBotFromRoom(targetRoom, botSocketId || null);
+      if (callback) callback(res);
+    }
+  );
+
+  // 9. TÌM TRẬN NHANH / GHÉP PHÒNG TỰ ĐỘNG (find_match & quick_match)
+  // Khi tìm không thấy phòng có người chơi khác -> Mặc định tạo phòng mới, thêm vài AI Bot (3 Bot) và bắt đầu Gameplay ngay!
+  const handleQuickMatch = async (
+    {
+      userName,
+      avatar,
+      botCount = DEFAULT_MATCHMAKING_BOT_COUNT,
+      botDifficulty,
+      autoStart = true
+    }: Record<string, any> = {},
+    callback?: (res: Record<string, unknown>) => void
+  ): Promise<void> => {
+    try {
+      const verifiedToken = socket.authSession || null;
+      const resolvedUserId = (verifiedToken && verifiedToken.uid) || currentUser.userId || generateSecureUserId();
+      const cleanName = sanitizeUserName(userName || (verifiedToken && verifiedToken.name) || currentUser.userName, socket.id);
+      const cleanAvatar = avatar || (verifiedToken && verifiedToken.avatar) || currentUser.avatar || '🎧';
+
+      if (sessionState.currentRoomId) {
+        leaveCurrentRoom(socket, sessionState.currentRoomId, currentUser);
+        sessionState.currentRoomId = null;
+      }
+
+      // 1. Tìm kiếm phòng đang chờ (IDLE) có người chơi khác
+      const existingRoom = findAvailableMatchmakingRoom(socket.id);
+      const matchedWithHumans = Boolean(existingRoom);
+
+      let room: RoomData;
+      if (existingRoom) {
+        room = existingRoom;
+      } else {
+        const newRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+        room = {
+          id: newRoomId,
+          name: cleanName,
+          createdAt: Date.now(),
+          hostId: socket.id,
+          hostUserId: resolvedUserId,
+          members: new Map(),
+          messages: [],
+          cleanupTimer: null
+        };
+        rooms.set(newRoomId, room);
+      }
+
+      const isHost = room.hostId === socket.id;
+      sessionState.currentRoomId = room.id;
+      currentUser.socketId = socket.id;
+      currentUser.userId = resolvedUserId;
+      currentUser.userName = cleanName;
+      currentUser.avatar = cleanAvatar;
+      currentUser.role = isHost ? 'HOST' : 'PLAYER';
+      currentUser.isReady = true;
+      currentUser.isAuthenticated = true;
+      currentUser.joinedAt = Date.now();
+
+      socket.join(room.id);
+      room.members.set(socket.id, currentUser);
+
+      let game = gameSessions.get(room.id);
+      if (!game) {
+        game = new MimicGameSession(room.id, io);
+        game.hostId = room.hostId;
+        gameSessions.set(room.id, game);
+      }
+      game.addPlayer(socket.id, currentUser.userName, currentUser.avatar, currentUser.role, currentUser.userId, true);
+
+      // Nếu ghép vào phòng có sẵn người chơi thật -> thông báo user_joined
+      if (matchedWithHumans) {
+        socket.to(room.id).emit('user_joined', {
+          user: currentUser,
+          members: getRoomMembersArray(room),
+          systemMessage: SystemMessageCode.SYS_PLAYER_JOINED_ROOM,
+          messageCode: SystemMessageCode.SYS_PLAYER_JOINED_ROOM,
+          messageParams: { userName: currentUser.userName, role: currentUser.role }
+        });
+      }
+
+      // 2. Nếu KHÔNG tìm thấy người chơi khác -> Mặc định thêm vài AI Bot (3 Bot) vào phòng và bắt đầu Gameplay!
+      let botsAdded = 0;
+      let autoStarted = false;
+      if (!matchedWithHumans) {
+        const count = Math.max(1, Number(botCount) || DEFAULT_MATCHMAKING_BOT_COUNT);
+        const diff = botDifficulty ? (String(botDifficulty).toUpperCase() as BotDifficulty) : undefined;
+        const filled = fillRoomWithBots(room.id, { botCount: count, difficulty: diff });
+        botsAdded = filled.botsAdded;
+
+        if (autoStart !== false) {
+          autoStarted = game.startGame({ requireAllReady: false });
+        }
+        console.log(
+          `[Matchmaking] 🤖 Không tìm thấy user khác -> Tạo phòng ${room.id}, thêm ${botsAdded} Bot AI & autoStart=${autoStarted}`
+        );
+      }
+
+      const responseData = {
+        success: true,
+        matchedWithHumans,
+        botsAdded,
+        autoStarted,
+        roomId: room.id,
+        room: {
+          id: room.id,
+          name: room.name,
+          hostId: room.hostId,
+          members: getRoomMembersArray(room),
+          messages: room.messages.slice(-MAX_CHAT_HISTORY_SIZE)
+        },
+        user: currentUser,
+        gameState: game.getStateSnapshot()
+      };
+
+      socket.emit('joined_room_success', responseData);
+      socket.emit('match_found', responseData);
+      if (callback) callback(responseData);
+    } catch {
+      if (callback) {
+        callback({
+          success: false,
+          code: ErrorCode.INTERNAL_SERVER_ERROR,
+          message: ErrorCode.INTERNAL_SERVER_ERROR
+        });
+      }
+    }
+  };
+
+  socket.on('find_match', handleQuickMatch);
+  socket.on('quick_match', handleQuickMatch);
 }

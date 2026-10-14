@@ -313,3 +313,51 @@ test('MimicGameSession — Decision Matrix: submitMimicAudio, Showdown Skip & Ro
 
   game.destroy();
 });
+
+test('MimicGameSession — AI Bot Lifecycle & Difficulty Scoring Matrix (EASY / NORMAL / HARD)', () => {
+  const { io } = createMockIo();
+  const game = new MimicGameSession('ROOM_BOTS', io);
+  game.hostId = 's_solo';
+  game.addPlayer('s_solo', 'SoloHuman', '👑', 'HOST', 'u_solo', true, false, null);
+  game.addPlayer('bot_easy', 'Bot Easy', '🤖', 'PLAYER', 'bot_easy', false, true, 'EASY');
+  game.addPlayer('bot_norm', 'Bot Normal', '🐱', 'PLAYER', 'bot_norm', false, true, 'NORMAL');
+  game.addPlayer('bot_hard', 'Bot Hard', '👾', 'PLAYER', 'bot_hard', false, true, 'HARD');
+
+  // 1. Bots are always ready in IDLE and do not block startGame({ requireAllReady: true })
+  assert.equal(game.startGame({ requireAllReady: true }), true);
+
+  // 2. Enter USER_RECORDING -> Bots automatically simulate attempts according to difficulty
+  game.startUserRecordingState(5);
+  assert.equal(game.state, GAME_STATES.USER_RECORDING);
+
+  const easyAttempt = game.players.get('bot_easy')!.currentAttempt;
+  const normAttempt = game.players.get('bot_norm')!.currentAttempt;
+  const hardAttempt = game.players.get('bot_hard')!.currentAttempt;
+  assert.ok(easyAttempt && easyAttempt.evaluation.totalScore >= 45 && easyAttempt.evaluation.totalScore <= 76);
+  assert.ok(normAttempt && normAttempt.evaluation.totalScore >= 63 && normAttempt.evaluation.totalScore <= 92);
+  assert.ok(hardAttempt && hardAttempt.evaluation.totalScore >= 78 && hardAttempt.evaluation.totalScore <= 99);
+
+  // 3. When the single human player submits, all players have submitted -> jumps immediately to AI_SCORING
+  const sampleAudio = 'data:audio/webm;base64,' + crypto.randomBytes(800).toString('base64');
+  const subSolo = game.submitMimicAudio('s_solo', sampleAudio, 'audio/webm', {
+    matchPct: 88,
+    rhythmScore: 85,
+    energyScore: 90,
+    activeRatio: 0.75
+  });
+  assert.equal(subSolo.success, true);
+  assert.equal(game.state, GAME_STATES.AI_SCORING);
+
+  // 4. In SHOWDOWN_REVEAL, bots pre-vote skip -> single human voting skip immediately triggers ROUND_RESULT
+  game.startShowdownRevealState();
+  assert.equal(game.state, GAME_STATES.SHOWDOWN_REVEAL);
+  const skipRes = game.confirmShowdownSkip('s_solo');
+  assert.equal(skipRes.allSkipConfirmed, true);
+  assert.equal(game.state, GAME_STATES.ROUND_RESULT);
+
+  // 5. In ROUND_RESULT, bots are already ready -> single human clicking ready sets allReady = true
+  const readyRes = game.confirmRoundReady('s_solo');
+  assert.equal(readyRes.allReady, true);
+
+  game.destroy();
+});

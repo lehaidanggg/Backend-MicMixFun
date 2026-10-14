@@ -184,7 +184,66 @@ test('Socket Handlers — Decision Matrix: Room, Media & Game Enum Error/Message
   const cfgEvent = broadcasted.find(b => b.event === 'game_config_changed');
   assert.equal(cfgEvent?.payload.systemMessage, SystemMessageCode.SYS_GAME_CONFIG_UPDATED);
 
+  // 10. Non-host attempts add_bot / remove_bot -> BOT_HOST_ONLY_MANAGE
+  playerMock.handlers.get('add_bot')!({ roomId: 'ENUM_RM', difficulty: 'HARD' }, (r: any) => {
+    cbRes = r;
+  });
+  assert.equal(cbRes.code, ErrorCode.BOT_HOST_ONLY_MANAGE);
+
+  playerMock.handlers.get('remove_bot')!({ roomId: 'ENUM_RM' }, (r: any) => {
+    cbRes = r;
+  });
+  assert.equal(cbRes.code, ErrorCode.BOT_HOST_ONLY_MANAGE);
+
+  // 11. Host removes bot when none exist -> BOT_NOT_FOUND
+  hostMock.handlers.get('remove_bot')!({ roomId: 'ENUM_RM' }, (r: any) => {
+    cbRes = r;
+  });
+  assert.equal(cbRes.code, ErrorCode.BOT_NOT_FOUND);
+
+  // 12. Host adds a bot and removes it -> SYS_BOT_JOINED_ROOM & SYS_BOT_REMOVED_FROM_ROOM
+  hostMock.handlers.get('add_bot')!({ roomId: 'ENUM_RM', difficulty: 'HARD', botName: 'CyberBot' }, (r: any) => {
+    cbRes = r;
+  });
+  assert.equal(cbRes.success, true);
+  assert.equal(cbRes.bot.userName, 'CyberBot');
+  assert.equal(cbRes.bot.isBot, true);
+  assert.equal(cbRes.bot.botDifficulty, 'HARD');
+
+  hostMock.handlers.get('remove_bot')!({ roomId: 'ENUM_RM', botSocketId: cbRes.bot.socketId }, (r: any) => {
+    cbRes = r;
+  });
+  assert.equal(cbRes.success, true);
+  assert.equal(cbRes.removedBot.userName, 'CyberBot');
+
   destroyRoomData('ENUM_RM');
   assert.equal(rooms.has('ENUM_RM'), false);
   assert.equal(gameSessions.has('ENUM_RM'), false);
+
+  // 13. Solo Host starts game -> autoFillBots automatically spawns 3 Bots so totalPlayers = 4
+  await hostMock.handlers.get('join_room')!({ roomId: 'SOLO_RM', userName: 'SoloHost' }, (r: any) => {
+    cbRes = r;
+  });
+  assert.equal(cbRes.success, true);
+
+  hostMock.handlers.get('game_start')!({ roomId: 'SOLO_RM' }, (r: any) => {
+    cbRes = r;
+  });
+  assert.equal(cbRes.success, true);
+  assert.equal(cbRes.botsAdded, 3);
+  assert.equal(cbRes.totalPlayers, 4);
+
+  destroyRoomData('SOLO_RM');
+
+  // 14. Quick Match / Find Match when no other users are waiting -> creates room, adds 3 Bots, and autoStarts gameplay
+  await hostMock.handlers.get('find_match')!({ userName: 'QuickPlayer' }, (r: any) => {
+    cbRes = r;
+  });
+  assert.equal(cbRes.success, true);
+  assert.equal(cbRes.matchedWithHumans, false);
+  assert.equal(cbRes.botsAdded, 3);
+  assert.equal(cbRes.autoStarted, true);
+  assert.equal(cbRes.room.members.length, 4);
+
+  destroyRoomData(cbRes.roomId);
 });

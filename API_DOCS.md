@@ -690,6 +690,9 @@ Client cũng có thể gọi trực tiếp **`GET /api/enums`** (hoặc **`GET /
 | `GAME_ALREADY_SUBMITTED_THIS_ROUND` | Bạn đã nộp bài trong vòng này rồi! | You have already submitted your recording for this round. | — | Chặn nộp bài trùng lặp nhiều lần trong cùng 1 vòng đấu. |
 | `GAME_NOT_IN_SHOWDOWN_PHASE` | Chưa tới giai đoạn Showdown Reveal! | Not currently in the Showdown Reveal phase. | — | Gọi `confirmShowdownSkip` khi game không ở trạng thái `SHOWDOWN_REVEAL`. |
 | `GAME_NOT_IN_READY_PHASE` | Chưa tới giai đoạn xác nhận sẵn sàng qua vòng! | Not currently in the Round Result or Game Over ready phase. | — | Gọi `confirmRoundReady` khi game không ở trạng thái `ROUND_RESULT` hoặc `GAME_OVER`. |
+| `BOT_HOST_ONLY_MANAGE` | Chỉ có Chủ phòng mới có quyền thêm hoặc xóa Bot AI! | Only the room Host can add or remove AI Bots. | — | Gọi `add_bot` hoặc `remove_bot` bởi người chơi không phải Host. |
+| `BOT_CANNOT_MANAGE_IN_PROGRESS` | Không thể thêm hoặc xóa Bot khi trận đấu đang diễn ra! | Cannot add or remove AI Bots while a match is in progress. | — | Gọi `add_bot` hoặc `remove_bot` khi trạng thái game khác `IDLE` và `GAME_OVER`. |
+| `BOT_NOT_FOUND` | Không tìm thấy Bot AI trong phòng! | AI Bot not found in the room. | — | Gọi `remove_bot` khi phòng không có Bot nào hoặc `botSocketId` không tồn tại. |
 
 ### 11.2. Bảng Mã Thông Báo Hệ Thống Phòng (`SystemMessageCode`)
 
@@ -705,6 +708,9 @@ Client cũng có thể gọi trực tiếp **`GET /api/enums`** (hoặc **`GET /
 | `SYS_SOUND_TRIGGERED` | đã phát âm thanh `"{soundName}"` | played sound `"{soundName}"` | `soundId`, `soundName` | `new_message` (`type: "sound_trigger"`) |
 | `SYS_AUDIO_CLIP_SHARED` | đã chia sẻ một đoạn ghi âm giọng nói 🎙️ | shared a voice recording clip 🎙️ | — | `new_message` (`type: "audio_share"`) |
 | `SYS_GAME_CONFIG_UPDATED` | ⚙️ Chủ phòng đã cập nhật: `{totalRounds}` vòng, thời gian nhại `{recordDuration}`s! | ⚙️ Host updated config: `{totalRounds}` rounds, `{recordDuration}`s recording time! | `totalRounds`, `recordDuration` | `game_config_changed` |
+| `SYS_BOT_JOINED_ROOM` | 🤖 Bot `{botName}` đã tham gia phòng đấu! | 🤖 Bot `{botName}` joined the room! | `botName`, `difficulty` | `bot_added` & `user_joined` |
+| `SYS_BOT_REMOVED_FROM_ROOM` | 🤖 Bot `{botName}` đã rời khỏi phòng. | 🤖 Bot `{botName}` was removed from the room. | `botName` | `bot_removed` & `user_left` |
+| `SYS_MATCHMAKING_BOTS_FILLED` | 🤖 Không tìm thấy người chơi khác — Hệ thống đã tự động thêm `{botsAdded}` Bot AI vào phòng để bắt đầu trận đấu! | 🤖 No other players found — Automatically added `{botsAdded}` AI Bots to start the match! | `botsAdded`, `totalPlayers` | `bots_auto_filled` |
 
 ### 11.3. Bảng Mã Thông Báo Gameplay (`GameMessageCode`)
 
@@ -736,3 +742,63 @@ Client cũng có thể gọi trực tiếp **`GET /api/enums`** (hoặc **`GET /
 | `AI_REMARK_TERRIBLE_2` | **F (< 35)** | 👻 Đang giả tiếng sinh vật ngoài hành tinh à? | 👻 Are you mimicking an alien creature? |
 | `AI_REMARK_TERRIBLE_3` | **F (< 35)** | 🤐 Quên bật tiếng hay đang nhai micro vậy? | 🤐 Did you forget to unmute or are you chewing the mic? |
 | `AI_REMARK_MISSED_RECORDING` | **F (0 - Missed)** | 😴 Không kịp thu âm nhại lại! | 😴 Missed the recording window! |
+
+---
+
+## 12. 🤖 Hệ Thống AI Bot & Ghép Trận Nhanh (Matchmaking)
+
+> **File hướng dẫn chi tiết dành riêng cho AI Client:** Xem tại [`backend/ENUM_LOCALIZATION_GUIDE.md`](./ENUM_LOCALIZATION_GUIDE.md).
+
+### 12.1. Tìm trận nhanh (`find_match` / `quick_match`)
+Khi người chơi bấm tìm trận nhưng không tìm thấy phòng chờ nào có người chơi khác:
+- Server tự động tạo phòng mới, thêm mặc định **3 AI Bot** (`DEFAULT_MATCHMAKING_BOT_COUNT = 3`, xoay vòng độ khó `NORMAL`, `EASY`, `HARD` để tạo bàn **4 người chơi**) và tự động bắt đầu ngay vòng 1 (`autoStarted: true`).
+
+```javascript
+socket.emit("find_match", {
+  userName: "CaoThuNhaiGiong",
+  avatar: "🎧",
+  botCount: 3,      // Mặc định thêm 3 Bot khi không tìm thấy user khác
+  autoStart: true   // Mặc định bắt đầu ngay vòng 1
+}, (res) => {
+  console.log(res.matchedWithHumans); // false nếu ghép với Bot, true nếu ghép được phòng có người thật
+  console.log(res.botsAdded);         // 3
+  console.log(res.autoStarted);       // true
+  console.log(res.room.members);      // Danh sách 4 thành viên (1 User + 3 AI Bots)
+});
+```
+
+### 12.2. Bắt đầu trận hoặc Hết thời gian tìm người tại sảnh (`game_start` / `matchmaking_timeout` / `fill_bots_and_start`)
+Khi Chủ phòng đang đợi ở sảnh mà ít người chơi (hoặc hết thời gian tìm người `matchmaking_timeout`), khi gọi `game_start` (hoặc `matchmaking_timeout` / `fill_bots_and_start`):
+- Mặc định `minPlayers = 4` (`autoFillBots = true`): Nếu phòng có ít hơn 4 người (ví dụ chỉ có 1 mình Host), Server tự động thêm **3 AI Bot** vào phòng để đủ 4 người chơi, phát sự kiện `bots_auto_filled` (`SYS_MATCHMAKING_BOTS_FILLED`) rồi bắt đầu trận đấu ngay!
+
+```javascript
+socket.emit("game_start", {
+  roomId: "K9P2",
+  requireAllReady: false,
+  autoFillBots: true, // Mặc định true
+  minPlayers: 4       // Mặc định bù thêm Bot cho đủ 4 người chơi
+}, (res) => {
+  console.log(res); // { success: true, botsAdded: 3, totalPlayers: 4 }
+});
+```
+
+### 12.3. Thêm / Xóa Bot thủ công tại sảnh (`add_bot` / `remove_bot`)
+- **Thêm 1 Bot (`add_bot`):**
+  ```javascript
+  socket.emit("add_bot", {
+    roomId: "K9P2",
+    difficulty: "HARD", // "EASY" (50-73đ) | "NORMAL" (68-88đ) | "HARD" (82-97đ)
+    botName: "Bot Cyber",
+    avatar: "👾"
+  }, (res) => {
+    console.log(res.bot); // { socketId: "bot_...", isBot: true, botDifficulty: "HARD", isReady: true }
+  });
+  ```
+- **Xóa 1 Bot (`remove_bot` hoặc `kick_player`):**
+  ```javascript
+  socket.emit("remove_bot", {
+    roomId: "K9P2",
+    botSocketId: "bot_x8k2p" // Nếu bỏ trống sẽ xóa Bot vừa thêm gần nhất
+  });
+  ```
+

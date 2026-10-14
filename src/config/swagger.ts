@@ -91,7 +91,14 @@ function buildEnumMarkdownDocs(): string {
     '### 🤖 5. Bảng Mapping Nhận Xét AI Chấm Điểm (`AiRemarkCode`)',
     '| Mã Enum (`evaluation.remark`) | Hạng Điểm | Tiếng Việt (VI) | Tiếng Anh (EN) |',
     '| :--- | :--- | :--- | :--- |',
-    remarkRows
+    remarkRows,
+    '',
+    '### 🤖 6. Tính Năng AI Bot & Ghép Trận Nhanh (Khi không tìm thấy User khác)',
+    '- **Tìm trận nhanh (`find_match` / `quick_match`):** Emit `{ userName, avatar, botCount: 3, autoStart: true }`. Nếu không tìm thấy phòng chờ nào có người chơi khác, Server tự tạo phòng mới, **thêm mặc định 3 AI Bot** (đủ 4 người chơi với độ khó `NORMAL`, `EASY`, `HARD`) và **bắt đầu ngay vòng 1 (`autoStarted: true`)**.',
+    '- **Tự động điền Bot khi bắt đầu trận hoặc hết thời gian chờ (`game_start` / `matchmaking_timeout` / `fill_bots_and_start`):** Mặc định `autoFillBots: true, minPlayers: 4` (hoặc truyền `botCount: 3`). Nếu phòng chỉ có 1 người chơi, Server tự động thêm **3 AI Bot** để đủ bàn 4 người và broadcast `bots_auto_filled` (`SYS_MATCHMAKING_BOTS_FILLED`).',
+    '- **Chủ phòng thêm Bot thủ công (`add_bot`):** Emit `{ roomId, difficulty: "EASY" | "NORMAL" | "HARD", botName?, avatar? }` ➔ Broadcast `bot_added` & `user_joined` (`SYS_BOT_JOINED_ROOM`).',
+    '- **Chủ phòng xóa Bot (`remove_bot` hoặc `kick_player`):** Emit `{ roomId, botSocketId? }` ➔ Broadcast `bot_removed` & `user_left` (`SYS_BOT_REMOVED_FROM_ROOM`).',
+    '- **Hành vi thông minh của Bot:** Luôn `isReady: true`, tự động nộp bài nhại theo độ khó (`EASY`: 50-73đ, `NORMAL`: 68-88đ, `HARD`: 82-97đ), tự động đồng ý skip Showdown và tự động Ready qua vòng mới.'
   ].join('\n');
 }
 
