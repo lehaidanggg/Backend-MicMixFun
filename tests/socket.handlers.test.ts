@@ -235,15 +235,44 @@ test('Socket Handlers — Decision Matrix: Room, Media & Game Enum Error/Message
 
   destroyRoomData('SOLO_RM');
 
-  // 14. Quick Match / Find Match when no other users are waiting -> creates room, adds 3 Bots, and autoStarts gameplay
-  await hostMock.handlers.get('find_match')!({ userName: 'QuickPlayer' }, (r: any) => {
-    cbRes = r;
+  // 14. Quick Match / Find Match: 2 IDLE users searching concurrently -> paired into the same room immediately
+  let p1MatchRes: any = null;
+  let p2MatchRes: any = null;
+  await hostMock.handlers.get('quick_match')!({ userName: 'IdleUser1', waitMs: 5000 }, (r: any) => {
+    p1MatchRes = r;
   });
-  assert.equal(cbRes.success, true);
-  assert.equal(cbRes.matchedWithHumans, false);
-  assert.equal(cbRes.botsAdded, 3);
-  assert.equal(cbRes.autoStarted, true);
-  assert.equal(cbRes.room.members.length, 4);
+  // While IdleUser1 is waiting on timer, matchmaking_searching is emitted
+  const searchingEvt = hostMock.emittedToSelf.find(e => e.event === 'matchmaking_searching');
+  assert.equal(Boolean(searchingEvt), true);
+  assert.equal(searchingEvt?.payload.searching, true);
 
-  destroyRoomData(cbRes.roomId);
+  // IdleUser2 calls quick_match while IdleUser1 is waiting -> both get paired into a room!
+  await playerMock.handlers.get('quick_match')!({ userName: 'IdleUser2', waitMs: 5000 }, (r: any) => {
+    p2MatchRes = r;
+  });
+  assert.equal(p1MatchRes?.success, true);
+  assert.equal(p1MatchRes?.matchedWithHumans, true);
+  assert.equal(p2MatchRes?.success, true);
+  assert.equal(p2MatchRes?.matchedWithHumans, true);
+  assert.equal(p1MatchRes?.roomId, p2MatchRes?.roomId);
+  assert.equal(p2MatchRes?.room.members.length, 2);
+
+  destroyRoomData(p1MatchRes.roomId);
+  hostSession.currentRoomId = null;
+  playerSession.currentRoomId = null;
+
+  // 15. Quick Match / Find Match when no other IDLE user is found after timer expires -> opens room, adds 3 Bots, and autoStarts gameplay
+  const timeoutRes: any = await new Promise(resolve => {
+    hostMock.handlers.get('quick_match')!({ userName: 'QuickSoloPlayer', waitMs: 40 }, (r: any) => {
+      resolve(r);
+    });
+  });
+  assert.equal(timeoutRes.success, true);
+  assert.equal(timeoutRes.matchedWithHumans, false);
+  assert.equal(timeoutRes.timedOutToBots, true);
+  assert.equal(timeoutRes.botsAdded, 3);
+  assert.equal(timeoutRes.autoStarted, true);
+  assert.equal(timeoutRes.room.members.length, 4);
+
+  destroyRoomData(timeoutRes.roomId);
 });

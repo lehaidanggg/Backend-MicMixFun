@@ -1,6 +1,6 @@
 import { Server } from 'socket.io';
 import { ipConnectionCounts, extractClientIp } from '../services/auth.service';
-import { leaveCurrentRoom } from '../services/room.service';
+import { leaveCurrentRoom, cancelMatchmakingForSocket } from '../services/room.service';
 import { socketAuthMiddleware } from './auth.middleware';
 import { registerRoomHandlers } from './room.handler';
 import { registerMediaHandlers } from './media.handler';
@@ -53,6 +53,7 @@ export function registerSocketServer(io: Server): void {
     // Xử lý ngắt kết nối (disconnect)
     socket.on('disconnect', () => {
       console.log(`[Socket] 🔴 Mất kết nối: ${socket.id} (${sessionState.currentUser.userName})`);
+      cancelMatchmakingForSocket(socket.id);
       const prevCount = ipConnectionCounts.get(clientIp) || 1;
       if (prevCount <= 1) {
         ipConnectionCounts.delete(clientIp);

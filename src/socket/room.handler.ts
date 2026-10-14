@@ -2,7 +2,8 @@ import { Server } from 'socket.io';
 import {
   MAX_MEMBERS_PER_ROOM,
   MAX_CHAT_HISTORY_SIZE,
-  DEFAULT_MATCHMAKING_BOT_COUNT
+  DEFAULT_MATCHMAKING_BOT_COUNT,
+  DEFAULT_MATCHMAKING_WAIT_MS
 } from '../config/constants';
 import { ErrorCode, RoomCloseReasonCode, SystemMessageCode } from '../config/messages';
 import { MimicGameSession } from '../game/MimicGameSession';
@@ -16,6 +17,8 @@ import {
 import {
   rooms,
   gameSessions,
+  matchmakingQueue,
+  cancelMatchmakingForSocket,
   getRoomMembersArray,
   destroyRoomData,
   leaveCurrentRoom,
@@ -25,7 +28,7 @@ import {
   findAvailableMatchmakingRoom,
   isBotMember
 } from '../services/room.service';
-import { AuthenticatedSocket, BotDifficulty, RoomData, SocketSessionState } from '../types';
+import { AuthenticatedSocket, BotDifficulty, MatchmakingQueueEntry, RoomData, SocketSessionState } from '../types';
 
 export function registerRoomHandlers(
   io: Server,
@@ -91,6 +94,7 @@ export function registerRoomHandlers(
     'create_room',
     ({ roomId, roomName, userName }: Record<string, any> = {}, callback?: (res: Record<string, unknown>) => void) => {
       try {
+        cancelMatchmakingForSocket(socket.id);
         const generatedRoomId = String(roomId || Math.random().toString(36).substring(2, 8))
           .trim()
           .toUpperCase()
@@ -143,6 +147,7 @@ export function registerRoomHandlers(
       callback?: (res: Record<string, unknown>) => void
     ) => {
       try {
+        cancelMatchmakingForSocket(socket.id);
         const targetRoomId = String(roomId || '').trim().toUpperCase().slice(0, 24);
 
         if (!targetRoomId) {
@@ -601,75 +606,299 @@ export function registerRoomHandlers(
     }
   );
 
-  // 9. TÌM TRẬN NHANH / GHÉP PHÒNG TỰ ĐỘNG (find_match & quick_match)
-  // Khi tìm không thấy phòng có người chơi khác -> Mặc định tạo phòng mới, thêm vài AI Bot (3 Bot) và bắt đầu Gameplay ngay!
+      // 9. TÌM TRẬN NHANH / GHÉP PHÒNG TỰ ĐỘNG (find_match & quick_match)
+  // Luồng hoạt động:
+  // - Bước 1: Tìm tất cả User đang rảnh (IDLE):
+  //     + (1a) Có phòng đang ở trạng thái IDLE có người chơi thật và còn chỗ trống -> Ghép ngay vào phòng đó.
+  //     + (1b) Có người chơi khác đang chờ trong hàng đợi tìm trận (matchmakingQueue) -> Tạo phòng mới và ghép cả hai vào cùng phòng ngay lập tức.
+  // - Bước 2: Nếu KHÔNG tìm thấy bất kỳ User rảnh nào khác -> Bắt đầu chạy 1 Timer chờ (waitMs, mặc định 10s).
+  // - Bước 3: Nếu hết thời gian Timer mà vẫn không có User nào khác ghép vào -> Tự động mở 1 phòng mới, thêm AI Bot vào phòng đó và bắt đầu Gameplay ngay!
+  const createBotFallbackRoomAndStart = (entry: MatchmakingQueueEntry): Record<string, unknown> => {
+    cancelMatchmakingForSocket(entry.socket.id);
+
+    const newRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const room: RoomData = {
+      id: newRoomId,
+      name: entry.userName,
+      createdAt: Date.now(),
+      hostId: entry.socket.id,
+      hostUserId: entry.userId,
+      members: new Map(),
+      messages: [],
+      cleanupTimer: null
+    };
+    rooms.set(newRoomId, room);
+
+    const userObj = entry.sessionState.currentUser;
+    entry.sessionState.currentRoomId = room.id;
+    userObj.socketId = entry.socket.id;
+    userObj.userId = entry.userId;
+    userObj.userName = entry.userName;
+    userObj.avatar = entry.avatar;
+    userObj.role = 'HOST';
+    userObj.isReady = true;
+    userObj.isAuthenticated = true;
+    userObj.joinedAt = Date.now();
+
+    entry.socket.join(room.id);
+    room.members.set(entry.socket.id, userObj);
+
+    const game = new MimicGameSession(room.id, io);
+    game.hostId = room.hostId;
+    gameSessions.set(room.id, game);
+    game.addPlayer(entry.socket.id, userObj.userName, userObj.avatar, 'HOST', userObj.userId, true);
+
+    const filled = fillRoomWithBots(room.id, {
+      botCount: entry.botCount,
+      difficulty: entry.botDifficulty
+    });
+    const botsAdded = filled.botsAdded;
+
+    let autoStarted = false;
+    if (entry.autoStart !== false) {
+      autoStarted = game.startGame({ requireAllReady: false });
+    }
+
+    console.log(
+      `[Matchmaking] ⏰ Hết thời gian chờ (${entry.waitMs}ms) không tìm thấy User khác -> Tạo phòng ${room.id}, thêm ${botsAdded} Bot AI & autoStart=${autoStarted}`
+    );
+
+    const responseData = {
+      success: true,
+      searching: false,
+      matchedWithHumans: false,
+      timedOutToBots: true,
+      botsAdded,
+      autoStarted,
+      roomId: room.id,
+      room: {
+        id: room.id,
+        name: room.name,
+        hostId: room.hostId,
+        members: getRoomMembersArray(room),
+        messages: room.messages.slice(-MAX_CHAT_HISTORY_SIZE)
+      },
+      user: userObj,
+      gameState: game.getStateSnapshot()
+    };
+
+    entry.socket.emit('joined_room_success', responseData);
+    entry.socket.emit('match_found', responseData);
+    if (entry.onResolved) {
+      const cb = entry.onResolved;
+      entry.onResolved = undefined;
+      cb(responseData);
+    }
+    return responseData;
+  };
+
   const handleQuickMatch = async (
     {
       userName,
       avatar,
       botCount = DEFAULT_MATCHMAKING_BOT_COUNT,
       botDifficulty,
-      autoStart = true
+      autoStart = true,
+      waitMs,
+      waitForPlayers = true
     }: Record<string, any> = {},
     callback?: (res: Record<string, unknown>) => void
   ): Promise<void> => {
     try {
+      // Hủy phiên tìm trận cũ của chính socket này (nếu có)
+      cancelMatchmakingForSocket(socket.id);
+
       const verifiedToken = socket.authSession || null;
       const resolvedUserId = (verifiedToken && verifiedToken.uid) || currentUser.userId || generateSecureUserId();
       const cleanName = sanitizeUserName(userName || (verifiedToken && verifiedToken.name) || currentUser.userName, socket.id);
       const cleanAvatar = avatar || (verifiedToken && verifiedToken.avatar) || currentUser.avatar || '🎧';
+
+      currentUser.socketId = socket.id;
+      currentUser.userId = resolvedUserId;
+      currentUser.userName = cleanName;
+      currentUser.avatar = cleanAvatar;
+      currentUser.isAuthenticated = true;
 
       if (sessionState.currentRoomId) {
         leaveCurrentRoom(socket, sessionState.currentRoomId, currentUser);
         sessionState.currentRoomId = null;
       }
 
-      // 1. Tìm kiếm phòng đang chờ (IDLE) có người chơi khác
-      const existingRoom = findAvailableMatchmakingRoom(socket.id);
-      const matchedWithHumans = Boolean(existingRoom);
+      // 1A. Kiểm tra xem có User nào khác đang chờ trong hàng đợi tìm trận (matchmakingQueue) không
+      let waitingPeer: MatchmakingQueueEntry | null = null;
+      for (const [peerSockId, entry] of matchmakingQueue.entries()) {
+        if (peerSockId !== socket.id) {
+          waitingPeer = entry;
+          break;
+        }
+      }
 
-      let room: RoomData;
-      if (existingRoom) {
-        room = existingRoom;
-      } else {
+      if (waitingPeer) {
+        cancelMatchmakingForSocket(waitingPeer.socket.id);
+
         const newRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
-        room = {
+        const hostEntry = waitingPeer;
+        const room: RoomData = {
           id: newRoomId,
-          name: cleanName,
+          name: hostEntry.userName,
           createdAt: Date.now(),
-          hostId: socket.id,
-          hostUserId: resolvedUserId,
+          hostId: hostEntry.socket.id,
+          hostUserId: hostEntry.userId,
           members: new Map(),
           messages: [],
           cleanupTimer: null
         };
         rooms.set(newRoomId, room);
-      }
 
-      const isHost = room.hostId === socket.id;
-      sessionState.currentRoomId = room.id;
-      currentUser.socketId = socket.id;
-      currentUser.userId = resolvedUserId;
-      currentUser.userName = cleanName;
-      currentUser.avatar = cleanAvatar;
-      currentUser.role = isHost ? 'HOST' : 'PLAYER';
-      currentUser.isReady = true;
-      currentUser.isAuthenticated = true;
-      currentUser.joinedAt = Date.now();
-
-      socket.join(room.id);
-      room.members.set(socket.id, currentUser);
-
-      let game = gameSessions.get(room.id);
-      if (!game) {
-        game = new MimicGameSession(room.id, io);
+        const game = new MimicGameSession(room.id, io);
         game.hostId = room.hostId;
         gameSessions.set(room.id, game);
-      }
-      game.addPlayer(socket.id, currentUser.userName, currentUser.avatar, currentUser.role, currentUser.userId, true);
 
-      // Nếu ghép vào phòng có sẵn người chơi thật -> thông báo user_joined
-      if (matchedWithHumans) {
+        // Đưa người chơi đang chờ (Peer) làm HOST
+        const hostUser = hostEntry.sessionState.currentUser;
+        hostEntry.sessionState.currentRoomId = room.id;
+        hostUser.socketId = hostEntry.socket.id;
+        hostUser.userId = hostEntry.userId;
+        hostUser.userName = hostEntry.userName;
+        hostUser.avatar = hostEntry.avatar;
+        hostUser.role = 'HOST';
+        hostUser.isReady = true;
+        hostUser.isAuthenticated = true;
+        hostUser.joinedAt = Date.now();
+
+        hostEntry.socket.join(room.id);
+        room.members.set(hostEntry.socket.id, hostUser);
+        game.addPlayer(hostEntry.socket.id, hostUser.userName, hostUser.avatar, 'HOST', hostUser.userId, true);
+
+        // Đưa người chơi hiện tại vào phòng làm PLAYER
+        sessionState.currentRoomId = room.id;
+        currentUser.role = 'PLAYER';
+        currentUser.isReady = true;
+        currentUser.joinedAt = Date.now();
+
+        socket.join(room.id);
+        room.members.set(socket.id, currentUser);
+        game.addPlayer(socket.id, currentUser.userName, currentUser.avatar, 'PLAYER', currentUser.userId, true);
+
+        // Gộp thêm toàn bộ các User khác đang rảnh trong matchmakingQueue (nếu còn chỗ)
+        const extraPeers: MatchmakingQueueEntry[] = [];
+        for (const [otherId, otherEntry] of Array.from(matchmakingQueue.entries())) {
+          if (room.members.size >= MAX_MEMBERS_PER_ROOM) break;
+          if (otherId === socket.id || otherId === hostEntry.socket.id) continue;
+          cancelMatchmakingForSocket(otherId);
+          const u = otherEntry.sessionState.currentUser;
+          otherEntry.sessionState.currentRoomId = room.id;
+          u.socketId = otherEntry.socket.id;
+          u.userId = otherEntry.userId;
+          u.userName = otherEntry.userName;
+          u.avatar = otherEntry.avatar;
+          u.role = 'PLAYER';
+          u.isReady = true;
+          u.isAuthenticated = true;
+          u.joinedAt = Date.now();
+          otherEntry.socket.join(room.id);
+          room.members.set(otherEntry.socket.id, u);
+          game.addPlayer(otherEntry.socket.id, u.userName, u.avatar, 'PLAYER', u.userId, true);
+          extraPeers.push(otherEntry);
+        }
+
+        const membersList = getRoomMembersArray(room);
+        const roomSnapshot = {
+          id: room.id,
+          name: room.name,
+          hostId: room.hostId,
+          members: membersList,
+          messages: room.messages.slice(-MAX_CHAT_HISTORY_SIZE)
+        };
+        const stateSnapshot = game.getStateSnapshot();
+
+        // Thông báo cho Host (người đang chờ trong queue)
+        const hostPayload = {
+          success: true,
+          searching: false,
+          matchedWithHumans: true,
+          botsAdded: 0,
+          autoStarted: false,
+          roomId: room.id,
+          room: roomSnapshot,
+          user: hostUser,
+          gameState: stateSnapshot
+        };
+        hostEntry.socket.emit('joined_room_success', hostPayload);
+        hostEntry.socket.emit('match_found', hostPayload);
+        if (hostEntry.onResolved) {
+          const cb = hostEntry.onResolved;
+          hostEntry.onResolved = undefined;
+          cb(hostPayload);
+        }
+
+        // Thông báo cho các peer phụ (nếu có)
+        for (const ep of extraPeers) {
+          const epPayload = {
+            ...hostPayload,
+            user: ep.sessionState.currentUser
+          };
+          ep.socket.emit('joined_room_success', epPayload);
+          ep.socket.emit('match_found', epPayload);
+          if (ep.onResolved) {
+            const cb = ep.onResolved;
+            ep.onResolved = undefined;
+            cb(epPayload);
+          }
+        }
+
+        // Broadcast sự kiện user_joined cho phòng
+        hostEntry.socket.emit('user_joined', {
+          user: currentUser,
+          members: membersList,
+          systemMessage: SystemMessageCode.SYS_PLAYER_JOINED_ROOM,
+          messageCode: SystemMessageCode.SYS_PLAYER_JOINED_ROOM,
+          messageParams: { userName: currentUser.userName, role: currentUser.role }
+        });
+
+        const currentPayload = {
+          success: true,
+          searching: false,
+          matchedWithHumans: true,
+          botsAdded: 0,
+          autoStarted: false,
+          roomId: room.id,
+          room: roomSnapshot,
+          user: currentUser,
+          gameState: stateSnapshot
+        };
+
+        console.log(
+          `[Matchmaking] 🤝 Ghép thành công ${room.members.size} người chơi đang rảnh vào phòng mới: ${room.id}`
+        );
+
+        socket.emit('joined_room_success', currentPayload);
+        socket.emit('match_found', currentPayload);
+        if (callback) callback(currentPayload);
+        return;
+      }
+
+      // 1B. Kiểm tra xem có phòng nào đang ở trạng thái rảnh (IDLE) có người chơi thật và còn chỗ trống không
+      const existingRoom = findAvailableMatchmakingRoom(socket.id);
+      if (existingRoom) {
+        const room = existingRoom;
+        const isHost = room.hostId === socket.id;
+        sessionState.currentRoomId = room.id;
+        currentUser.role = isHost ? 'HOST' : 'PLAYER';
+        currentUser.isReady = true;
+        currentUser.joinedAt = Date.now();
+
+        socket.join(room.id);
+        room.members.set(socket.id, currentUser);
+
+        let game = gameSessions.get(room.id);
+        if (!game) {
+          game = new MimicGameSession(room.id, io);
+          game.hostId = room.hostId;
+          gameSessions.set(room.id, game);
+        }
+        game.addPlayer(socket.id, currentUser.userName, currentUser.avatar, currentUser.role, currentUser.userId, true);
+
         socket.to(room.id).emit('user_joined', {
           user: currentUser,
           members: getRoomMembersArray(room),
@@ -677,45 +906,112 @@ export function registerRoomHandlers(
           messageCode: SystemMessageCode.SYS_PLAYER_JOINED_ROOM,
           messageParams: { userName: currentUser.userName, role: currentUser.role }
         });
+
+        const responseData = {
+          success: true,
+          searching: false,
+          matchedWithHumans: true,
+          botsAdded: 0,
+          autoStarted: false,
+          roomId: room.id,
+          room: {
+            id: room.id,
+            name: room.name,
+            hostId: room.hostId,
+            members: getRoomMembersArray(room),
+            messages: room.messages.slice(-MAX_CHAT_HISTORY_SIZE)
+          },
+          user: currentUser,
+          gameState: game.getStateSnapshot()
+        };
+
+        console.log(`[Matchmaking] 🤝 Ghép ${currentUser.userName} vào phòng IDLE sẵn có: ${room.id}`);
+        socket.emit('joined_room_success', responseData);
+        socket.emit('match_found', responseData);
+        if (callback) callback(responseData);
+        return;
       }
 
-      // 2. Nếu KHÔNG tìm thấy người chơi khác -> Mặc định thêm vài AI Bot (3 Bot) vào phòng và bắt đầu Gameplay!
-      let botsAdded = 0;
-      let autoStarted = false;
-      if (!matchedWithHumans) {
-        const count = Math.max(1, Number(botCount) || DEFAULT_MATCHMAKING_BOT_COUNT);
-        const diff = botDifficulty ? (String(botDifficulty).toUpperCase() as BotDifficulty) : undefined;
-        const filled = fillRoomWithBots(room.id, { botCount: count, difficulty: diff });
-        botsAdded = filled.botsAdded;
+      // 2. KHÔNG tìm thấy User nào đang rảnh -> Đưa vào hàng đợi và bật Timer chờ!
+      const resolvedBotCount = Math.max(1, Number(botCount) || DEFAULT_MATCHMAKING_BOT_COUNT);
+      const resolvedDiff = botDifficulty ? (String(botDifficulty).toUpperCase() as BotDifficulty) : undefined;
+      const resolvedWaitMs =
+        waitForPlayers === false
+          ? 0
+          : typeof waitMs === 'number' && waitMs >= 0
+            ? Math.min(60000, waitMs)
+            : DEFAULT_MATCHMAKING_WAIT_MS;
 
-        if (autoStart !== false) {
-          autoStarted = game.startGame({ requireAllReady: false });
-        }
-        console.log(
-          `[Matchmaking] 🤖 Không tìm thấy user khác -> Tạo phòng ${room.id}, thêm ${botsAdded} Bot AI & autoStart=${autoStarted}`
-        );
-      }
-
-      const responseData = {
-        success: true,
-        matchedWithHumans,
-        botsAdded,
-        autoStarted,
-        roomId: room.id,
-        room: {
-          id: room.id,
-          name: room.name,
-          hostId: room.hostId,
-          members: getRoomMembersArray(room),
-          messages: room.messages.slice(-MAX_CHAT_HISTORY_SIZE)
-        },
-        user: currentUser,
-        gameState: game.getStateSnapshot()
+      const queueEntry: MatchmakingQueueEntry = {
+        socket,
+        sessionState,
+        userId: resolvedUserId,
+        userName: cleanName,
+        avatar: cleanAvatar,
+        botCount: resolvedBotCount,
+        botDifficulty: resolvedDiff,
+        autoStart: autoStart !== false,
+        waitMs: resolvedWaitMs,
+        joinedQueueAt: Date.now(),
+        timer: null,
+        tickTimer: null,
+        onResolved: callback
       };
 
-      socket.emit('joined_room_success', responseData);
-      socket.emit('match_found', responseData);
-      if (callback) callback(responseData);
+      // Nếu waitMs === 0 (hoặc waitForPlayers === false) -> Mở ngay phòng và thêm Bot
+      if (resolvedWaitMs <= 0) {
+        createBotFallbackRoomAndStart(queueEntry);
+        return;
+      }
+
+      sessionState.isSearchingMatch = true;
+      matchmakingQueue.set(socket.id, queueEntry);
+
+      const totalWaitSeconds = Math.ceil(resolvedWaitMs / 1000);
+      let remainingSeconds = totalWaitSeconds;
+
+      console.log(
+        `[Matchmaking] 🔍 ${cleanName} (${socket.id}) bắt đầu chờ tìm người chơi khác trong ${resolvedWaitMs}ms...`
+      );
+
+      socket.emit('matchmaking_searching', {
+        searching: true,
+        waitMs: resolvedWaitMs,
+        timeRemaining: remainingSeconds,
+        totalWaitSeconds,
+        systemMessage: SystemMessageCode.SYS_MATCHMAKING_SEARCHING,
+        messageCode: SystemMessageCode.SYS_MATCHMAKING_SEARCHING,
+        messageParams: { waitSeconds: remainingSeconds, waitMs: resolvedWaitMs }
+      });
+
+      // Phát sự kiện đếm ngược mỗi giây (matchmaking_tick) để UI hiển thị đồng hồ tìm trận
+      if (resolvedWaitMs >= 1000) {
+        queueEntry.tickTimer = setInterval(() => {
+          remainingSeconds = Math.max(0, remainingSeconds - 1);
+          socket.emit('matchmaking_tick', {
+            searching: true,
+            timeRemaining: remainingSeconds,
+            totalWaitSeconds,
+            progressPercent: Math.max(
+              0,
+              Math.min(100, Math.round(((totalWaitSeconds - remainingSeconds) / totalWaitSeconds) * 100))
+            )
+          });
+        }, 1000);
+        if (typeof queueEntry.tickTimer.unref === 'function') {
+          queueEntry.tickTimer.unref();
+        }
+      }
+
+      // 3. Khi hết thời gian Timer mà vẫn chưa tìm được User nào khác -> Mở phòng mới & thêm Bot để bắt đầu game!
+      queueEntry.timer = setTimeout(() => {
+        if (!matchmakingQueue.has(socket.id)) return;
+        createBotFallbackRoomAndStart(queueEntry);
+      }, resolvedWaitMs);
+
+      if (typeof queueEntry.timer.unref === 'function') {
+        queueEntry.timer.unref();
+      }
     } catch {
       if (callback) {
         callback({
@@ -729,4 +1025,24 @@ export function registerRoomHandlers(
 
   socket.on('find_match', handleQuickMatch);
   socket.on('quick_match', handleQuickMatch);
+
+  // 10. HỦY TÌM TRẬN NHANH (cancel_match & cancel_quick_match)
+  const handleCancelMatchmaking = (
+    _data: unknown,
+    callback?: (res: Record<string, unknown>) => void
+  ): void => {
+    const cancelled = cancelMatchmakingForSocket(socket.id);
+    const payload = {
+      success: true,
+      cancelled: Boolean(cancelled),
+      searching: false,
+      systemMessage: SystemMessageCode.SYS_MATCHMAKING_CANCELLED,
+      messageCode: SystemMessageCode.SYS_MATCHMAKING_CANCELLED
+    };
+    socket.emit('matchmaking_cancelled', payload);
+    if (callback) callback(payload);
+  };
+
+  socket.on('cancel_match', handleCancelMatchmaking);
+  socket.on('cancel_quick_match', handleCancelMatchmaking);
 }

@@ -157,9 +157,26 @@ export interface RoomData {
   cleanupTimer: ReturnType<typeof setTimeout> | null;
 }
 
+export interface MatchmakingQueueEntry {
+  socket: AuthenticatedSocket;
+  sessionState: SocketSessionState;
+  userId: string;
+  userName: string;
+  avatar: string;
+  botCount: number;
+  botDifficulty?: BotDifficulty;
+  autoStart: boolean;
+  waitMs: number;
+  joinedQueueAt: number;
+  timer: ReturnType<typeof setTimeout> | null;
+  tickTimer: ReturnType<typeof setInterval> | null;
+  onResolved?: (res: Record<string, unknown>) => void;
+}
+
 export interface SocketSessionState {
   currentRoomId: string | null;
   currentUser: RoomMember;
+  isSearchingMatch?: boolean;
 }
 
 export interface AuthenticatedSocket extends Socket {

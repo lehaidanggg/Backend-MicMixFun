@@ -61,7 +61,9 @@ export enum SystemMessageCode {
   SYS_GAME_CONFIG_UPDATED = 'SYS_GAME_CONFIG_UPDATED',
   SYS_BOT_JOINED_ROOM = 'SYS_BOT_JOINED_ROOM',
   SYS_BOT_REMOVED_FROM_ROOM = 'SYS_BOT_REMOVED_FROM_ROOM',
-  SYS_MATCHMAKING_BOTS_FILLED = 'SYS_MATCHMAKING_BOTS_FILLED'
+  SYS_MATCHMAKING_BOTS_FILLED = 'SYS_MATCHMAKING_BOTS_FILLED',
+  SYS_MATCHMAKING_SEARCHING = 'SYS_MATCHMAKING_SEARCHING',
+  SYS_MATCHMAKING_CANCELLED = 'SYS_MATCHMAKING_CANCELLED'
 }
 
 export enum RoomCloseReasonCode {
@@ -427,6 +429,19 @@ export const SYSTEM_MESSAGE_DESCRIPTIONS: Record<SystemMessageCode, EnumDocItem>
     en: '🤖 No other players found — Automatically added {botsAdded} AI Bots to start the match!',
     params: ['botsAdded', 'totalPlayers'],
     context: 'Broadcast sự kiện bots_auto_filled khi tìm trận không có người hoặc bắt đầu trận khi thiếu người.'
+  },
+  [SystemMessageCode.SYS_MATCHMAKING_SEARCHING]: {
+    code: SystemMessageCode.SYS_MATCHMAKING_SEARCHING,
+    vi: '🔍 Đang tìm kiếm người chơi khác đang rảnh ({waitSeconds}s)...',
+    en: '🔍 Searching for other idle players ({waitSeconds}s)...',
+    params: ['waitSeconds', 'waitMs'],
+    context: 'Sự kiện matchmaking_searching / matchmaking_tick khi chưa có user rảnh nào khác và hệ thống đang chạy timer chờ.'
+  },
+  [SystemMessageCode.SYS_MATCHMAKING_CANCELLED]: {
+    code: SystemMessageCode.SYS_MATCHMAKING_CANCELLED,
+    vi: 'Đã hủy tìm trận nhanh.',
+    en: 'Quick matchmaking cancelled.',
+    context: 'Sự kiện matchmaking_cancelled khi người chơi gọi cancel_match / cancel_quick_match.'
   }
 };
 

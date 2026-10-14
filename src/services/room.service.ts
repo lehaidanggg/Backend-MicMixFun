@@ -3,16 +3,36 @@ import { ROOM_CLEANUP_DELAY_MS, CHALLENGE_TTL_MS, MAX_MEMBERS_PER_ROOM } from '.
 import { ErrorCode, RoomCloseReasonCode, SystemMessageCode } from '../config/messages';
 import { challengeNonces } from './auth.service';
 import { MimicGameSession } from '../game/MimicGameSession';
-import { BotDifficulty, RoomData, RoomMember } from '../types';
+import { BotDifficulty, MatchmakingQueueEntry, RoomData, RoomMember } from '../types';
 
-// In-Memory Database Quản Lý Phòng & Game Sessions
+// In-Memory Database Quản Lý Phòng, Game Sessions & Hàng Đợi Ghép Trận Nhanh (Matchmaking Queue)
 export const rooms = new Map<string, RoomData>();
 export const gameSessions = new Map<string, MimicGameSession>();
+export const matchmakingQueue = new Map<string, MatchmakingQueueEntry>();
 
 let ioInstance: Server | null = null;
 
 export function setIoInstance(io: Server): void {
   ioInstance = io;
+}
+
+/**
+ * Hủy và xóa 1 socket khỏi hàng đợi tìm trận nhanh (dọn sạch timer chờ)
+ */
+export function cancelMatchmakingForSocket(socketId: string): MatchmakingQueueEntry | null {
+  const entry = matchmakingQueue.get(socketId);
+  if (!entry) return null;
+  if (entry.timer) {
+    clearTimeout(entry.timer);
+    entry.timer = null;
+  }
+  if (entry.tickTimer) {
+    clearInterval(entry.tickTimer);
+    entry.tickTimer = null;
+  }
+  entry.sessionState.isSearchingMatch = false;
+  matchmakingQueue.delete(socketId);
+  return entry;
 }
 
 export const BOT_PRESETS: Array<{ name: string; avatar: string }> = [
