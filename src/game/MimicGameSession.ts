@@ -1,5 +1,5 @@
 import { Server } from 'socket.io';
-import { getSoundDuration, resolveSoundFile, getSoundUrl } from '../services/audio.service';
+import { getSoundDuration, resolveSoundFile, getSoundUrl, pickBotVariantSound } from '../services/audio.service';
 import { AiRemarkCode, ErrorCode, GameMessageCode } from '../config/messages';
 import { GAME_STATES, STATE_LABELS, SOUND_PACKS, AI_REMARKS } from './soundPacks';
 import {
@@ -513,8 +513,13 @@ export class MimicGameSession {
 
   /**
    * Mô phỏng bài dự thi nhại âm cho AI Bot dựa trên độ khó (EASY / NORMAL / HARD)
+   * Mỗi Bot sẽ tự chọn 1 sound biến thể riêng biệt (flow theo cùng chủ đề/từ khóa/thời lượng với sound gốc, KHÔNG dùng lại y nguyên sound gốc)
    */
-  simulateBotAttempt(bot: GamePlayer): EvaluationResult {
+  simulateBotAttempt(
+    bot: GamePlayer,
+    excludeRelativePaths: Set<string> = new Set(),
+    botIndex = 0
+  ): EvaluationResult {
     const difficulty = bot.botDifficulty || 'NORMAL';
     let minScore = 68;
     let maxScore = 88;
@@ -559,25 +564,61 @@ export class MimicGameSession {
       remark
     };
 
-    const sampleAudioUrl = this.getTargetSoundUrl(this.targetSound || SOUND_PACKS[0].sounds[0]);
+    const baseSound = this.targetSound || SOUND_PACKS[0].sounds[0];
+    const basePackId = (this.selectedPack && this.selectedPack.id) || SOUND_PACKS[0].id;
+    const seed =
+      botIndex * 17 +
+      this.currentRound * 31 +
+      Array.from(bot.socketId).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+
+    const variant = pickBotVariantSound(
+      baseSound.relativePath || baseSound.fileName,
+      basePackId,
+      difficulty,
+      excludeRelativePaths,
+      seed
+    );
+    if (variant.sound && variant.sound.relativePath) {
+      excludeRelativePaths.add(variant.sound.relativePath);
+    }
+
+    const botAudioUrl = variant.sound ? variant.sound.url : this.getTargetSoundUrl(baseSound);
     bot.roundScore = evaluation.totalScore;
     bot.totalScore += evaluation.totalScore;
     bot.currentAttempt = {
-      audioUrl: sampleAudioUrl || null,
-      audioStreamUrl: sampleAudioUrl || null,
+      audioUrl: botAudioUrl || null,
+      audioStreamUrl: botAudioUrl || null,
       mimeType: 'audio/mpeg',
+      botSoundId: variant.sound ? variant.sound.id : null,
+      botSoundFileName: variant.sound ? variant.sound.fileName : null,
+      botPitch: variant.pitch,
+      botSpeed: variant.speed,
       evaluation,
       submittedAt: Date.now()
     };
 
-    console.log(`[MimicGame:${this.roomId}] 🤖 ${bot.userName} (${difficulty}) tự động nộp bài: ${evaluation.totalScore}đ (${evaluation.grade})`);
+    console.log(
+      `[MimicGame:${this.roomId}] 🤖 ${bot.userName} (${difficulty}) nộp sound biến thể "${variant.sound?.relativePath}" (pitch=${variant.pitch}, speed=${variant.speed}): ${evaluation.totalScore}đ (${evaluation.grade})`
+    );
     return evaluation;
   }
 
   simulateAllBotsAttempts(): void {
+    const usedBotPaths = new Set<string>();
     for (const player of this.players.values()) {
-      if (player.isBot && player.currentAttempt === null) {
-        this.simulateBotAttempt(player);
+      if (player.isBot && player.currentAttempt && player.currentAttempt.botSoundFileName) {
+        const resolved = resolveSoundFile(player.currentAttempt.botSoundFileName);
+        if (resolved) usedBotPaths.add(resolved.relativePath);
+      }
+    }
+
+    let idx = 0;
+    for (const player of this.players.values()) {
+      if (player.isBot) {
+        if (player.currentAttempt === null) {
+          this.simulateBotAttempt(player, usedBotPaths, idx);
+        }
+        idx++;
       }
     }
   }
@@ -743,10 +784,15 @@ export class MimicGameSession {
       userName: p.userName,
       avatar: p.avatar,
       isBot: Boolean(p.isBot),
+      botDifficulty: p.botDifficulty || null,
       roundScore: p.roundScore,
       totalScore: p.totalScore,
       audioUrl: p.currentAttempt ? p.currentAttempt.audioUrl : null,
       audioStreamUrl: (p.currentAttempt && p.currentAttempt.audioStreamUrl) || null,
+      botSoundId: (p.currentAttempt && p.currentAttempt.botSoundId) || null,
+      botSoundFileName: (p.currentAttempt && p.currentAttempt.botSoundFileName) || null,
+      botPitch: (p.currentAttempt && p.currentAttempt.botPitch) || null,
+      botSpeed: (p.currentAttempt && p.currentAttempt.botSpeed) || null,
       evaluation: p.currentAttempt ? p.currentAttempt.evaluation : null
     })).sort((a, b) => b.roundScore - a.roundScore);
 

@@ -337,6 +337,15 @@ test('MimicGameSession — AI Bot Lifecycle & Difficulty Scoring Matrix (EASY / 
   assert.ok(normAttempt && normAttempt.evaluation.totalScore >= 63 && normAttempt.evaluation.totalScore <= 92);
   assert.ok(hardAttempt && hardAttempt.evaluation.totalScore >= 78 && hardAttempt.evaluation.totalScore <= 99);
 
+  // Verify each bot generated a DIFFERENT sound flowing with the target sound (not the exact original target sound, and all 3 bots have distinct sounds)
+  const targetUrl = game.getTargetSoundUrl(game.targetSound);
+  assert.notEqual(easyAttempt?.audioUrl, targetUrl, 'Bot Easy must not reuse exact target sound URL');
+  assert.notEqual(normAttempt?.audioUrl, targetUrl, 'Bot Normal must not reuse exact target sound URL');
+  assert.notEqual(hardAttempt?.audioUrl, targetUrl, 'Bot Hard must not reuse exact target sound URL');
+  const uniqueBotUrls = new Set([easyAttempt?.audioUrl, normAttempt?.audioUrl, hardAttempt?.audioUrl]);
+  assert.equal(uniqueBotUrls.size, 3, 'All 3 bots must have distinct sound URLs');
+  assert.ok(typeof easyAttempt?.botPitch === 'number' && typeof easyAttempt?.botSpeed === 'number');
+
   // 3. When the single human player submits, all players have submitted -> jumps immediately to AI_SCORING
   const sampleAudio = 'data:audio/webm;base64,' + crypto.randomBytes(800).toString('base64');
   const subSolo = game.submitMimicAudio('s_solo', sampleAudio, 'audio/webm', {

@@ -89,6 +89,10 @@ export interface PlayerAttempt {
   audioUrl: string | null;
   audioStreamUrl?: string | null;
   mimeType?: string;
+  botSoundId?: string | null;
+  botSoundFileName?: string | null;
+  botPitch?: number | null;
+  botSpeed?: number | null;
   evaluation: EvaluationResult;
   submittedAt?: number;
 }

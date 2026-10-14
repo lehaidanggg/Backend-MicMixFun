@@ -139,3 +139,92 @@ export function getSoundDuration(fileNameOrRelativePath?: string | null): number
 
   return 4.0;
 }
+
+/**
+ * Chọn 1 file âm thanh biến thể (khác với file gốc `targetSound`) nhưng cùng luồng chủ đề/thời lượng
+ * dành riêng cho từng AI Bot, đảm bảo Bot không dùng lại y nguyên file gốc và mỗi Bot trong phòng có 1 sound riêng biệt!
+ */
+export function pickBotVariantSound(
+  targetFileNameOrPath?: string | null,
+  packId?: string | null,
+  difficulty: 'EASY' | 'NORMAL' | 'HARD' = 'NORMAL',
+  excludeRelativePaths: Set<string> = new Set(),
+  botSeed = 0
+): {
+  sound: SoundCatalogItem;
+  pitch: number;
+  speed: number;
+} {
+  const index = buildSoundIndex();
+  const targetResolved = resolveSoundFile(targetFileNameOrPath);
+  const targetRel = targetResolved ? targetResolved.relativePath : String(targetFileNameOrPath || '');
+  const targetFile = targetResolved ? targetResolved.fileName : path.basename(targetRel);
+  const targetPack = (packId || (targetResolved && targetResolved.pack) || 'animals').toLowerCase();
+  const targetDur = getSoundDuration(targetRel || targetFile);
+
+  // Tách từ khóa ngữ nghĩa từ tên file gốc (VD: "cat-two.mp3" -> ["cat", "two"])
+  const targetTokens = path
+    .parse(targetFile)
+    .name.toLowerCase()
+    .split(/[-_]+/)
+    .filter(t => t.length >= 3 && !['sound', 'voice', 'animals', 'meme', 'anime'].includes(t));
+
+  // 1. Lấy tất cả các sound khác với sound gốc và chưa được Bot khác chọn trong vòng này
+  const allOtherSounds = index.allSounds.filter(
+    s =>
+      s.relativePath !== targetRel &&
+      s.fileName !== targetFile &&
+      !excludeRelativePaths.has(s.relativePath)
+  );
+
+  const samePackSounds = allOtherSounds.filter(s => s.pack.toLowerCase() === targetPack);
+  const pool = samePackSounds.length > 0 ? samePackSounds : allOtherSounds;
+
+  // Chấm điểm mức độ tương đồng (flow theo sound gốc) cho từng ứng viên trong pool
+  const scoredCandidates = pool.map(candidate => {
+    const candDur = getSoundDuration(candidate.relativePath);
+    const durDiff = Math.abs(candDur - targetDur);
+    const candName = path.parse(candidate.fileName).name.toLowerCase();
+    const hasSharedToken = targetTokens.some(tok => candName.includes(tok));
+    // Điểm tương đồng càng cao thì càng sát với sound gốc (cùng từ khóa + thời lượng gần bằng nhau)
+    const similarityScore = (hasSharedToken ? 50 : 0) - durDiff * 5;
+    return { candidate, similarityScore, durDiff };
+  });
+
+  // Sắp xếp từ giống nhất (flow sát nhất) đến khác biệt nhất
+  scoredCandidates.sort((a, b) => b.similarityScore - a.similarityScore);
+
+  let chosen: SoundCatalogItem;
+  if (scoredCandidates.length === 0) {
+    chosen = targetResolved || index.allSounds[0];
+  } else if (difficulty === 'HARD') {
+    // Bot HARD: chọn các sound có nhịp/chủ đề sát nhất với sound gốc (top đầu)
+    const topSlice = scoredCandidates.slice(0, Math.min(3, scoredCandidates.length));
+    chosen = topSlice[Math.abs(botSeed) % topSlice.length].candidate;
+  } else if (difficulty === 'NORMAL') {
+    // Bot NORMAL: chọn các sound cùng pack ở nhóm giữa
+    const midSlice = scoredCandidates.slice(0, Math.min(6, scoredCandidates.length));
+    chosen = midSlice[Math.abs(botSeed + 1) % midSlice.length].candidate;
+  } else {
+    // Bot EASY: chọn các sound biến tấu hài hước/lệch nhịp hơn trong cùng pack (hoặc pack voices/funny)
+    const tailSlice = scoredCandidates.slice(Math.max(0, scoredCandidates.length - 5));
+    chosen = tailSlice[Math.abs(botSeed + 2) % tailSlice.length].candidate;
+  }
+
+  // Tạo thông số biến điệu giọng (pitch & speed) đặc trưng theo độ khó của Bot
+  let pitch = 1.0;
+  let speed = 1.0;
+  const jitter = ((Math.abs(botSeed) % 7) - 3) * 0.02; // -0.06 .. +0.06
+  if (difficulty === 'HARD') {
+    pitch = Number((0.97 + jitter).toFixed(2));
+    speed = Number((0.98 - jitter * 0.5).toFixed(2));
+  } else if (difficulty === 'NORMAL') {
+    pitch = Number((1.06 + jitter).toFixed(2));
+    speed = Number((1.04 + jitter * 0.5).toFixed(2));
+  } else {
+    pitch = Number((1.15 + jitter).toFixed(2));
+    speed = Number((0.9 + jitter * 0.5).toFixed(2));
+  }
+
+  return { sound: chosen, pitch, speed };
+}
