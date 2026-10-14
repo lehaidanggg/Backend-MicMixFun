@@ -1,6 +1,3 @@
-const fs = require('fs');
-const path = require('path');
-const { DOWNLOADED_SOUNDS_DIR } = require('../config/constants');
 const { getSoundDuration, resolveSoundFile, getSoundUrl } = require('../services/audio.service');
 const { GAME_STATES, STATE_LABELS, SOUND_PACKS, AI_REMARKS } = require('./soundPacks');
 

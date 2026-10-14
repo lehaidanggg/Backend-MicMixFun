@@ -1,11 +1,7 @@
-const fs = require('fs');
 const path = require('path');
 
 const SERVER_ROOT = path.resolve(__dirname, '../..');
-const SOUNDS_DIR_CANDIDATE = path.join(SERVER_ROOT, 'sounds');
-const DOWNLOADED_SOUNDS_DIR = fs.existsSync(SOUNDS_DIR_CANDIDATE)
-  ? SOUNDS_DIR_CANDIDATE
-  : path.join(SERVER_ROOT, 'downloaded_sounds');
+const SOUNDS_DIR = path.join(SERVER_ROOT, 'sounds');
 
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_MEMBERS_PER_ROOM = 12;
@@ -24,7 +20,7 @@ const ASSET_CDN_URL = (process.env.ASSET_CDN_URL || 'https://pub-2ec3726948d14e4
 
 module.exports = {
   SERVER_ROOT,
-  DOWNLOADED_SOUNDS_DIR,
+  SOUNDS_DIR,
   PORT,
   MAX_MEMBERS_PER_ROOM,
   MAX_CHAT_HISTORY_SIZE,

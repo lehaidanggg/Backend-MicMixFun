@@ -15,6 +15,5 @@ Thumbs.db
 .idea/
 .vscode/
 
-# Logs & Temp reports
+# Logs
 *.log
-scripts/*_report.json

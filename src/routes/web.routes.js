@@ -6,7 +6,7 @@ function registerWebRoutes(app) {
     res.redirect('/api-docs');
   });
 
-  // Fallback tương thích ngược cho cả /sounds/*, /downloaded_sounds/* và /audio/* (Hỗ trợ Express 5 & Redirect R2 CDN)
+  // Tự động Redirect (302) các đường dẫn cũ /sounds/*, /downloaded_sounds/* và /audio/* sang Cloudflare R2 CDN
   const fallbackSoundHandler = (req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
     let subPath = '';
@@ -18,9 +18,8 @@ function registerWebRoutes(app) {
     if (!subPath) return next();
 
     const resolved = resolveSoundFile(subPath);
-    if (resolved) {
-      if (resolved.fullPath) return res.sendFile(resolved.fullPath);
-      if (resolved.url) return res.redirect(302, resolved.url);
+    if (resolved && resolved.url) {
+      return res.redirect(302, resolved.url);
     }
     next();
   };

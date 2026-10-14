@@ -1,5 +1,3 @@
-const fs = require('fs');
-const path = require('path');
 const { MAX_MEMBERS_PER_ROOM } = require('../config/constants');
 const { GAME_STATES, STATE_LABELS, SOUND_PACKS } = require('../game/soundPacks');
 const { getAllDownloadedSounds } = require('../services/audio.service');
