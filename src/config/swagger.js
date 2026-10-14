@@ -24,12 +24,7 @@ function buildOpenApiSpec(serverUrl = 'https://micmixfun.up.railway.app') {
     info: {
       title: 'MicMixFun & Mimic Party API',
       version: '1.0.0',
-      description:
-        'Tài liệu REST API chính thức cho **MicMixFun & Mimic Party Server** (Express 5 + Socket.IO + Cloudflare R2 CDN).\n\n' +
-        '### 🔗 Hệ thống liên kết\n' +
-        '- **Cloudflare R2 Audio CDN:** `https://pub-2ec3726948d14e47babdc7ea12268a78.r2.dev`\n' +
-        '- **Health Check:** [/api/health](/api/health)\n' +
-        '- **OpenAPI JSON Spec:** [/api-docs.json](/api-docs.json)',
+      description: 'Tài liệu REST API chính thức cho **MicMixFun & Mimic Party Server** (Express 5 + Socket.IO + Cloudflare R2 CDN).',
       contact: {
         name: 'MicMixFun Backend Team'
       }
