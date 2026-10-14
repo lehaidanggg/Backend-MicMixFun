@@ -19,8 +19,6 @@ if (require.main === module) {
   server.listen(PORT, '0.0.0.0', () => {
     console.log('================================================================');
     console.log(`🚀 MICMIXFUN SOCKET SERVER ĐANG CHẠY TẠI CỔNG ${PORT}`);
-    console.log(`👉 Trang Demo Web Studio & Room: http://localhost:${PORT}`);
-    console.log(`👉 Trang Mimic Party Game:        http://localhost:${PORT}/mimic`);
     console.log(`👉 Tài liệu Swagger API Docs:     http://localhost:${PORT}/api-docs`);
     console.log(`👉 REST API Health Check:         http://localhost:${PORT}/api/health`);
     console.log(`👉 Auth Challenge API:            GET  http://localhost:${PORT}/api/auth/challenge`);

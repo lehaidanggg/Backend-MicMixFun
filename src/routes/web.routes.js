@@ -1,32 +1,13 @@
 const express = require('express');
-const path = require('path');
-const { SERVER_ROOT, DOWNLOADED_SOUNDS_DIR } = require('../config/constants');
+const { DOWNLOADED_SOUNDS_DIR } = require('../config/constants');
 const { resolveSoundFile } = require('../services/audio.service');
 
 function registerWebRoutes(app) {
-  // Route trang chủ hiển thị Socket Room Demo (Tạo/Join phòng, Chat, Share Audio)
+  // Trang chủ tự động điều hướng về trang tài liệu Swagger API Docs
   app.get('/', (req, res) => {
-    res.sendFile(path.join(SERVER_ROOT, 'room_demo.html'));
-  });
-  app.get('/room', (req, res) => {
-    res.sendFile(path.join(SERVER_ROOT, 'room_demo.html'));
+    res.redirect('/api-docs');
   });
 
-  // Route Đấu trường nhại giọng online (Mimic Party Game)
-  app.get('/mimic', (req, res) => {
-    res.sendFile(path.join(SERVER_ROOT, 'mimic_party.html'));
-  });
-  app.get('/party', (req, res) => {
-    res.sendFile(path.join(SERVER_ROOT, 'mimic_party.html'));
-  });
-
-  // Route xem Web Studio Catalog
-  app.get('/studio', (req, res) => {
-    res.sendFile(path.join(SERVER_ROOT, 'index.html'));
-  });
-
-  // Phục vụ file tĩnh (tắt index: false để không bị index.html đè trang chủ)
-  app.use(express.static(SERVER_ROOT, { index: false }));
   app.use('/sounds', express.static(DOWNLOADED_SOUNDS_DIR));
   app.use('/downloaded_sounds', express.static(DOWNLOADED_SOUNDS_DIR));
 
