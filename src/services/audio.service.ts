@@ -1,17 +1,24 @@
-const fs = require('fs');
-const path = require('path');
-const { SOUNDS_DIR, ASSET_CDN_URL } = require('../config/constants');
+import fs from 'fs';
+import path from 'path';
+import { SOUNDS_DIR, ASSET_CDN_URL } from '../config/constants';
+import { SoundCatalogItem } from '../types';
+
+export interface SoundIndex {
+  byFileName: Map<string, SoundCatalogItem>;
+  byRelativePath: Map<string, SoundCatalogItem>;
+  allSounds: SoundCatalogItem[];
+}
 
 // Cache thời lượng âm thanh (giây) từ catalog.json
-const durationCache = new Map();
+export const durationCache = new Map<string, number>();
 
 // Cache index tra cứu file âm thanh theo tên file hoặc relativePath (pack/fileName)
-let soundIndexCache = null;
+let soundIndexCache: SoundIndex | null = null;
 
 /**
  * Tạo URL truy cập file âm thanh trên Cloudflare R2 CDN
  */
-function getSoundUrl(relativePath) {
+export function getSoundUrl(relativePath?: string | null): string {
   const cleanRel = String(relativePath || '')
     .replace(/\\/g, '/')
     .replace(/^\/+/, '');
@@ -25,14 +32,14 @@ function getSoundUrl(relativePath) {
 /**
  * Nạp danh mục 251 âm thanh và thời lượng đã tính sẵn từ sounds/catalog.json
  */
-function buildSoundIndex(forceRebuild = false) {
+export function buildSoundIndex(forceRebuild = false): SoundIndex {
   if (soundIndexCache && !forceRebuild) {
     return soundIndexCache;
   }
 
-  const byFileName = new Map();
-  const byRelativePath = new Map();
-  const allSounds = [];
+  const byFileName = new Map<string, SoundCatalogItem>();
+  const byRelativePath = new Map<string, SoundCatalogItem>();
+  const allSounds: SoundCatalogItem[] = [];
 
   const catalogPath = path.join(SOUNDS_DIR, 'catalog.json');
   if (fs.existsSync(catalogPath)) {
@@ -41,7 +48,7 @@ function buildSoundIndex(forceRebuild = false) {
       const catalogSounds = cat.sounds || [];
       for (const s of catalogSounds) {
         if (!s.relativePath) continue;
-        const item = {
+        const item: SoundCatalogItem = {
           id: s.id || path.parse(s.fileName).name,
           pack: s.pack || 'general',
           fileName: s.fileName,
@@ -59,7 +66,7 @@ function buildSoundIndex(forceRebuild = false) {
         }
         allSounds.push(item);
       }
-    } catch (e) {
+    } catch {
       // Bỏ qua nếu catalog.json lỗi
     }
   }
@@ -71,21 +78,21 @@ function buildSoundIndex(forceRebuild = false) {
 /**
  * Tra cứu thông tin file âm thanh từ tên file ("cat-two.mp3") hoặc đường dẫn tương đối ("animals/cat-two.mp3")
  */
-function resolveSoundFile(fileNameOrRelativePath) {
+export function resolveSoundFile(fileNameOrRelativePath?: string | null): SoundCatalogItem | null {
   if (!fileNameOrRelativePath) return null;
   const normalized = String(fileNameOrRelativePath).replace(/\\/g, '/').replace(/^\/+/, '');
   const index = buildSoundIndex();
 
   if (index.byRelativePath.has(normalized)) {
-    return index.byRelativePath.get(normalized);
+    return index.byRelativePath.get(normalized) || null;
   }
   const base = path.basename(normalized);
   if (index.byFileName.has(base)) {
-    return index.byFileName.get(base);
+    return index.byFileName.get(base) || null;
   }
   const strippedBase = base.replace(/^(animals|anime|meme|voices|voice1|robots|yankee|everyday|melody|funny|signals|space|vehicles|common)_/i, '');
   if (strippedBase !== base && index.byFileName.has(strippedBase)) {
-    return index.byFileName.get(strippedBase);
+    return index.byFileName.get(strippedBase) || null;
   }
 
   return null;
@@ -94,7 +101,7 @@ function resolveSoundFile(fileNameOrRelativePath) {
 /**
  * Lấy danh sách toàn bộ file âm thanh theo từng pack từ catalog.json
  */
-function getAllDownloadedSounds(packFilter = null) {
+export function getAllDownloadedSounds(packFilter: string | null = null): SoundCatalogItem[] {
   const index = buildSoundIndex();
   let list = index.allSounds;
   if (packFilter) {
@@ -114,30 +121,21 @@ function getAllDownloadedSounds(packFilter = null) {
 /**
  * Lấy thời lượng thực tế (giây) của file âm thanh từ catalog.json
  */
-function getSoundDuration(fileNameOrRelativePath) {
+export function getSoundDuration(fileNameOrRelativePath?: string | null): number {
   if (!fileNameOrRelativePath) return 4.0;
   if (durationCache.has(fileNameOrRelativePath)) {
-    return durationCache.get(fileNameOrRelativePath);
+    return durationCache.get(fileNameOrRelativePath) ?? 4.0;
   }
 
   const resolved = resolveSoundFile(fileNameOrRelativePath);
   if (resolved) {
     if (durationCache.has(resolved.relativePath)) {
-      return durationCache.get(resolved.relativePath);
+      return durationCache.get(resolved.relativePath) ?? 4.0;
     }
     if (durationCache.has(resolved.fileName)) {
-      return durationCache.get(resolved.fileName);
+      return durationCache.get(resolved.fileName) ?? 4.0;
     }
   }
 
   return 4.0;
 }
-
-module.exports = {
-  getSoundDuration,
-  resolveSoundFile,
-  getSoundUrl,
-  getAllDownloadedSounds,
-  buildSoundIndex,
-  durationCache
-};

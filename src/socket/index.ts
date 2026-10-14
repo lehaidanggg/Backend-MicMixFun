@@ -1,22 +1,26 @@
-const { ipConnectionCounts, extractClientIp } = require('../services/auth.service');
-const { leaveCurrentRoom } = require('../services/room.service');
-const { socketAuthMiddleware } = require('./auth.middleware');
-const { registerRoomHandlers } = require('./room.handler');
-const { registerMediaHandlers } = require('./media.handler');
-const { registerGameHandlers } = require('./game.handler');
+import { Server } from 'socket.io';
+import { ipConnectionCounts, extractClientIp } from '../services/auth.service';
+import { leaveCurrentRoom } from '../services/room.service';
+import { socketAuthMiddleware } from './auth.middleware';
+import { registerRoomHandlers } from './room.handler';
+import { registerMediaHandlers } from './media.handler';
+import { registerGameHandlers } from './game.handler';
+import { AuthenticatedSocket, SocketSessionState } from '../types';
 
-function registerSocketServer(io) {
+export function registerSocketServer(io: Server): void {
   // 1. Handshake Middleware (HMAC + Firebase Auth + Anti-Relay Fingerprint & IP Limit)
   io.use(socketAuthMiddleware);
 
   // 2. Xử lý kết nối Socket.IO
-  io.on('connection', (socket) => {
+  io.on('connection', (socket: AuthenticatedSocket) => {
     const clientIp = socket.clientIp || extractClientIp(socket);
     ipConnectionCounts.set(clientIp, (ipConnectionCounts.get(clientIp) || 0) + 1);
 
-    console.log(`[Socket] 🟢 Kết nối mới: ${socket.id} (IP: ${clientIp})${socket.authSession ? ` (Auth UID: ${socket.authSession.uid})` : ''}`);
+    console.log(
+      `[Socket] 🟢 Kết nối mới: ${socket.id} (IP: ${clientIp})${socket.authSession ? ` (Auth UID: ${socket.authSession.uid})` : ''}`
+    );
 
-    const sessionState = {
+    const sessionState: SocketSessionState = {
       currentRoomId: null,
       currentUser: {
         socketId: socket.id,
@@ -29,8 +33,8 @@ function registerSocketServer(io) {
     };
 
     // Bộ giới hạn tần suất sự kiện (Rate Limiter per Socket) chống spam/DDoS
-    const rateBuckets = new Map();
-    function checkRateLimit(action, maxCount, windowMs) {
+    const rateBuckets = new Map<string, { count: number; windowStart: number }>();
+    function checkRateLimit(action: string, maxCount: number, windowMs: number): boolean {
       const now = Date.now();
       let bucket = rateBuckets.get(action);
       if (!bucket || now - bucket.windowStart > windowMs) {
@@ -62,7 +66,3 @@ function registerSocketServer(io) {
     });
   });
 }
-
-module.exports = {
-  registerSocketServer
-};

@@ -1,7 +1,9 @@
+import { GameStateType, SoundPack } from '../types';
+
 // ==========================================
 // 1. ĐỊNH NGHĨA GAME STATES (STATE ENUMS)
 // ==========================================
-const GAME_STATES = {
+export const GAME_STATES = {
   IDLE: 'IDLE',                           // Chờ người chơi
   THEME_SELECTION: 'THEME_SELECTION',     // Random chủ đề (Sound Pack)
   PLAYING_SAMPLE: 'PLAYING_SAMPLE',       // Phát audio mẫu
@@ -11,9 +13,9 @@ const GAME_STATES = {
   SHOWDOWN_REVEAL: 'SHOWDOWN_REVEAL',     // Nghe lại bản thu & reaction
   ROUND_RESULT: 'ROUND_RESULT',           // Bảng xếp hạng vòng
   GAME_OVER: 'GAME_OVER'                  // Kết thúc trận đấu
-};
+} as const;
 
-const STATE_LABELS = {
+export const STATE_LABELS: Record<GameStateType, string> = {
   [GAME_STATES.IDLE]: 'Đang chờ tại sảnh',
   [GAME_STATES.THEME_SELECTION]: 'Đang quay chọn chủ đề âm thanh',
   [GAME_STATES.PLAYING_SAMPLE]: 'Đang phát âm thanh mẫu',
@@ -28,7 +30,7 @@ const STATE_LABELS = {
 // ==========================================
 // 2. DANH MỤC SOUND PACKS THEO CHỦ ĐỀ (PACK FOLDERS)
 // ==========================================
-const SOUND_PACKS = [
+export const SOUND_PACKS: SoundPack[] = [
   {
     id: 'animals',
     folder: 'animals',
@@ -166,7 +168,7 @@ const SOUND_PACKS = [
   }
 ];
 
-const AI_REMARKS = {
+export const AI_REMARKS: Record<'legendary' | 'good' | 'funny' | 'terrible', string[]> = {
   legendary: [
     '🔥 THÁNH NHẠI ÂM! Giống đến mức bản gốc phải xin chữ ký!',
     '🌟 10 điểm không có nhưng! Quá xuất thần!',
@@ -188,11 +190,4 @@ const AI_REMARKS = {
     '👻 Đang giả tiếng sinh vật ngoài hành tinh à?',
     '🤐 Quên bật tiếng hay đang nhai micro vậy?'
   ]
-};
-
-module.exports = {
-  GAME_STATES,
-  STATE_LABELS,
-  SOUND_PACKS,
-  AI_REMARKS
 };

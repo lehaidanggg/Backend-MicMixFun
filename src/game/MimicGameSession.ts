@@ -1,36 +1,68 @@
-const { getSoundDuration, resolveSoundFile, getSoundUrl } = require('../services/audio.service');
-const { GAME_STATES, STATE_LABELS, SOUND_PACKS, AI_REMARKS } = require('./soundPacks');
+import { Server } from 'socket.io';
+import { getSoundDuration, resolveSoundFile, getSoundUrl } from '../services/audio.service';
+import { GAME_STATES, STATE_LABELS, SOUND_PACKS, AI_REMARKS } from './soundPacks';
+import {
+  AudioStoreRecord,
+  ClientMetrics,
+  DisconnectedPlayerRecord,
+  EvaluationResult,
+  GamePlayer,
+  GameStateType,
+  SoundPack,
+  SoundPackSound,
+  UserRole
+} from '../types';
 
-class MimicGameSession {
-  constructor(roomId, io, config = {}) {
+export interface GameConfig {
+  totalRounds?: number | string;
+  recordDuration?: number | string;
+  useCustomRecordDuration?: boolean;
+}
+
+export class MimicGameSession {
+  public roomId: string;
+  public io: Server;
+  public hostId: string | null = null;
+  public totalRounds: number;
+  public recordDuration: number;
+  public customRecordDuration: number | null = null;
+  public useCustomRecordDuration = false;
+  public currentRound = 0;
+  public state: GameStateType = GAME_STATES.IDLE;
+  public players = new Map<string, GamePlayer>();
+  public disconnectedPlayers = new Map<string, DisconnectedPlayerRecord>();
+  public selectedPack: SoundPack | null = null;
+  public targetSound: SoundPackSound | null = null;
+  public usedSoundIds = new Set<string>();
+  public timer: ReturnType<typeof setInterval> | null = null;
+  public nextStageTimer: ReturnType<typeof setTimeout> | null = null;
+  public timeRemaining = 0;
+  public currentDuration = 0;
+  public currentPayload: Record<string, any> = {};
+  public showdownSkipVotes = new Set<string>();
+  public sampleDoneSockets = new Set<string>();
+  public sampleStartTime = 0;
+  public sampleFinishedHandled = false;
+  public audioStore = new Map<string, AudioStoreRecord>();
+
+  constructor(roomId: string, io: Server, config: GameConfig = {}) {
     this.roomId = roomId;
     this.io = io;
-    this.totalRounds = config.totalRounds || 3;
-    this.recordDuration = config.recordDuration || 5;
-    this.customRecordDuration = null;
-    this.useCustomRecordDuration = false;
-    this.currentRound = 0;
-    this.state = GAME_STATES.IDLE;
-    this.players = new Map();
-    this.disconnectedPlayers = new Map();
-    this.selectedPack = null;
-    this.targetSound = null;
-    this.usedSoundIds = new Set();
-    this.timer = null;
-    this.nextStageTimer = null;
-    this.timeRemaining = 0;
-    this.currentDuration = 0;
-    this.currentPayload = {};
-    this.showdownSkipVotes = new Set();
-    this.sampleDoneSockets = new Set();
-    this.sampleStartTime = 0;
-    this.audioStore = new Map(); // socketId -> { buffer, mimeType, updatedAt }
+    this.totalRounds = Number(config.totalRounds) || 3;
+    this.recordDuration = Number(config.recordDuration) || 5;
   }
 
-  addPlayer(socketId, userName, avatar, role = 'PLAYER', userId = null, isAuthenticated = false) {
+  addPlayer(
+    socketId: string,
+    userName: string,
+    avatar: string,
+    role: UserRole = 'PLAYER',
+    userId: string | null = null,
+    isAuthenticated = false
+  ): { restored: boolean; totalScore: number } {
     const savedState = (userId && isAuthenticated) ? this.disconnectedPlayers.get(userId) : null;
 
-    if (savedState && (Date.now() - savedState.disconnectedAt < 120000)) {
+    if (savedState && userId && (Date.now() - savedState.disconnectedAt < 120000)) {
       this.disconnectedPlayers.delete(userId);
       this.players.set(socketId, {
         socketId,
@@ -73,7 +105,7 @@ class MimicGameSession {
     return { restored: false, totalScore: 0 };
   }
 
-  setHost(newHostSocketId) {
+  setHost(newHostSocketId: string): void {
     this.hostId = newHostSocketId;
     for (const [sId, p] of this.players.entries()) {
       p.role = (sId === newHostSocketId) ? 'HOST' : 'PLAYER';
@@ -83,14 +115,14 @@ class MimicGameSession {
     }
   }
 
-  setPlayerReady(socketId, isReady) {
+  setPlayerReady(socketId: string, isReady: boolean): void {
     const p = this.players.get(socketId);
     if (p) {
       p.isReady = isReady;
     }
   }
 
-  updateConfig({ totalRounds, recordDuration, useCustomRecordDuration }) {
+  updateConfig({ totalRounds, recordDuration, useCustomRecordDuration }: GameConfig): boolean {
     if (this.state !== GAME_STATES.IDLE && this.state !== GAME_STATES.GAME_OVER) return false;
     if (totalRounds && [3, 5, 7, 10].includes(Number(totalRounds))) {
       this.totalRounds = Number(totalRounds);
@@ -105,7 +137,7 @@ class MimicGameSession {
     return true;
   }
 
-  removePlayer(socketId) {
+  removePlayer(socketId: string): void {
     const leavingPlayer = this.players.get(socketId);
     if (leavingPlayer && leavingPlayer.userId && (leavingPlayer.totalScore > 0 || leavingPlayer.currentAttempt)) {
       this.disconnectedPlayers.set(leavingPlayer.userId, {
@@ -179,7 +211,12 @@ class MimicGameSession {
     }
   }
 
-  transitionToState(nextState, durationSeconds, payload = {}, onComplete = null) {
+  transitionToState(
+    nextState: GameStateType,
+    durationSeconds: number,
+    payload: Record<string, any> = {},
+    onComplete: (() => void) | null = null
+  ): void {
     this.stopTimer();
     this.state = nextState;
     this.currentDuration = durationSeconds;
@@ -219,7 +256,7 @@ class MimicGameSession {
     }
   }
 
-  getStateSnapshot() {
+  getStateSnapshot(): Record<string, unknown> {
     return {
       roomId: this.roomId,
       hostId: this.hostId,
@@ -245,7 +282,7 @@ class MimicGameSession {
     };
   }
 
-  startGame(options = {}) {
+  startGame(options: { requireAllReady?: boolean } = {}): boolean {
     if (this.state !== GAME_STATES.IDLE && this.state !== GAME_STATES.GAME_OVER) return false;
     if (this.players.size === 0) return false;
 
@@ -269,7 +306,7 @@ class MimicGameSession {
     return true;
   }
 
-  startNextRound() {
+  startNextRound(): void {
     this.currentRound++;
     if (this.currentRound > this.totalRounds) {
       this.finishGame();
@@ -303,8 +340,12 @@ class MimicGameSession {
       }));
     }
 
-    const chosenPack = candidatePacks[Math.floor(Math.random() * candidatePacks.length)] || SOUND_PACKS[0];
-    this.selectedPack = SOUND_PACKS.find(p => p.id === chosenPack.id) || chosenPack;
+    const chosenPack = candidatePacks[Math.floor(Math.random() * candidatePacks.length)] || {
+      ...SOUND_PACKS[0],
+      existingSounds: SOUND_PACKS[0].sounds,
+      unusedSounds: SOUND_PACKS[0].sounds
+    };
+    this.selectedPack = SOUND_PACKS.find(p => p.id === chosenPack.id) || SOUND_PACKS[0];
 
     const pool = chosenPack.unusedSounds || chosenPack.sounds;
     this.targetSound = pool[Math.floor(Math.random() * pool.length)] || this.selectedPack.sounds[0];
@@ -328,39 +369,41 @@ class MimicGameSession {
     );
   }
 
-  getTargetSoundUrl(sound) {
+  getTargetSoundUrl(sound: SoundPackSound | null): string {
     if (!sound) return '';
     const resolved = resolveSoundFile(sound.relativePath || sound.fileName);
     if (resolved) return resolved.url;
     return getSoundUrl(sound.relativePath || sound.fileName);
   }
 
-  startPlaySampleState() {
-    const soundRef = this.targetSound.relativePath || this.targetSound.fileName;
+  startPlaySampleState(): void {
+    const sound = this.targetSound || SOUND_PACKS[0].sounds[0];
+    const pack = this.selectedPack || SOUND_PACKS[0];
+    const soundRef = sound.relativePath || sound.fileName;
     const rawDuration = getSoundDuration(soundRef);
     const playDuration = Math.max(2, Math.ceil(rawDuration));
-    const audioUrl = this.getTargetSoundUrl(this.targetSound);
+    const audioUrl = this.getTargetSoundUrl(sound);
 
     this.sampleFinishedHandled = false;
     this.sampleDoneSockets.clear();
     this.sampleStartTime = Date.now();
 
-    console.log(`[MimicGame:${this.roomId}] 🔊 Phát âm thanh mẫu: ${this.targetSound.name} (Độ dài: ${rawDuration}s | Timer: ${playDuration}s)`);
+    console.log(`[MimicGame:${this.roomId}] 🔊 Phát âm thanh mẫu: ${sound.name} (Độ dài: ${rawDuration}s | Timer: ${playDuration}s)`);
 
     this.transitionToState(
       GAME_STATES.PLAYING_SAMPLE,
       playDuration,
       {
         pack: {
-          id: this.selectedPack.id,
-          name: this.selectedPack.name,
-          emoji: this.selectedPack.emoji
+          id: pack.id,
+          name: pack.name,
+          emoji: pack.emoji
         },
         targetSound: {
-          id: this.targetSound.id,
-          name: this.targetSound.name,
-          emoji: this.targetSound.emoji,
-          hint: this.targetSound.hint,
+          id: sound.id,
+          name: sound.name,
+          emoji: sound.emoji,
+          hint: sound.hint,
           audioUrl,
           rawDuration,
           exactDuration: rawDuration,
@@ -376,7 +419,7 @@ class MimicGameSession {
     );
   }
 
-  handleSamplePlaybackDone(socketId) {
+  handleSamplePlaybackDone(socketId: string): void {
     if (this.state !== GAME_STATES.PLAYING_SAMPLE || this.sampleFinishedHandled) return;
     if (!this.players.has(socketId)) return;
 
@@ -395,14 +438,15 @@ class MimicGameSession {
     }
   }
 
-  startPrepareRecordingState(recordingDuration) {
-    const soundRef = this.targetSound ? (this.targetSound.relativePath || this.targetSound.fileName) : null;
+  startPrepareRecordingState(recordingDuration?: number): void {
+    const sound = this.targetSound || SOUND_PACKS[0].sounds[0];
+    const soundRef = sound.relativePath || sound.fileName;
     const rawDuration = getSoundDuration(soundRef);
     const exactDuration = (this.useCustomRecordDuration && this.customRecordDuration)
       ? this.customRecordDuration
       : ((typeof recordingDuration === 'number' && recordingDuration > 0) ? recordingDuration : rawDuration);
     const roundedDuration = Math.max(2, Math.ceil(exactDuration));
-    const audioUrl = this.getTargetSoundUrl(this.targetSound);
+    const audioUrl = this.getTargetSoundUrl(sound);
 
     console.log(`[MimicGame:${this.roomId}] 🧘 Chuẩn bị lấy hơi & bật micro (3s đệm) -> Thời gian nhại: ${exactDuration}s`);
 
@@ -411,10 +455,10 @@ class MimicGameSession {
       3,
       {
         targetSound: {
-          id: this.targetSound.id,
-          name: this.targetSound.name,
-          emoji: this.targetSound.emoji,
-          hint: this.targetSound.hint,
+          id: sound.id,
+          name: sound.name,
+          emoji: sound.emoji,
+          hint: sound.hint,
           audioUrl,
           rawDuration: exactDuration,
           exactDuration,
@@ -428,12 +472,13 @@ class MimicGameSession {
     );
   }
 
-  startUserRecordingState(customDuration = null) {
-    const soundRef = this.targetSound ? (this.targetSound.relativePath || this.targetSound.fileName) : null;
+  startUserRecordingState(customDuration: number | null = null): void {
+    const sound = this.targetSound || SOUND_PACKS[0].sounds[0];
+    const soundRef = sound.relativePath || sound.fileName;
     const rawDuration = getSoundDuration(soundRef);
     const exactDuration = (typeof customDuration === 'number' && customDuration > 0) ? customDuration : rawDuration;
     const duration = Math.max(2, Math.ceil(exactDuration));
-    const audioUrl = this.getTargetSoundUrl(this.targetSound);
+    const audioUrl = this.getTargetSoundUrl(sound);
 
     console.log(`[MimicGame:${this.roomId}] 🎙️ Tới lượt user nhại lại - Thời gian nhại: ${exactDuration}s (Timer: ${duration}s)`);
 
@@ -442,10 +487,10 @@ class MimicGameSession {
       duration,
       {
         targetSound: {
-          id: this.targetSound.id,
-          name: this.targetSound.name,
-          emoji: this.targetSound.emoji,
-          hint: this.targetSound.hint,
+          id: sound.id,
+          name: sound.name,
+          emoji: sound.emoji,
+          hint: sound.hint,
           audioUrl,
           rawDuration: exactDuration,
           exactDuration,
@@ -459,7 +504,12 @@ class MimicGameSession {
     );
   }
 
-  submitMimicAudio(socketId, audioBase64, mimeType = 'audio/webm', clientMetrics = null) {
+  submitMimicAudio(
+    socketId: string,
+    audioBase64?: string | null,
+    mimeType = 'audio/webm',
+    clientMetrics: ClientMetrics | null = null
+  ): { success: boolean; message?: string; evaluation?: EvaluationResult } {
     if (this.state !== GAME_STATES.USER_RECORDING && this.state !== GAME_STATES.AI_SCORING) {
       return { success: false, message: 'Hiện không trong thời gian thu âm!' };
     }
@@ -476,7 +526,7 @@ class MimicGameSession {
 
     const evaluation = this.evaluateMimicAttempt(audioBase64, clientMetrics);
 
-    let resolvedAudioUrl = audioBase64 || null;
+    let resolvedAudioUrl: string | null = audioBase64 || null;
     if (audioBase64 && typeof audioBase64 === 'string') {
       const commaIdx = audioBase64.indexOf(',');
       const rawB64 = commaIdx !== -1 ? audioBase64.slice(commaIdx + 1) : audioBase64;
@@ -490,7 +540,9 @@ class MimicGameSession {
         if (audioBase64.length > 65536) {
           resolvedAudioUrl = `/api/attempts/${encodeURIComponent(this.roomId)}/${encodeURIComponent(socketId)}?r=${this.currentRound}&t=${Date.now()}`;
         }
-      } catch (e) {}
+      } catch {
+        // Bỏ qua lỗi giải mã base64
+      }
     }
 
     player.roundScore = evaluation.totalScore;
@@ -515,11 +567,11 @@ class MimicGameSession {
     return { success: true, evaluation };
   }
 
-  getAttemptAudio(socketId) {
+  getAttemptAudio(socketId: string): AudioStoreRecord | null {
     return this.audioStore.get(socketId) || null;
   }
 
-  startAiScoringState() {
+  startAiScoringState(): void {
     const suspenseDuration = 5;
     console.log(`[MimicGame:${this.roomId}] 🤖 AI Voice Detector đang phân tích & chấm điểm hồi hộp (${suspenseDuration}s)...`);
 
@@ -535,7 +587,7 @@ class MimicGameSession {
     );
   }
 
-  startShowdownRevealState() {
+  startShowdownRevealState(): void {
     for (const player of this.players.values()) {
       if (!player.currentAttempt) {
         player.currentAttempt = {
@@ -558,9 +610,9 @@ class MimicGameSession {
       avatar: p.avatar,
       roundScore: p.roundScore,
       totalScore: p.totalScore,
-      audioUrl: p.currentAttempt.audioUrl,
-      audioStreamUrl: p.currentAttempt.audioStreamUrl || null,
-      evaluation: p.currentAttempt.evaluation
+      audioUrl: p.currentAttempt ? p.currentAttempt.audioUrl : null,
+      audioStreamUrl: (p.currentAttempt && p.currentAttempt.audioStreamUrl) || null,
+      evaluation: p.currentAttempt ? p.currentAttempt.evaluation : null
     })).sort((a, b) => b.roundScore - a.roundScore);
 
     this.showdownSkipVotes.clear();
@@ -581,7 +633,14 @@ class MimicGameSession {
     );
   }
 
-  confirmShowdownSkip(socketId) {
+  confirmShowdownSkip(socketId: string): {
+    success: boolean;
+    message?: string;
+    isVoted?: boolean;
+    skipCount?: number;
+    totalCount?: number;
+    allSkipConfirmed?: boolean;
+  } {
     if (this.state !== GAME_STATES.SHOWDOWN_REVEAL) {
       return { success: false, message: 'Chưa tới giai đoạn Showdown Reveal' };
     }
@@ -631,7 +690,7 @@ class MimicGameSession {
     };
   }
 
-  skipToShowdownResult(socketId) {
+  skipToShowdownResult(socketId?: string): { success: boolean } {
     if (socketId) {
       return this.confirmShowdownSkip(socketId);
     }
@@ -642,7 +701,7 @@ class MimicGameSession {
     return { success: false };
   }
 
-  startRoundResultState() {
+  startRoundResultState(): void {
     this.clearRoundAudioData();
 
     for (const player of this.players.values()) {
@@ -678,7 +737,7 @@ class MimicGameSession {
     );
   }
 
-  finishGame() {
+  finishGame(): void {
     this.clearRoundAudioData();
 
     for (const player of this.players.values()) {
@@ -713,7 +772,13 @@ class MimicGameSession {
     );
   }
 
-  confirmRoundReady(socketId) {
+  confirmRoundReady(socketId: string): {
+    success: boolean;
+    message?: string;
+    readyCount?: number;
+    totalCount?: number;
+    allReady?: boolean;
+  } {
     if (this.state !== GAME_STATES.ROUND_RESULT && this.state !== GAME_STATES.GAME_OVER) {
       return { success: false, message: 'Chưa tới giai đoạn xác nhận sẵn sàng' };
     }
@@ -752,7 +817,7 @@ class MimicGameSession {
     return { success: true, readyCount, totalCount, allReady };
   }
 
-  triggerNextStageAfterAllReady() {
+  triggerNextStageAfterAllReady(): void {
     if (this.nextStageTimer) return;
 
     console.log(`[MimicGame:${this.roomId}] 🎉 TẤT CẢ NGƯỜI CHƠI ĐÃ SẴN SÀNG! Đang đếm ngược 3s...`);
@@ -778,7 +843,7 @@ class MimicGameSession {
     }, 3000);
   }
 
-  evaluateMimicAttempt(audioBase64, clientMetrics = null) {
+  evaluateMimicAttempt(audioBase64?: string | null, clientMetrics: ClientMetrics | null = null): EvaluationResult {
     if (!audioBase64 || typeof audioBase64 !== 'string' || audioBase64.length < 500) {
       return {
         totalScore: 0,
@@ -813,7 +878,7 @@ class MimicGameSession {
       const rawB64 = commaIdx !== -1 ? audioBase64.slice(commaIdx + 1) : audioBase64;
       const buf = Buffer.from(rawB64, 'base64');
 
-      const uniqueBytes = new Set();
+      const uniqueBytes = new Set<number>();
       let deltaSum = 0;
       const step = Math.max(1, Math.floor(buf.length / 256));
       let samples = 0;
@@ -872,7 +937,7 @@ class MimicGameSession {
     };
   }
 
-  clearRoundAudioData() {
+  clearRoundAudioData(): void {
     this.audioStore.clear();
     for (const player of this.players.values()) {
       if (player.currentAttempt) {
@@ -886,7 +951,7 @@ class MimicGameSession {
     }
   }
 
-  destroy() {
+  destroy(): void {
     this.stopTimer();
     this.clearRoundAudioData();
     this.players.clear();
@@ -900,7 +965,7 @@ class MimicGameSession {
     this.state = GAME_STATES.IDLE;
   }
 
-  stopTimer() {
+  stopTimer(): void {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
@@ -911,7 +976,3 @@ class MimicGameSession {
     }
   }
 }
-
-module.exports = {
-  MimicGameSession
-};

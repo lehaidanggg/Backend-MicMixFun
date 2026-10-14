@@ -1,6 +1,6 @@
-const https = require('https');
-const crypto = require('crypto');
-const {
+import https from 'https';
+import crypto from 'crypto';
+import {
   MAX_USERNAME_LENGTH,
   CHALLENGE_TTL_MS,
   AUTH_TOKEN_TTL_MS,
@@ -8,25 +8,31 @@ const {
   APP_SIGNING_SECRET,
   FIREBASE_PROJECT_ID,
   ALLOW_DEV_MOCK_FIREBASE
-} = require('../config/constants');
+} from '../config/constants';
+import {
+  AuthTokenPayload,
+  ChallengeRecord,
+  FirebaseDecodedToken,
+  IssuedAuthToken
+} from '../types';
 
 // Lưu trữ One-Time Challenge Nonce (Chống Replay Attack & Server Trung Gian)
-const challengeNonces = new Map(); // nonce -> { ip, createdAt }
-const ipConnectionCounts = new Map(); // ip -> active socket count
+export const challengeNonces = new Map<string, ChallengeRecord>(); // nonce -> { ip, createdAt }
+export const ipConnectionCounts = new Map<string, number>(); // ip -> active socket count
 
 /**
  * Chuẩn hóa tên người dùng (cắt giới hạn MAX_USERNAME_LENGTH)
  */
-function sanitizeUserName(rawName, fallbackId = '0000') {
+export function sanitizeUserName(rawName?: string | null, fallbackId: string | null = '0000'): string {
   const trimmed = String(rawName || '').trim();
-  if (!trimmed) return `User_${String(fallbackId).substring(0, 4)}`;
+  if (!trimmed) return `User_${String(fallbackId || '0000').substring(0, 4)}`;
   return trimmed.slice(0, MAX_USERNAME_LENGTH);
 }
 
 /**
  * Trích xuất địa chỉ IP chuẩn hóa của Client
  */
-function extractClientIp(reqOrSocket) {
+export function extractClientIp(reqOrSocket: any): string {
   if (!reqOrSocket) return '0.0.0.0';
   const rawIp =
     (reqOrSocket.handshake && reqOrSocket.handshake.address) ||
@@ -40,9 +46,18 @@ function extractClientIp(reqOrSocket) {
  * Tạo dấu vân tay kết nối (Client Fingerprint) gắn chặt với Token
  * Nếu Hacker lấy Token đem lên 1 Server Trung Gian (khác IP / khác User-Agent) để móc vào Server -> Fingerprint sẽ lệch và bị từ chối!
  */
-function computeClientFingerprint({ ip = '', userAgent = '', deviceId = '' } = {}) {
+export function computeClientFingerprint({
+  ip = '',
+  userAgent = '',
+  deviceId = ''
+}: {
+  ip?: string;
+  userAgent?: string | string[];
+  deviceId?: string | string[];
+} = {}): string {
   const normIp = String(ip || '').replace(/^::ffff:/, '').trim();
-  const normUa = String(deviceId || userAgent || '').trim().slice(0, 120);
+  const uaStr = Array.isArray(deviceId) ? deviceId[0] : (deviceId || (Array.isArray(userAgent) ? userAgent[0] : userAgent));
+  const normUa = String(uaStr || '').trim().slice(0, 120);
   return crypto
     .createHmac('sha256', AUTH_SECRET)
     .update(`${normIp}|${normUa}`)
@@ -53,7 +68,7 @@ function computeClientFingerprint({ ip = '', userAgent = '', deviceId = '' } = {
 /**
  * Phát hành One-Time Challenge Nonce (Hiệu lực 30 giây, dùng 1 lần duy nhất)
  */
-function createAuthChallenge(clientIp = '0.0.0.0') {
+export function createAuthChallenge(clientIp = '0.0.0.0'): { nonce: string; expiresInMs: number } {
   const nonce = crypto.randomBytes(16).toString('hex');
   challengeNonces.set(nonce, { ip: clientIp, createdAt: Date.now() });
   return { nonce, expiresInMs: CHALLENGE_TTL_MS };
@@ -63,7 +78,19 @@ function createAuthChallenge(clientIp = '0.0.0.0') {
  * Xác thực Challenge-Response (Proof-of-Possession) từ App chính chủ
  * Signature = HMAC_SHA256(nonce + ":" + timestamp + ":" + uid, APP_SIGNING_SECRET)
  */
-function verifyAppChallenge({ nonce, timestamp, uid = '', signature, clientIp = null }) {
+export function verifyAppChallenge({
+  nonce,
+  timestamp,
+  uid = '',
+  signature,
+  clientIp = null
+}: {
+  nonce?: string;
+  timestamp?: number | string;
+  uid?: string;
+  signature?: string;
+  clientIp?: string | null;
+}): boolean {
   if (!nonce || !timestamp || !signature) return false;
   const record = challengeNonces.get(nonce);
   if (!record) return false;
@@ -85,13 +112,16 @@ function verifyAppChallenge({ nonce, timestamp, uid = '', signature, clientIp = 
     const sigBuf = Buffer.from(String(signature), 'utf8');
     const expBuf = Buffer.from(expectedSig, 'utf8');
     return sigBuf.length === expBuf.length && crypto.timingSafeEqual(sigBuf, expBuf);
-  } catch (e) {
+  } catch {
     return false;
   }
 }
 
 // Bộ nhớ đệm chứng chỉ công khai (Public Keys) của Google Firebase
-let googleCertsCache = {
+let googleCertsCache: {
+  certs: Record<string, string> | null;
+  expiresAt: number;
+} = {
   certs: null,
   expiresAt: 0
 };
@@ -99,7 +129,7 @@ let googleCertsCache = {
 /**
  * Tải và cache chứng chỉ X.509 của Google để xác thực chữ ký RS256 của Firebase ID Token
  */
-function fetchGooglePublicCerts() {
+export function fetchGooglePublicCerts(): Promise<Record<string, string> | null> {
   if (googleCertsCache.certs && Date.now() < googleCertsCache.expiresAt) {
     return Promise.resolve(googleCertsCache.certs);
   }
@@ -110,8 +140,8 @@ function fetchGooglePublicCerts() {
       res.on('data', (chunk) => { body += chunk; });
       res.on('end', () => {
         try {
-          const certs = JSON.parse(body);
-          const cc = res.headers['cache-control'] || '';
+          const certs = JSON.parse(body) as Record<string, string>;
+          const cc = String(res.headers['cache-control'] || '');
           const m = cc.match(/max-age=(\d+)/);
           const maxAgeMs = m ? parseInt(m[1], 10) * 1000 : 3600000;
           googleCertsCache = {
@@ -119,7 +149,7 @@ function fetchGooglePublicCerts() {
             expiresAt: Date.now() + maxAgeMs
           };
           resolve(certs);
-        } catch (e) {
+        } catch {
           resolve(null);
         }
       });
@@ -134,7 +164,7 @@ function fetchGooglePublicCerts() {
  * - Bắt buộc alg === 'RS256' và chữ ký RSA-SHA256 hợp lệ với chứng chỉ X.509 của Google
  * - Kiểm tra hạn dùng (exp), iat, issuer (securetoken.google.com/<projectId>), aud và sub
  */
-async function verifyFirebaseIdToken(idToken) {
+export async function verifyFirebaseIdToken(idToken?: unknown): Promise<FirebaseDecodedToken | null> {
   if (!idToken || typeof idToken !== 'string') return null;
   const raw = idToken.startsWith('Bearer ') ? idToken.slice(7).trim() : idToken.trim();
   const parts = raw.split('.');
@@ -197,7 +227,7 @@ async function verifyFirebaseIdToken(idToken) {
       isAnonymous: provider === 'anonymous',
       exp: payload.exp * 1000
     };
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -205,21 +235,36 @@ async function verifyFirebaseIdToken(idToken) {
 /**
  * Tạo userId ngẫu nhiên an toàn
  */
-function generateSecureUserId() {
+export function generateSecureUserId(): string {
   return 'u_' + crypto.randomBytes(8).toString('hex');
 }
 
 /**
  * Ký Session Token bằng HMAC-SHA256 kèm Client Fingerprint (fp) chống Relay qua Server Trung Gian
  */
-function issueAuthToken({ userId, firebaseUid = null, provider = 'guest', userName, avatar, fingerprint = null }) {
+export function issueAuthToken({
+  userId,
+  firebaseUid = null,
+  provider = 'guest',
+  userName,
+  avatar,
+  fingerprint = null
+}: {
+  userId?: string | null;
+  firebaseUid?: string | null;
+  provider?: string;
+  userName?: string | null;
+  avatar?: string | null;
+  fingerprint?: string | null;
+}): IssuedAuthToken {
   const now = Date.now();
-  const payload = {
-    uid: userId || generateSecureUserId(),
+  const resolvedUid = userId || generateSecureUserId();
+  const payload: AuthTokenPayload = {
+    uid: resolvedUid,
     fbUid: firebaseUid || null,
     provider,
     fp: fingerprint || null,
-    name: sanitizeUserName(userName, userId),
+    name: sanitizeUserName(userName, resolvedUid),
     avatar: String(avatar || '🎧').slice(0, 8),
     iat: now,
     exp: now + AUTH_TOKEN_TTL_MS
@@ -239,7 +284,7 @@ function issueAuthToken({ userId, firebaseUid = null, provider = 'guest', userNa
 /**
  * Xác thực chữ ký HMAC-SHA256, hạn sử dụng và Client Fingerprint (fp) của Token
  */
-function verifyAuthToken(token, expectedFingerprint = null) {
+export function verifyAuthToken(token?: unknown, expectedFingerprint: string | null = null): AuthTokenPayload | null {
   if (!token || typeof token !== 'string') return null;
   const rawToken = token.startsWith('Bearer ') ? token.slice(7).trim() : token.trim();
   const parts = rawToken.split('.');
@@ -260,7 +305,7 @@ function verifyAuthToken(token, expectedFingerprint = null) {
       return null;
     }
 
-    const decoded = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+    const decoded = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as AuthTokenPayload;
     if (!decoded || !decoded.uid || typeof decoded.exp !== 'number') return null;
     if (Date.now() > decoded.exp) return null;
 
@@ -270,22 +315,7 @@ function verifyAuthToken(token, expectedFingerprint = null) {
     }
 
     return decoded;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
-
-module.exports = {
-  challengeNonces,
-  ipConnectionCounts,
-  sanitizeUserName,
-  extractClientIp,
-  computeClientFingerprint,
-  createAuthChallenge,
-  verifyAppChallenge,
-  fetchGooglePublicCerts,
-  verifyFirebaseIdToken,
-  generateSecureUserId,
-  issueAuthToken,
-  verifyAuthToken
-};

@@ -1,20 +1,23 @@
-const { ROOM_CLEANUP_DELAY_MS, CHALLENGE_TTL_MS } = require('../config/constants');
-const { challengeNonces } = require('./auth.service');
+import { Server, Socket } from 'socket.io';
+import { ROOM_CLEANUP_DELAY_MS, CHALLENGE_TTL_MS } from '../config/constants';
+import { challengeNonces } from './auth.service';
+import { MimicGameSession } from '../game/MimicGameSession';
+import { RoomData, RoomMember } from '../types';
 
 // In-Memory Database Quản Lý Phòng & Game Sessions
-const rooms = new Map();
-const gameSessions = new Map();
+export const rooms = new Map<string, RoomData>();
+export const gameSessions = new Map<string, MimicGameSession>();
 
-let ioInstance = null;
+let ioInstance: Server | null = null;
 
-function setIoInstance(io) {
+export function setIoInstance(io: Server): void {
   ioInstance = io;
 }
 
 /**
  * Lấy danh sách thành viên trong phòng dưới dạng mảng an toàn để gửi qua Socket
  */
-function getRoomMembersArray(room) {
+export function getRoomMembersArray(room?: RoomData | null): RoomMember[] {
   if (!room || !room.members) return [];
   return Array.from(room.members.values()).map(m => ({
     socketId: m.socketId,
@@ -30,7 +33,11 @@ function getRoomMembersArray(room) {
 /**
  * XÓA SẠCH TOÀN BỘ DỮ LIỆU CỦA PHÒNG KHỎI RAM (Khi đóng phòng hoặc phòng giải tán)
  */
-function destroyRoomData(roomId, reason = 'ROOM_CLOSED', notifyMessage = null) {
+export function destroyRoomData(
+  roomId: string,
+  reason = 'ROOM_CLOSED',
+  notifyMessage: string | null = null
+): boolean {
   const targetId = String(roomId || '').trim().toUpperCase();
   if (!targetId) return false;
 
@@ -87,9 +94,9 @@ function destroyRoomData(roomId, reason = 'ROOM_CLOSED', notifyMessage = null) {
 /**
  * Xử lý khi 1 socket rời khỏi phòng hiện tại (hỗ trợ Host Migration & Empty Room Cleanup)
  */
-function leaveCurrentRoom(sock, roomId, fallbackUser = {}) {
-  if (!rooms.has(roomId)) return;
+export function leaveCurrentRoom(sock: Socket, roomId: string, fallbackUser: Partial<RoomMember> = {}): void {
   const room = rooms.get(roomId);
+  if (!room) return;
   const leavingMember = room.members.get(sock.id) || fallbackUser;
 
   sock.leave(roomId);
@@ -125,29 +132,31 @@ function leaveCurrentRoom(sock, roomId, fallbackUser = {}) {
   }
 
   // Host Migration (chuyển giao quyền Chủ phòng khi phòng vẫn còn người)
-  let newHostInfo = null;
+  let newHostInfo: { newHostId: string; newHostName: string } | null = null;
   if (room.hostId === sock.id && room.members.size > 0) {
     const nextHost = room.members.values().next().value;
-    room.hostId = nextHost.socketId;
-    room.hostUserId = nextHost.userId || null;
-    nextHost.role = 'HOST';
-    nextHost.isReady = true;
+    if (nextHost) {
+      room.hostId = nextHost.socketId;
+      room.hostUserId = nextHost.userId || null;
+      nextHost.role = 'HOST';
+      nextHost.isReady = true;
 
-    if (game) {
-      game.setHost(room.hostId);
+      if (game) {
+        game.setHost(room.hostId);
+      }
+
+      newHostInfo = {
+        newHostId: room.hostId,
+        newHostName: nextHost.userName
+      };
+      console.log(`[Room] 👑 Host Migration: ${nextHost.userName} (${room.hostId}) trở thành Chủ phòng mới!`);
     }
-
-    newHostInfo = {
-      newHostId: room.hostId,
-      newHostName: nextHost.userName
-    };
-    console.log(`[Room] 👑 Host Migration: ${nextHost.userName} (${room.hostId}) trở thành Chủ phòng mới!`);
   }
 
   sock.to(roomId).emit('user_left', {
     user: leavingMember,
     members: getRoomMembersArray(room),
-    systemMessage: `${leavingMember.userName} đã rời phòng.`
+    systemMessage: `${leavingMember.userName || sock.id} đã rời phòng.`
   });
 
   if (newHostInfo && ioInstance) {
@@ -163,7 +172,7 @@ function leaveCurrentRoom(sock, roomId, fallbackUser = {}) {
 /**
  * Định kỳ mỗi 60s dọn dẹp các dữ liệu rớt mạng quá hạn (> 120s), Challenge Nonce hết hạn và phòng mồ côi
  */
-function startPeriodicGcTimer() {
+export function startPeriodicGcTimer(): ReturnType<typeof setInterval> {
   const timer = setInterval(() => {
     const now = Date.now();
 
@@ -195,13 +204,3 @@ function startPeriodicGcTimer() {
   }
   return timer;
 }
-
-module.exports = {
-  rooms,
-  gameSessions,
-  setIoInstance,
-  getRoomMembersArray,
-  destroyRoomData,
-  leaveCurrentRoom,
-  startPeriodicGcTimer
-};

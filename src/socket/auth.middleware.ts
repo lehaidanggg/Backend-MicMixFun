@@ -1,11 +1,12 @@
-const { MAX_CONNECTIONS_PER_IP } = require('../config/constants');
-const {
+import { MAX_CONNECTIONS_PER_IP } from '../config/constants';
+import {
   ipConnectionCounts,
   extractClientIp,
   computeClientFingerprint,
   verifyAuthToken,
   verifyFirebaseIdToken
-} = require('../services/auth.service');
+} from '../services/auth.service';
+import { AuthenticatedSocket } from '../types';
 
 /**
  * Socket.IO Handshake Middleware:
@@ -13,15 +14,19 @@ const {
  * - Tính toán Client Fingerprint (IP + User-Agent / deviceId)
  * - Tự động giải mã HMAC Token hoặc Firebase ID Token ngay khi bắt tay
  */
-async function socketAuthMiddleware(socket, next) {
+export async function socketAuthMiddleware(
+  socket: AuthenticatedSocket,
+  next: (err?: Error) => void
+): Promise<void> {
   try {
     const clientIp = extractClientIp(socket);
     const activeOnIp = ipConnectionCounts.get(clientIp) || 0;
     if (activeOnIp >= MAX_CONNECTIONS_PER_IP) {
-      return next(new Error(`Vượt quá số kết nối tối đa cho phép trên cùng 1 địa chỉ IP (${MAX_CONNECTIONS_PER_IP})!`));
+      next(new Error(`Vượt quá số kết nối tối đa cho phép trên cùng 1 địa chỉ IP (${MAX_CONNECTIONS_PER_IP})!`));
+      return;
     }
 
-    const authObj = socket.handshake.auth || {};
+    const authObj: Record<string, any> = socket.handshake.auth || {};
     const socketFp = computeClientFingerprint({
       ip: clientIp,
       userAgent: socket.handshake.headers && socket.handshake.headers['user-agent'],
@@ -30,12 +35,14 @@ async function socketAuthMiddleware(socket, next) {
     socket.clientFingerprint = socketFp;
     socket.clientIp = clientIp;
 
+    const queryObj = socket.handshake.query || {};
     const rawToken =
       authObj.token ||
       authObj.firebaseToken ||
       authObj.firebaseIdToken ||
       (socket.handshake.headers && socket.handshake.headers.authorization) ||
-      (socket.handshake.query && (socket.handshake.query.token || socket.handshake.query.firebaseToken));
+      queryObj.token ||
+      queryObj.firebaseToken;
 
     if (rawToken) {
       const hmacDecoded = verifyAuthToken(rawToken, socketFp);
@@ -56,10 +63,8 @@ async function socketAuthMiddleware(socket, next) {
         }
       }
     }
-  } catch (e) {}
+  } catch {
+    // Bỏ qua lỗi handshake auth không bắt buộc
+  }
   next();
 }
-
-module.exports = {
-  socketAuthMiddleware
-};

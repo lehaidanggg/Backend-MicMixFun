@@ -1,8 +1,10 @@
-const { MAX_MEMBERS_PER_ROOM } = require('../config/constants');
-const { GAME_STATES, STATE_LABELS, SOUND_PACKS } = require('../game/soundPacks');
-const { getAllDownloadedSounds } = require('../services/audio.service');
-const { rooms, gameSessions } = require('../services/room.service');
-const {
+import { Express, Request, Response } from 'express';
+import { Server } from 'socket.io';
+import { MAX_MEMBERS_PER_ROOM } from '../config/constants';
+import { GAME_STATES, STATE_LABELS, SOUND_PACKS } from '../game/soundPacks';
+import { getAllDownloadedSounds } from '../services/audio.service';
+import { rooms, gameSessions } from '../services/room.service';
+import {
   sanitizeUserName,
   extractClientIp,
   computeClientFingerprint,
@@ -12,31 +14,34 @@ const {
   generateSecureUserId,
   issueAuthToken,
   verifyAuthToken
-} = require('../services/auth.service');
-const { buildOpenApiSpec, renderSwaggerHtml } = require('../config/swagger');
+} from '../services/auth.service';
+import { buildOpenApiSpec, renderSwaggerHtml } from '../config/swagger';
+import { AuthTokenPayload } from '../types';
 
-function registerApiRoutes(app, io) {
+export function registerApiRoutes(app: Express, io: Server): void {
   // Swagger / OpenAPI 3.0 Documentation
-  const resolveServerUrl = (req) => {
-    const host = (req.headers['x-forwarded-host'] || req.get('host') || 'localhost:3000').split(',')[0].trim();
+  const resolveServerUrl = (req: Request): string => {
+    const rawHost = req.headers['x-forwarded-host'] || req.get('host') || 'localhost:3000';
+    const host = String(Array.isArray(rawHost) ? rawHost[0] : rawHost).split(',')[0].trim();
     const isLocal = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(host);
+    const rawProto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
     const proto = isLocal
-      ? (req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0].trim()
+      ? String(Array.isArray(rawProto) ? rawProto[0] : rawProto).split(',')[0].trim()
       : 'https';
     return `${proto}://${host}`;
   };
 
-  app.get('/api-docs.json', (req, res) => {
+  app.get('/api-docs.json', (req: Request, res: Response) => {
     res.json(buildOpenApiSpec(resolveServerUrl(req)));
   });
 
-  app.get(['/api-docs', '/docs', '/api/docs'], (req, res) => {
+  app.get(['/api-docs', '/docs', '/api/docs'], (req: Request, res: Response) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(renderSwaggerHtml(buildOpenApiSpec(resolveServerUrl(req))));
   });
 
   // 0. Phát hành One-Time Challenge Nonce (Chống Server Trung Gian / Replay Attack)
-  app.get('/api/auth/challenge', (req, res) => {
+  app.get('/api/auth/challenge', (req: Request, res: Response) => {
     const clientIp = extractClientIp(req);
     const challenge = createAuthChallenge(clientIp);
     res.json({
@@ -48,17 +53,18 @@ function registerApiRoutes(app, io) {
   });
 
   // 1. Xác thực qua Firebase Anonymous Authentication (Đổi Firebase ID Token lấy Session Token gắn Fingerprint)
-  app.post('/api/auth/firebase', async (req, res) => {
+  app.post('/api/auth/firebase', async (req: Request, res: Response) => {
     try {
       const { firebaseIdToken, userName, avatar, deviceId, nonce, timestamp, appSignature } = req.body || {};
       const rawToken = firebaseIdToken || req.headers.authorization;
       const fbDecoded = await verifyFirebaseIdToken(rawToken);
 
       if (!fbDecoded) {
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
           message: 'Firebase ID Token không hợp lệ hoặc đã hết hạn!'
         });
+        return;
       }
 
       const clientIp = extractClientIp(req);
@@ -71,10 +77,11 @@ function registerApiRoutes(app, io) {
           clientIp
         });
         if (!challengeOk) {
-          return res.status(403).json({
+          res.status(403).json({
             success: false,
             message: 'Chữ ký xác thực thiết bị (Challenge-Response) không hợp lệ hoặc bị giả mạo qua trung gian!'
           });
+          return;
         }
       }
 
@@ -109,13 +116,13 @@ function registerApiRoutes(app, io) {
           avatar: issued.payload.avatar
         }
       });
-    } catch (err) {
-      res.status(500).json({ success: false, message: err.message });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err?.message || 'Internal Server Error' });
     }
   });
 
   // 2. Cấp mới hoặc làm mới Guest Session Token (Hỗ trợ kèm firebaseIdToken & Fingerprint Binding)
-  app.post('/api/auth/guest', async (req, res) => {
+  app.post('/api/auth/guest', async (req: Request, res: Response) => {
     const { userName, avatar, authToken, firebaseIdToken, deviceId } = req.body || {};
     const clientIp = extractClientIp(req);
     const fp = computeClientFingerprint({
@@ -162,14 +169,14 @@ function registerApiRoutes(app, io) {
   });
 
   // 3. Kiểm tra tính hợp lệ của Token hiện tại
-  app.get('/api/auth/verify', async (req, res) => {
-    const token = req.headers.authorization || req.query.token;
+  app.get('/api/auth/verify', async (req: Request, res: Response) => {
+    const token = req.headers.authorization || (typeof req.query.token === 'string' ? req.query.token : undefined);
     const fp = computeClientFingerprint({
       ip: extractClientIp(req),
       userAgent: req.headers['user-agent'],
       deviceId: req.headers['x-device-id']
     });
-    let decoded = verifyAuthToken(token, fp);
+    let decoded: AuthTokenPayload | null = verifyAuthToken(token, fp);
     if (!decoded) {
       const fb = await verifyFirebaseIdToken(token);
       if (fb) {
@@ -184,7 +191,8 @@ function registerApiRoutes(app, io) {
       }
     }
     if (!decoded) {
-      return res.status(401).json({ success: false, valid: false, message: 'Token không hợp lệ hoặc đã hết hạn!' });
+      res.status(401).json({ success: false, valid: false, message: 'Token không hợp lệ hoặc đã hết hạn!' });
+      return;
     }
     res.json({
       success: true,
@@ -201,7 +209,7 @@ function registerApiRoutes(app, io) {
   });
 
   // 4. Health Check
-  app.get('/api/health', (req, res) => {
+  app.get('/api/health', (_req: Request, res: Response) => {
     res.json({
       status: 'online',
       timestamp: Date.now(),
@@ -211,11 +219,11 @@ function registerApiRoutes(app, io) {
   });
 
   // 5. Danh sách Sound Packs & Game States
-  app.get('/api/mimic-packs', (req, res) => {
+  app.get('/api/mimic-packs', (_req: Request, res: Response) => {
     res.json({ packs: SOUND_PACKS });
   });
 
-  app.get('/api/game-states', (req, res) => {
+  app.get('/api/game-states', (_req: Request, res: Response) => {
     res.json({
       states: GAME_STATES,
       labels: STATE_LABELS
@@ -223,7 +231,7 @@ function registerApiRoutes(app, io) {
   });
 
   // 6. Danh sách các phòng đang mở
-  app.get('/api/rooms', (req, res) => {
+  app.get('/api/rooms', (_req: Request, res: Response) => {
     const roomList = [];
     for (const [, room] of rooms.entries()) {
       const game = gameSessions.get(room.id);
@@ -240,16 +248,18 @@ function registerApiRoutes(app, io) {
   });
 
   // 7. Stream trực tiếp audio bản thu của người chơi (giảm tải payload Socket)
-  app.get('/api/attempts/:roomId/:socketId', (req, res) => {
-    const roomId = (req.params.roomId || '').toUpperCase();
-    const socketId = req.params.socketId;
+  app.get('/api/attempts/:roomId/:socketId', (req: Request, res: Response) => {
+    const roomId = String(req.params.roomId || '').toUpperCase();
+    const socketId = String(req.params.socketId || '');
     const game = gameSessions.get(roomId);
     if (!game) {
-      return res.status(404).json({ error: 'Phòng đấu không tồn tại' });
+      res.status(404).json({ error: 'Phòng đấu không tồn tại' });
+      return;
     }
     const audioRecord = game.getAttemptAudio(socketId);
     if (!audioRecord || !audioRecord.buffer) {
-      return res.status(404).json({ error: 'Không tìm thấy bản thu âm' });
+      res.status(404).json({ error: 'Không tìm thấy bản thu âm' });
+      return;
     }
     res.setHeader('Content-Type', audioRecord.mimeType || 'audio/webm');
     res.setHeader('Content-Length', audioRecord.buffer.length);
@@ -257,12 +267,12 @@ function registerApiRoutes(app, io) {
     res.send(audioRecord.buffer);
   });
 
-  // 8. Lấy danh sách file âm thanh có sẵn từ các folder pack trong downloaded_sounds
-  app.get('/api/sounds', (req, res) => {
+  // 8. Lấy danh sách file âm thanh có sẵn từ các folder pack trong catalog.json
+  app.get('/api/sounds', (req: Request, res: Response) => {
     try {
-      const packFilter = req.query.pack || null;
+      const packFilter = typeof req.query.pack === 'string' ? req.query.pack : null;
       const soundList = getAllDownloadedSounds(packFilter);
-      const packCounts = {};
+      const packCounts: Record<string, number> = {};
       for (const s of soundList) {
         packCounts[s.pack] = (packCounts[s.pack] || 0) + 1;
       }
@@ -271,12 +281,8 @@ function registerApiRoutes(app, io) {
         packCounts,
         sounds: soundList
       });
-    } catch (err) {
-      res.status(500).json({ error: 'Không thể đọc thư mục âm thanh', message: err.message });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể đọc thư mục âm thanh', message: err?.message });
     }
   });
 }
-
-module.exports = {
-  registerApiRoutes
-};

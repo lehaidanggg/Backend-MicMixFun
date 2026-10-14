@@ -16,15 +16,15 @@ const PACK_ENUM = [
   'voice1',
   'voices',
   'yankee'
-];
+] as const;
 
-function buildOpenApiSpec(serverUrl = 'https://micmixfun.up.railway.app') {
+export function buildOpenApiSpec(serverUrl = 'https://micmixfun.up.railway.app'): Record<string, unknown> {
   return {
     openapi: '3.0.3',
     info: {
       title: 'MicMixFun & Mimic Party API',
       version: '1.0.0',
-      description: 'Tài liệu REST API chính thức cho **MicMixFun & Mimic Party Server** (Express 5 + Socket.IO + Cloudflare R2 CDN).',
+      description: 'Tài liệu REST API chính thức cho **MicMixFun & Mimic Party Server** (TypeScript + Express 5 + Socket.IO + Cloudflare R2 CDN).',
       contact: {
         name: 'MicMixFun Backend Team'
       }
@@ -548,7 +548,7 @@ function buildOpenApiSpec(serverUrl = 'https://micmixfun.up.railway.app') {
   };
 }
 
-function renderSwaggerHtml(specObject) {
+export function renderSwaggerHtml(specObject?: Record<string, unknown>): string {
   const inlineSpecJson = JSON.stringify(specObject || buildOpenApiSpec());
   return `<!DOCTYPE html>
 <html lang="vi">
@@ -633,8 +633,3 @@ function renderSwaggerHtml(specObject) {
 </body>
 </html>`;
 }
-
-module.exports = {
-  buildOpenApiSpec,
-  renderSwaggerHtml
-};

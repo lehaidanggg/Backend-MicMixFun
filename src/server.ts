@@ -1,11 +1,11 @@
 /**
- * MicMixFun & Mimic Party Server - Entry Point
+ * MicMixFun & Mimic Party Server - Entry Point (TypeScript)
  * Kiến trúc Modular Clean Structure (`src/`)
  */
-const { PORT } = require('./src/config/constants');
-const { app, server, io } = require('./src/app');
-const { rooms, gameSessions, destroyRoomData } = require('./src/services/room.service');
-const {
+import { PORT } from './config/constants';
+import { app, server, io } from './app';
+import { rooms, gameSessions, destroyRoomData } from './services/room.service';
+import {
   issueAuthToken,
   verifyAuthToken,
   verifyFirebaseIdToken,
@@ -13,12 +13,12 @@ const {
   createAuthChallenge,
   verifyAppChallenge,
   generateSecureUserId
-} = require('./src/services/auth.service');
+} from './services/auth.service';
 
 if (require.main === module) {
   server.listen(PORT, '0.0.0.0', () => {
     console.log('================================================================');
-    console.log(`🚀 MICMIXFUN SOCKET SERVER ĐANG CHẠY TẠI CỔNG ${PORT}`);
+    console.log(`🚀 MICMIXFUN SOCKET SERVER (TS) ĐANG CHẠY TẠI CỔNG ${PORT}`);
     console.log(`👉 Tài liệu Swagger API Docs:     http://localhost:${PORT}/api-docs`);
     console.log(`👉 REST API Health Check:         http://localhost:${PORT}/api/health`);
     console.log(`👉 Auth Challenge API:            GET  http://localhost:${PORT}/api/auth/challenge`);
@@ -30,7 +30,7 @@ if (require.main === module) {
   });
 }
 
-module.exports = {
+export {
   app,
   server,
   io,
