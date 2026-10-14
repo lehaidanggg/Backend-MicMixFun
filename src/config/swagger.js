@@ -555,21 +555,21 @@ function buildOpenApiSpec(serverUrl = 'https://micmixfun.up.railway.app') {
   };
 }
 
-function renderSwaggerHtml(specUrl = '/api-docs.json') {
+function renderSwaggerHtml(specObject) {
+  const inlineSpecJson = JSON.stringify(specObject || buildOpenApiSpec());
   return `<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MicMixFun API Documentation - Swagger UI</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.18.2/swagger-ui.min.css" crossorigin="anonymous" />
   <style>
-    body { margin: 0; background: #fafafa; }
+    body { margin: 0; background: #fafafa; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     .topbar-custom {
       background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
       color: #fff;
       padding: 12px 24px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -593,6 +593,11 @@ function renderSwaggerHtml(specUrl = '/api-docs.json') {
       color: #ffffff;
       text-decoration: underline;
     }
+    #swagger-ui {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 12px 16px 48px;
+    }
   </style>
 </head>
 <body>
@@ -606,24 +611,33 @@ function renderSwaggerHtml(specUrl = '/api-docs.json') {
     </div>
   </div>
   <div id="swagger-ui"></div>
-  <script src="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui-bundle.js"></script>
-  <script src="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui-standalone-preset.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/5.18.2/swagger-ui-bundle.min.js" crossorigin="anonymous"></script>
   <script>
-    window.onload = function() {
-      window.ui = SwaggerUIBundle({
-        url: "${specUrl}",
-        dom_id: '#swagger-ui',
-        deepLinking: true,
-        persistAuthorization: true,
-        displayRequestDuration: true,
-        filter: true,
-        presets: [
-          SwaggerUIBundle.presets.apis,
-          SwaggerUIStandalonePreset
-        ],
-        layout: "BaseLayout"
-      });
-    };
+    (function initSwagger() {
+      var specData = ${inlineSpecJson};
+      function mount() {
+        if (typeof SwaggerUIBundle === 'undefined') return false;
+        window.ui = SwaggerUIBundle({
+          spec: specData,
+          dom_id: '#swagger-ui',
+          deepLinking: true,
+          persistAuthorization: true,
+          displayRequestDuration: true,
+          filter: true,
+          tryItOutEnabled: true,
+          presets: [
+            SwaggerUIBundle.presets.apis
+          ]
+        });
+        return true;
+      }
+      if (!mount()) {
+        var fallbackScript = document.createElement('script');
+        fallbackScript.src = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.18.2/swagger-ui-bundle.js';
+        fallbackScript.onload = mount;
+        document.body.appendChild(fallbackScript);
+      }
+    })();
   </script>
 </body>
 </html>`;
