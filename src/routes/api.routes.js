@@ -15,8 +15,22 @@ const {
   issueAuthToken,
   verifyAuthToken
 } = require('../services/auth.service');
+const { buildOpenApiSpec, renderSwaggerHtml } = require('../config/swagger');
 
 function registerApiRoutes(app, io) {
+  // Swagger / OpenAPI 3.0 Documentation
+  app.get('/api-docs.json', (req, res) => {
+    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const host = req.headers['x-forwarded-host'] || req.get('host') || 'localhost:3000';
+    const serverUrl = `${proto}://${host}`;
+    res.json(buildOpenApiSpec(serverUrl));
+  });
+
+  app.get(['/api-docs', '/docs', '/api/docs'], (req, res) => {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderSwaggerHtml('/api-docs.json'));
+  });
+
   // 0. Phát hành One-Time Challenge Nonce (Chống Server Trung Gian / Replay Attack)
   app.get('/api/auth/challenge', (req, res) => {
     const clientIp = extractClientIp(req);

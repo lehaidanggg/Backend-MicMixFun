@@ -21,6 +21,7 @@ if (require.main === module) {
     console.log(`🚀 MICMIXFUN SOCKET SERVER ĐANG CHẠY TẠI CỔNG ${PORT}`);
     console.log(`👉 Trang Demo Web Studio & Room: http://localhost:${PORT}`);
     console.log(`👉 Trang Mimic Party Game:        http://localhost:${PORT}/mimic`);
+    console.log(`👉 Tài liệu Swagger API Docs:     http://localhost:${PORT}/api-docs`);
     console.log(`👉 REST API Health Check:         http://localhost:${PORT}/api/health`);
     console.log(`👉 Auth Challenge API:            GET  http://localhost:${PORT}/api/auth/challenge`);
     console.log(`👉 Firebase Auth API:             POST http://localhost:${PORT}/api/auth/firebase`);
