@@ -18,7 +18,7 @@ const PACK_ENUM = [
   'yankee'
 ];
 
-function buildOpenApiSpec(serverUrl = 'https://backend-micmixfun-production.up.railway.app') {
+function buildOpenApiSpec(serverUrl = 'https://micmixfun.up.railway.app') {
   return {
     openapi: '3.0.3',
     info: {
@@ -41,7 +41,7 @@ function buildOpenApiSpec(serverUrl = 'https://backend-micmixfun-production.up.r
         description: 'Current Server'
       },
       {
-        url: 'https://backend-micmixfun-production.up.railway.app',
+        url: 'https://micmixfun.up.railway.app',
         description: 'Railway Production Server (Singapore)'
       },
       {
