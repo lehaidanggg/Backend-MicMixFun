@@ -2,6 +2,17 @@
  * Cấu hình OpenAPI 3.0.3 (Swagger) cho MicMixFun & Mimic Party Backend
  */
 
+import {
+  AI_REMARK_DESCRIPTIONS,
+  ENUM_DICTIONARY,
+  ERROR_CODE_DESCRIPTIONS,
+  ErrorCode,
+  GAME_MESSAGE_DESCRIPTIONS,
+  ROOM_CLOSE_REASON_DESCRIPTIONS,
+  STATE_LABEL_DESCRIPTIONS,
+  SYSTEM_MESSAGE_DESCRIPTIONS
+} from './messages';
+
 const PACK_ENUM = [
   'animals',
   'anime',
@@ -18,13 +29,79 @@ const PACK_ENUM = [
   'yankee'
 ] as const;
 
+function buildEnumMarkdownDocs(): string {
+  const errorRows = Object.values(ERROR_CODE_DESCRIPTIONS)
+    .map(
+      item =>
+        `| \`${item.code}\` | ${item.vi} | ${item.en} | ${item.params ? `\`${item.params.join(', ')}\`` : '—'} | ${item.context} |`
+    )
+    .join('\n');
+
+  const sysRows = Object.values(SYSTEM_MESSAGE_DESCRIPTIONS)
+    .map(
+      item =>
+        `| \`${item.code}\` | ${item.vi} | ${item.en} | ${item.params ? `\`${item.params.join(', ')}\`` : '—'} | ${item.context} |`
+    )
+    .join('\n');
+
+  const gameRows = Object.values(GAME_MESSAGE_DESCRIPTIONS)
+    .map(
+      item =>
+        `| \`${item.code}\` | ${item.vi} | ${item.en} | ${item.params ? `\`${item.params.join(', ')}\`` : '—'} | ${item.context} |`
+    )
+    .join('\n');
+
+  const stateRows = Object.entries(STATE_LABEL_DESCRIPTIONS)
+    .map(([code, val]) => `| \`${code}\` | ${val.vi} | ${val.en} |`)
+    .join('\n');
+
+  const remarkRows = Object.entries(AI_REMARK_DESCRIPTIONS)
+    .map(([code, val]) => `| \`${code}\` | **${val.gradeRange}** | ${val.vi} | ${val.en} |`)
+    .join('\n');
+
+  const closeRows = Object.entries(ROOM_CLOSE_REASON_DESCRIPTIONS)
+    .map(([code, val]) => `| \`${code}\` | ${val.vi} | ${val.en} |`)
+    .join('\n');
+
+  return [
+    'Tài liệu REST API & Localization Enum Mapping chính thức cho **MicMixFun & Mimic Party Server** (TypeScript + Express 5 + Socket.IO + Cloudflare R2 CDN).',
+    '',
+    '---',
+    '### 🌐 1. Bảng Mapping Mã Lỗi (`ErrorCode` ➔ Text Mô Tả)',
+    '| Mã Enum (`code` / `message`) | Tiếng Việt (VI) | Tiếng Anh (EN) | `messageParams` | Ngữ cảnh xuất hiện |',
+    '| :--- | :--- | :--- | :--- | :--- |',
+    errorRows,
+    '',
+    '### 💬 2. Bảng Mapping Thông Báo Hệ Thống Phòng (`SystemMessageCode`)',
+    '| Mã Enum (`systemMessage`) | Tiếng Việt (VI) | Tiếng Anh (EN) | `messageParams` | Sự kiện Socket |',
+    '| :--- | :--- | :--- | :--- | :--- |',
+    sysRows,
+    '',
+    '### 🎮 3. Bảng Mapping Thông Báo Trạng Thái Game (`GameMessageCode`)',
+    '| Mã Enum (`message`) | Tiếng Việt (VI) | Tiếng Anh (EN) | `messageParams` | Ngữ cảnh Gameplay |',
+    '| :--- | :--- | :--- | :--- | :--- |',
+    gameRows,
+    '',
+    '### 🔄 4. Bảng Mapping Nhãn State Machine (`StateLabelCode`) & Lý Do Đóng Phòng (`RoomCloseReasonCode`)',
+    '| Mã Enum (`stateLabel`) | Tiếng Việt (VI) | Tiếng Anh (EN) |',
+    '| :--- | :--- | :--- |',
+    stateRows,
+    ...closeRows.split('\n'),
+    '',
+    '### 🤖 5. Bảng Mapping Nhận Xét AI Chấm Điểm (`AiRemarkCode`)',
+    '| Mã Enum (`evaluation.remark`) | Hạng Điểm | Tiếng Việt (VI) | Tiếng Anh (EN) |',
+    '| :--- | :--- | :--- | :--- |',
+    remarkRows
+  ].join('\n');
+}
+
 export function buildOpenApiSpec(serverUrl = 'https://micmixfun.up.railway.app'): Record<string, unknown> {
   return {
     openapi: '3.0.3',
     info: {
       title: 'MicMixFun & Mimic Party API',
       version: '1.0.0',
-      description: 'Tài liệu REST API chính thức cho **MicMixFun & Mimic Party Server** (TypeScript + Express 5 + Socket.IO + Cloudflare R2 CDN).',
+      description: buildEnumMarkdownDocs(),
       contact: {
         name: 'MicMixFun Backend Team'
       }
@@ -45,6 +122,10 @@ export function buildOpenApiSpec(serverUrl = 'https://micmixfun.up.railway.app')
       {
         name: 'Authentication',
         description: 'Xác thực người chơi (Guest Token, Firebase Anonymous Auth, Challenge-Response HMAC)'
+      },
+      {
+        name: 'Localization & Enums',
+        description: 'Tra cứu bảng ánh xạ mã Enum (ErrorCode, SystemMessageCode, GameMessageCode, AiRemarkCode) sang ngôn ngữ hiển thị'
       },
       {
         name: 'Mimic Game & Sounds',
@@ -115,8 +196,17 @@ export function buildOpenApiSpec(serverUrl = 'https://micmixfun.up.railway.app')
           type: 'object',
           properties: {
             success: { type: 'boolean', example: false },
-            code: { type: 'string', example: 'AUTH_TOKEN_INVALID_OR_EXPIRED' },
-            message: { type: 'string', example: 'AUTH_TOKEN_INVALID_OR_EXPIRED' }
+            code: {
+              type: 'string',
+              enum: Object.values(ErrorCode),
+              example: ErrorCode.AUTH_TOKEN_INVALID_OR_EXPIRED,
+              description: 'Mã lỗi cố định từ enum ErrorCode để Client tự localize'
+            },
+            message: {
+              type: 'string',
+              enum: Object.values(ErrorCode),
+              example: ErrorCode.AUTH_TOKEN_INVALID_OR_EXPIRED
+            }
           }
         }
       }
@@ -434,14 +524,41 @@ export function buildOpenApiSpec(serverUrl = 'https://micmixfun.up.railway.app')
           }
         }
       },
-      '/api/game-states': {
+      '/api/enums': {
         get: {
-          tags: ['Mimic Game & Sounds'],
-          summary: 'Lấy danh sách các trạng thái của Game State Machine',
-          description: 'Trả về các mã trạng thái (`IDLE`, `THEME_SELECTION`, `PLAYING_SAMPLE`, `PREPARE_RECORDING`, `USER_RECORDING`, `AI_SCORING`, `SHOWDOWN_REVEAL`, `ROUND_RESULT`, `GAME_OVER`) và nhãn hiển thị tiếng Việt.',
+          tags: ['Localization & Enums'],
+          summary: 'Lấy toàn bộ từ điển ánh xạ Localization Enum Codes ➔ Text mô tả (VI / EN)',
+          description:
+            'Trả về danh mục đầy đủ các mã `ErrorCode`, `SystemMessageCode`, `GameMessageCode`, `StateLabelCode`, `AiRemarkCode`, `RoomCloseReasonCode` cùng bản dịch mẫu Tiếng Việt (`vi`), Tiếng Anh (`en`), danh sách `params` và ngữ cảnh sử dụng (`context`).',
           responses: {
             200: {
-              description: 'Danh sách Game States và Labels',
+              description: 'Từ điển Localization Enum Codes và Descriptions',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      enums: { type: 'object' },
+                      descriptions: {
+                        type: 'object',
+                        example: ENUM_DICTIONARY
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      '/api/game-states': {
+        get: {
+          tags: ['Mimic Game & Sounds', 'Localization & Enums'],
+          summary: 'Lấy danh sách các trạng thái của Game State Machine & Localization Enums',
+          description: 'Trả về các mã trạng thái (`IDLE`, `THEME_SELECTION`, `PLAYING_SAMPLE`, `PREPARE_RECORDING`, `USER_RECORDING`, `AI_SCORING`, `SHOWDOWN_REVEAL`, `ROUND_RESULT`, `GAME_OVER`), nhãn enum `StateLabelCode` và từ điển `descriptions`.',
+          responses: {
+            200: {
+              description: 'Danh sách Game States, Labels và Localization Enums',
               content: {
                 'application/json': {
                   schema: {
@@ -465,6 +582,12 @@ export function buildOpenApiSpec(serverUrl = 'https://micmixfun.up.railway.app')
                       labels: {
                         type: 'object',
                         additionalProperties: { type: 'string' }
+                      },
+                      enums: {
+                        type: 'object'
+                      },
+                      descriptions: {
+                        type: 'object'
                       }
                     }
                   }

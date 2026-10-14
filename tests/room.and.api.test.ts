@@ -182,6 +182,12 @@ test('REST API — Decision Matrix: Endpoints & Enum Error Codes', async () => {
         expectedCode: ErrorCode.ROOM_NOT_FOUND
       },
       {
+        caseName: 'GET /api/enums returns full enum dictionary and VI/EN text descriptions',
+        method: 'GET',
+        path: '/api/enums',
+        expectedStatus: 200
+      },
+      {
         caseName: 'GET /api/game-states returns states, labels, and localization enums',
         method: 'GET',
         path: '/api/game-states',

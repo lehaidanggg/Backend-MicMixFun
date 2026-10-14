@@ -3,6 +3,7 @@ import { Server } from 'socket.io';
 import { MAX_MEMBERS_PER_ROOM } from '../config/constants';
 import {
   AiRemarkCode,
+  ENUM_DICTIONARY,
   ErrorCode,
   GameMessageCode,
   RoomCloseReasonCode,
@@ -257,7 +258,25 @@ export function registerApiRoutes(app: Express, io: Server): void {
         aiRemarkCodes: AiRemarkCode,
         soundPackNameCodes: SoundPackNameCode,
         soundPackDescCodes: SoundPackDescCode
-      }
+      },
+      descriptions: ENUM_DICTIONARY
+    });
+  });
+
+  // 5b. Bảng tra cứu chi tiết Localization Enum Codes -> Mô tả Tiếng Việt / Tiếng Anh
+  app.get('/api/enums', (_req: Request, res: Response) => {
+    res.json({
+      enums: {
+        errorCodes: ErrorCode,
+        systemMessageCodes: SystemMessageCode,
+        gameMessageCodes: GameMessageCode,
+        roomCloseReasonCodes: RoomCloseReasonCode,
+        stateLabelCodes: StateLabelCode,
+        aiRemarkCodes: AiRemarkCode,
+        soundPackNameCodes: SoundPackNameCode,
+        soundPackDescCodes: SoundPackDescCode
+      },
+      descriptions: ENUM_DICTIONARY
     });
   });
 
