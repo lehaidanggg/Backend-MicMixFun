@@ -1,5 +1,3 @@
-const express = require('express');
-const { DOWNLOADED_SOUNDS_DIR } = require('../config/constants');
 const { resolveSoundFile } = require('../services/audio.service');
 
 function registerWebRoutes(app) {
@@ -7,9 +5,6 @@ function registerWebRoutes(app) {
   app.get('/', (req, res) => {
     res.redirect('/api-docs');
   });
-
-  app.use('/sounds', express.static(DOWNLOADED_SOUNDS_DIR));
-  app.use('/downloaded_sounds', express.static(DOWNLOADED_SOUNDS_DIR));
 
   // Fallback tương thích ngược cho cả /sounds/*, /downloaded_sounds/* và /audio/* (Hỗ trợ Express 5 & Redirect R2 CDN)
   const fallbackSoundHandler = (req, res, next) => {
