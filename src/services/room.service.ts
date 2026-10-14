@@ -1,5 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import { ROOM_CLEANUP_DELAY_MS, CHALLENGE_TTL_MS } from '../config/constants';
+import { RoomCloseReasonCode, SystemMessageCode } from '../config/messages';
 import { challengeNonces } from './auth.service';
 import { MimicGameSession } from '../game/MimicGameSession';
 import { RoomData, RoomMember } from '../types';
@@ -35,8 +36,9 @@ export function getRoomMembersArray(room?: RoomData | null): RoomMember[] {
  */
 export function destroyRoomData(
   roomId: string,
-  reason = 'ROOM_CLOSED',
-  notifyMessage: string | null = null
+  reason: string = RoomCloseReasonCode.ROOM_CLOSED,
+  notifyMessage: string | null = null,
+  notifyParams: Record<string, unknown> = {}
 ): boolean {
   const targetId = String(roomId || '').trim().toUpperCase();
   if (!targetId) return false;
@@ -52,6 +54,8 @@ export function destroyRoomData(
       roomId: targetId,
       reason,
       message: notifyMessage,
+      messageCode: notifyMessage,
+      messageParams: notifyParams,
       timestamp: Date.now()
     });
   }
@@ -116,7 +120,7 @@ export function leaveCurrentRoom(sock: Socket, roomId: string, fallbackUser: Par
       game.stopTimer();
       game.clearRoundAudioData();
       if (game.disconnectedPlayers.size === 0) {
-        destroyRoomData(roomId, 'ALL_MEMBERS_LEFT');
+        destroyRoomData(roomId, RoomCloseReasonCode.ALL_MEMBERS_LEFT);
         return;
       }
     }
@@ -125,7 +129,7 @@ export function leaveCurrentRoom(sock: Socket, roomId: string, fallbackUser: Par
     room.cleanupTimer = setTimeout(() => {
       const checkRoom = rooms.get(roomId);
       if (checkRoom && checkRoom.members.size === 0) {
-        destroyRoomData(roomId, 'EMPTY_ROOM_TIMEOUT');
+        destroyRoomData(roomId, RoomCloseReasonCode.EMPTY_ROOM_TIMEOUT);
       }
     }, ROOM_CLEANUP_DELAY_MS);
     return;
@@ -156,7 +160,9 @@ export function leaveCurrentRoom(sock: Socket, roomId: string, fallbackUser: Par
   sock.to(roomId).emit('user_left', {
     user: leavingMember,
     members: getRoomMembersArray(room),
-    systemMessage: `${leavingMember.userName || sock.id} đã rời phòng.`
+    systemMessage: SystemMessageCode.SYS_USER_LEFT_ROOM,
+    messageCode: SystemMessageCode.SYS_USER_LEFT_ROOM,
+    messageParams: { userName: leavingMember.userName || sock.id }
   });
 
   if (newHostInfo && ioInstance) {
@@ -164,7 +170,9 @@ export function leaveCurrentRoom(sock: Socket, roomId: string, fallbackUser: Par
       newHostId: newHostInfo.newHostId,
       newHostName: newHostInfo.newHostName,
       members: getRoomMembersArray(room),
-      systemMessage: `👑 ${newHostInfo.newHostName} đã trở thành Chủ phòng mới!`
+      systemMessage: SystemMessageCode.SYS_HOST_CHANGED,
+      messageCode: SystemMessageCode.SYS_HOST_CHANGED,
+      messageParams: { newHostName: newHostInfo.newHostName }
     });
   }
 }
@@ -194,7 +202,7 @@ export function startPeriodicGcTimer(): ReturnType<typeof setInterval> {
       }
       const room = rooms.get(roomId);
       if (!room || (room.members.size === 0 && !room.cleanupTimer)) {
-        destroyRoomData(roomId, 'GC_ORPHAN_ROOM');
+        destroyRoomData(roomId, RoomCloseReasonCode.GC_ORPHAN_ROOM);
       }
     }
   }, 60000);

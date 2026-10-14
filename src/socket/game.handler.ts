@@ -1,4 +1,5 @@
 import { Server } from 'socket.io';
+import { ErrorCode, SystemMessageCode } from '../config/messages';
 import { rooms, gameSessions } from '../services/room.service';
 import { AuthenticatedSocket, SocketSessionState } from '../types';
 
@@ -16,19 +17,39 @@ export function registerGameHandlers(
     ({ roomId, requireAllReady = false }: Record<string, any> = {}, callback?: (res: Record<string, unknown>) => void) => {
       const targetRoom = String(roomId || sessionState.currentRoomId || '').toUpperCase();
       if (!targetRoom) {
-        if (callback) callback({ success: false, message: 'Chưa vào phòng!' });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.ROOM_NOT_JOINED,
+            message: ErrorCode.ROOM_NOT_JOINED
+          });
+        }
         return;
       }
       const room = rooms.get(targetRoom);
       if (!room) {
-        if (callback) callback({ success: false, message: 'Phòng không tồn tại!' });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.ROOM_NOT_FOUND,
+            message: ErrorCode.ROOM_NOT_FOUND
+          });
+        }
         return;
       }
 
       if (room.hostId !== socket.id) {
-        const errorMsg = 'Chỉ có Chủ phòng (Host) mới có quyền bắt đầu trận đấu!';
-        socket.emit('game_error', { message: errorMsg });
-        if (callback) callback({ success: false, message: errorMsg });
+        socket.emit('game_error', {
+          code: ErrorCode.GAME_HOST_ONLY_START,
+          message: ErrorCode.GAME_HOST_ONLY_START
+        });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.GAME_HOST_ONLY_START,
+            message: ErrorCode.GAME_HOST_ONLY_START
+          });
+        }
         return;
       }
 
@@ -37,10 +58,14 @@ export function registerGameHandlers(
           m => m.socketId !== room.hostId && !m.isReady
         );
         if (unreadyMembers.length > 0) {
-          const names = unreadyMembers.map(m => m.userName).join(', ');
-          const errorMsg = `Chưa thể bắt đầu! Còn thành viên chưa sẵn sàng: ${names}`;
-          socket.emit('game_error', { message: errorMsg });
-          if (callback) callback({ success: false, message: errorMsg });
+          const unreadyUserNames = unreadyMembers.map(m => m.userName);
+          const errPayload = {
+            code: ErrorCode.GAME_PLAYERS_NOT_READY,
+            message: ErrorCode.GAME_PLAYERS_NOT_READY,
+            messageParams: { unreadyPlayers: unreadyUserNames }
+          };
+          socket.emit('game_error', errPayload);
+          if (callback) callback({ success: false, ...errPayload });
           return;
         }
       }
@@ -64,9 +89,17 @@ export function registerGameHandlers(
       const targetRoom = String(roomId || sessionState.currentRoomId || '').toUpperCase();
       const room = rooms.get(targetRoom);
       if (!room || room.hostId !== socket.id) {
-        const err = 'Chỉ có Chủ phòng mới có quyền cấu hình trận đấu!';
-        socket.emit('game_error', { message: err });
-        if (callback) callback({ success: false, message: err });
+        socket.emit('game_error', {
+          code: ErrorCode.GAME_HOST_ONLY_CONFIG,
+          message: ErrorCode.GAME_HOST_ONLY_CONFIG
+        });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.GAME_HOST_ONLY_CONFIG,
+            message: ErrorCode.GAME_HOST_ONLY_CONFIG
+          });
+        }
         return;
       }
 
@@ -79,11 +112,22 @@ export function registerGameHandlers(
             recordDuration: game.recordDuration,
             useCustomRecordDuration: game.useCustomRecordDuration,
             updatedBy: socket.id,
-            systemMessage: `⚙️ Chủ phòng đã cập nhật: ${game.totalRounds} vòng, thời gian nhại ${game.recordDuration}s!`
+            systemMessage: SystemMessageCode.SYS_GAME_CONFIG_UPDATED,
+            messageCode: SystemMessageCode.SYS_GAME_CONFIG_UPDATED,
+            messageParams: {
+              totalRounds: game.totalRounds,
+              recordDuration: game.recordDuration
+            }
           });
           if (callback) callback({ success: true, totalRounds: game.totalRounds, recordDuration: game.recordDuration });
         } else {
-          if (callback) callback({ success: false, message: 'Không thể đổi cấu hình khi game đang diễn ra!' });
+          if (callback) {
+            callback({
+              success: false,
+              code: ErrorCode.GAME_CONFIG_LOCKED_IN_PROGRESS,
+              message: ErrorCode.GAME_CONFIG_LOCKED_IN_PROGRESS
+            });
+          }
         }
       }
     }
@@ -98,7 +142,13 @@ export function registerGameHandlers(
     ) => {
       const targetRoom = String(roomId || sessionState.currentRoomId || '').toUpperCase();
       if (!targetRoom) {
-        if (callback) callback({ success: false, message: 'Chưa vào phòng!' });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.ROOM_NOT_JOINED,
+            message: ErrorCode.ROOM_NOT_JOINED
+          });
+        }
         return;
       }
       const game = gameSessions.get(targetRoom);
@@ -106,7 +156,13 @@ export function registerGameHandlers(
         const res = game.submitMimicAudio(socket.id, audioData, mimeType, metrics);
         if (callback) callback(res);
       } else {
-        if (callback) callback({ success: false, message: 'Trận đấu không tồn tại!' });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.GAME_NOT_FOUND,
+            message: ErrorCode.GAME_NOT_FOUND
+          });
+        }
       }
     }
   );
@@ -139,7 +195,13 @@ export function registerGameHandlers(
         const res = game.confirmRoundReady(socket.id);
         if (callback) callback(res);
       } else {
-        if (callback) callback({ success: false, message: 'Trận đấu không tồn tại!' });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.GAME_NOT_FOUND,
+            message: ErrorCode.GAME_NOT_FOUND
+          });
+        }
       }
     }
   );
@@ -154,7 +216,13 @@ export function registerGameHandlers(
         const res = game.confirmShowdownSkip(socket.id);
         if (callback) callback(res);
       } else {
-        if (callback) callback({ success: false, message: 'Trận đấu không tồn tại!' });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.GAME_NOT_FOUND,
+            message: ErrorCode.GAME_NOT_FOUND
+          });
+        }
       }
     }
   );
@@ -168,7 +236,13 @@ export function registerGameHandlers(
         const res = game.confirmShowdownSkip(socket.id);
         if (callback) callback(res);
       } else {
-        if (callback) callback({ success: false, message: 'Trận đấu không tồn tại!' });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.GAME_NOT_FOUND,
+            message: ErrorCode.GAME_NOT_FOUND
+          });
+        }
       }
     }
   );

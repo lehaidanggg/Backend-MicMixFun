@@ -115,7 +115,8 @@ export function buildOpenApiSpec(serverUrl = 'https://micmixfun.up.railway.app')
           type: 'object',
           properties: {
             success: { type: 'boolean', example: false },
-            message: { type: 'string', example: 'Token không hợp lệ hoặc đã hết hạn!' }
+            code: { type: 'string', example: 'AUTH_TOKEN_INVALID_OR_EXPIRED' },
+            message: { type: 'string', example: 'AUTH_TOKEN_INVALID_OR_EXPIRED' }
           }
         }
       }

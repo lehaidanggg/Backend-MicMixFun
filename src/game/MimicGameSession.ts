@@ -1,5 +1,6 @@
 import { Server } from 'socket.io';
 import { getSoundDuration, resolveSoundFile, getSoundUrl } from '../services/audio.service';
+import { AiRemarkCode, ErrorCode, GameMessageCode } from '../config/messages';
 import { GAME_STATES, STATE_LABELS, SOUND_PACKS, AI_REMARKS } from './soundPacks';
 import {
   AudioStoreRecord,
@@ -466,7 +467,9 @@ export class MimicGameSession {
         },
         exactDuration,
         recordingDuration: roundedDuration,
-        message: 'Lấy hơi! Chuẩn bị micro để nhại lại trong 3 giây...'
+        message: GameMessageCode.GAME_MSG_PREPARE_RECORDING,
+        messageCode: GameMessageCode.GAME_MSG_PREPARE_RECORDING,
+        messageParams: { countdown: 3 }
       },
       () => this.startUserRecordingState(exactDuration)
     );
@@ -498,7 +501,9 @@ export class MimicGameSession {
         },
         exactDuration,
         duration,
-        message: '🎙️ TỚI LƯỢT BẠN! HÃY NHẠI LẠI NGAY VÀO MICRO!'
+        message: GameMessageCode.GAME_MSG_USER_RECORDING,
+        messageCode: GameMessageCode.GAME_MSG_USER_RECORDING,
+        messageParams: { duration }
       },
       () => this.startAiScoringState()
     );
@@ -509,19 +514,31 @@ export class MimicGameSession {
     audioBase64?: string | null,
     mimeType = 'audio/webm',
     clientMetrics: ClientMetrics | null = null
-  ): { success: boolean; message?: string; evaluation?: EvaluationResult } {
+  ): { success: boolean; code?: ErrorCode; message?: ErrorCode; evaluation?: EvaluationResult } {
     if (this.state !== GAME_STATES.USER_RECORDING && this.state !== GAME_STATES.AI_SCORING) {
-      return { success: false, message: 'Hiện không trong thời gian thu âm!' };
+      return {
+        success: false,
+        code: ErrorCode.GAME_NOT_IN_RECORDING_PHASE,
+        message: ErrorCode.GAME_NOT_IN_RECORDING_PHASE
+      };
     }
 
     const player = this.players.get(socketId);
     if (!player) {
-      return { success: false, message: 'Người chơi không tồn tại trong phòng!' };
+      return {
+        success: false,
+        code: ErrorCode.PLAYER_NOT_IN_ROOM,
+        message: ErrorCode.PLAYER_NOT_IN_ROOM
+      };
     }
 
     if (player.currentAttempt !== null) {
       console.warn(`[MimicGame:${this.roomId}] ⚠️ Chặn ${player.userName} nộp bài trùng lặp trong vòng ${this.currentRound}`);
-      return { success: false, message: 'Bạn đã nộp bài trong vòng này rồi!' };
+      return {
+        success: false,
+        code: ErrorCode.GAME_ALREADY_SUBMITTED_THIS_ROUND,
+        message: ErrorCode.GAME_ALREADY_SUBMITTED_THIS_ROUND
+      };
     }
 
     const evaluation = this.evaluateMimicAttempt(audioBase64, clientMetrics);
@@ -580,7 +597,8 @@ export class MimicGameSession {
       suspenseDuration,
       {
         duration: suspenseDuration,
-        message: '🤖 AI Voice Detector đang phân tích & đối chiếu phổ âm thanh...',
+        message: GameMessageCode.GAME_MSG_AI_SCORING,
+        messageCode: GameMessageCode.GAME_MSG_AI_SCORING,
         suspenseDuration
       },
       () => this.startShowdownRevealState()
@@ -598,7 +616,7 @@ export class MimicGameSession {
             rhythmScore: 0,
             energyScore: 0,
             grade: 'F',
-            remark: '😴 Không kịp thu âm nhại lại!'
+            remark: AiRemarkCode.AI_REMARK_MISSED_RECORDING
           }
         };
       }
@@ -635,18 +653,29 @@ export class MimicGameSession {
 
   confirmShowdownSkip(socketId: string): {
     success: boolean;
-    message?: string;
+    code?: ErrorCode;
+    message?: ErrorCode;
     isVoted?: boolean;
     skipCount?: number;
     totalCount?: number;
     allSkipConfirmed?: boolean;
   } {
     if (this.state !== GAME_STATES.SHOWDOWN_REVEAL) {
-      return { success: false, message: 'Chưa tới giai đoạn Showdown Reveal' };
+      return {
+        success: false,
+        code: ErrorCode.GAME_NOT_IN_SHOWDOWN_PHASE,
+        message: ErrorCode.GAME_NOT_IN_SHOWDOWN_PHASE
+      };
     }
 
     const player = this.players.get(socketId);
-    if (!player) return { success: false, message: 'Người chơi không tồn tại' };
+    if (!player) {
+      return {
+        success: false,
+        code: ErrorCode.PLAYER_NOT_IN_ROOM,
+        message: ErrorCode.PLAYER_NOT_IN_ROOM
+      };
+    }
 
     let isVoted = false;
     if (this.showdownSkipVotes.has(socketId)) {
@@ -676,7 +705,8 @@ export class MimicGameSession {
     if (allSkipConfirmed) {
       console.log(`[MimicGame:${this.roomId}] 🚀 Tất cả người chơi (${totalCount}/${totalCount}) đã đồng ý xem bảng điểm sớm! Chuyển ngay...`);
       this.io.to(this.roomId).emit('all_players_ready', {
-        message: '🚀 Tất cả đã đồng ý! Đang mở Bảng Điểm Vòng...'
+        message: GameMessageCode.GAME_MSG_ALL_SKIP_CONFIRMED,
+        messageCode: GameMessageCode.GAME_MSG_ALL_SKIP_CONFIRMED
       });
       this.startRoundResultState();
     }
@@ -756,6 +786,9 @@ export class MimicGameSession {
       .sort((a, b) => b.totalScore - a.totalScore);
 
     const champion = finalRanking[0] || null;
+    const msgCode = champion
+      ? GameMessageCode.GAME_MSG_GAME_OVER_CHAMPION
+      : GameMessageCode.GAME_MSG_GAME_OVER_FINISHED;
 
     this.transitionToState(
       GAME_STATES.GAME_OVER,
@@ -766,7 +799,9 @@ export class MimicGameSession {
         readyCount: 0,
         totalCount: this.players.size,
         players: finalRanking,
-        message: champion ? `🏆 Chúc mừng ${champion.userName} đã trở thành Vua Nhại Giọng!` : 'Trận đấu kết thúc!'
+        message: msgCode,
+        messageCode: msgCode,
+        messageParams: champion ? { championName: champion.userName, totalScore: champion.totalScore } : {}
       },
       null
     );
@@ -774,17 +809,28 @@ export class MimicGameSession {
 
   confirmRoundReady(socketId: string): {
     success: boolean;
-    message?: string;
+    code?: ErrorCode;
+    message?: ErrorCode;
     readyCount?: number;
     totalCount?: number;
     allReady?: boolean;
   } {
     if (this.state !== GAME_STATES.ROUND_RESULT && this.state !== GAME_STATES.GAME_OVER) {
-      return { success: false, message: 'Chưa tới giai đoạn xác nhận sẵn sàng' };
+      return {
+        success: false,
+        code: ErrorCode.GAME_NOT_IN_READY_PHASE,
+        message: ErrorCode.GAME_NOT_IN_READY_PHASE
+      };
     }
 
     const player = this.players.get(socketId);
-    if (!player) return { success: false, message: 'Người chơi không tồn tại' };
+    if (!player) {
+      return {
+        success: false,
+        code: ErrorCode.PLAYER_NOT_IN_ROOM,
+        message: ErrorCode.PLAYER_NOT_IN_ROOM
+      };
+    }
 
     player.isReady = true;
 
@@ -822,8 +868,10 @@ export class MimicGameSession {
 
     console.log(`[MimicGame:${this.roomId}] 🎉 TẤT CẢ NGƯỜI CHƠI ĐÃ SẴN SÀNG! Đang đếm ngược 3s...`);
     this.io.to(this.roomId).emit('all_players_ready', {
-      message: '🎉 Tất cả người chơi đã SẴN SÀNG! Bắt đầu trong 3 giây...',
-      countdown: 3
+      message: GameMessageCode.GAME_MSG_ALL_PLAYERS_READY_COUNTDOWN,
+      messageCode: GameMessageCode.GAME_MSG_ALL_PLAYERS_READY_COUNTDOWN,
+      countdown: 3,
+      messageParams: { countdown: 3 }
     });
 
     this.nextStageTimer = setTimeout(() => {

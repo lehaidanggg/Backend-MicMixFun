@@ -1,4 +1,5 @@
 import { MAX_CONNECTIONS_PER_IP } from '../config/constants';
+import { ErrorCode } from '../config/messages';
 import {
   ipConnectionCounts,
   extractClientIp,
@@ -22,7 +23,7 @@ export async function socketAuthMiddleware(
     const clientIp = extractClientIp(socket);
     const activeOnIp = ipConnectionCounts.get(clientIp) || 0;
     if (activeOnIp >= MAX_CONNECTIONS_PER_IP) {
-      next(new Error(`Vượt quá số kết nối tối đa cho phép trên cùng 1 địa chỉ IP (${MAX_CONNECTIONS_PER_IP})!`));
+      next(new Error(ErrorCode.AUTH_IP_CONNECTION_LIMIT_EXCEEDED));
       return;
     }
 

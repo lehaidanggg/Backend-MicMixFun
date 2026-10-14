@@ -1,6 +1,16 @@
 import { Express, Request, Response } from 'express';
 import { Server } from 'socket.io';
 import { MAX_MEMBERS_PER_ROOM } from '../config/constants';
+import {
+  AiRemarkCode,
+  ErrorCode,
+  GameMessageCode,
+  RoomCloseReasonCode,
+  SoundPackDescCode,
+  SoundPackNameCode,
+  StateLabelCode,
+  SystemMessageCode
+} from '../config/messages';
 import { GAME_STATES, STATE_LABELS, SOUND_PACKS } from '../game/soundPacks';
 import { getAllDownloadedSounds } from '../services/audio.service';
 import { rooms, gameSessions } from '../services/room.service';
@@ -62,7 +72,8 @@ export function registerApiRoutes(app: Express, io: Server): void {
       if (!fbDecoded) {
         res.status(401).json({
           success: false,
-          message: 'Firebase ID Token không hợp lệ hoặc đã hết hạn!'
+          code: ErrorCode.AUTH_FIREBASE_TOKEN_INVALID,
+          message: ErrorCode.AUTH_FIREBASE_TOKEN_INVALID
         });
         return;
       }
@@ -79,7 +90,8 @@ export function registerApiRoutes(app: Express, io: Server): void {
         if (!challengeOk) {
           res.status(403).json({
             success: false,
-            message: 'Chữ ký xác thực thiết bị (Challenge-Response) không hợp lệ hoặc bị giả mạo qua trung gian!'
+            code: ErrorCode.AUTH_CHALLENGE_SIGNATURE_INVALID,
+            message: ErrorCode.AUTH_CHALLENGE_SIGNATURE_INVALID
           });
           return;
         }
@@ -116,8 +128,12 @@ export function registerApiRoutes(app: Express, io: Server): void {
           avatar: issued.payload.avatar
         }
       });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err?.message || 'Internal Server Error' });
+    } catch {
+      res.status(500).json({
+        success: false,
+        code: ErrorCode.INTERNAL_SERVER_ERROR,
+        message: ErrorCode.INTERNAL_SERVER_ERROR
+      });
     }
   });
 
@@ -191,7 +207,12 @@ export function registerApiRoutes(app: Express, io: Server): void {
       }
     }
     if (!decoded) {
-      res.status(401).json({ success: false, valid: false, message: 'Token không hợp lệ hoặc đã hết hạn!' });
+      res.status(401).json({
+        success: false,
+        valid: false,
+        code: ErrorCode.AUTH_TOKEN_INVALID_OR_EXPIRED,
+        message: ErrorCode.AUTH_TOKEN_INVALID_OR_EXPIRED
+      });
       return;
     }
     res.json({
@@ -218,7 +239,7 @@ export function registerApiRoutes(app: Express, io: Server): void {
     });
   });
 
-  // 5. Danh sách Sound Packs & Game States
+  // 5. Danh sách Sound Packs & Game States (kèm toàn bộ Localization Enum Codes)
   app.get('/api/mimic-packs', (_req: Request, res: Response) => {
     res.json({ packs: SOUND_PACKS });
   });
@@ -226,7 +247,17 @@ export function registerApiRoutes(app: Express, io: Server): void {
   app.get('/api/game-states', (_req: Request, res: Response) => {
     res.json({
       states: GAME_STATES,
-      labels: STATE_LABELS
+      labels: STATE_LABELS,
+      enums: {
+        errorCodes: ErrorCode,
+        systemMessageCodes: SystemMessageCode,
+        gameMessageCodes: GameMessageCode,
+        roomCloseReasonCodes: RoomCloseReasonCode,
+        stateLabelCodes: StateLabelCode,
+        aiRemarkCodes: AiRemarkCode,
+        soundPackNameCodes: SoundPackNameCode,
+        soundPackDescCodes: SoundPackDescCode
+      }
     });
   });
 
@@ -253,12 +284,22 @@ export function registerApiRoutes(app: Express, io: Server): void {
     const socketId = String(req.params.socketId || '');
     const game = gameSessions.get(roomId);
     if (!game) {
-      res.status(404).json({ error: 'Phòng đấu không tồn tại' });
+      res.status(404).json({
+        success: false,
+        code: ErrorCode.ROOM_NOT_FOUND,
+        error: ErrorCode.ROOM_NOT_FOUND,
+        message: ErrorCode.ROOM_NOT_FOUND
+      });
       return;
     }
     const audioRecord = game.getAttemptAudio(socketId);
     if (!audioRecord || !audioRecord.buffer) {
-      res.status(404).json({ error: 'Không tìm thấy bản thu âm' });
+      res.status(404).json({
+        success: false,
+        code: ErrorCode.ATTEMPT_AUDIO_NOT_FOUND,
+        error: ErrorCode.ATTEMPT_AUDIO_NOT_FOUND,
+        message: ErrorCode.ATTEMPT_AUDIO_NOT_FOUND
+      });
       return;
     }
     res.setHeader('Content-Type', audioRecord.mimeType || 'audio/webm');
@@ -281,8 +322,13 @@ export function registerApiRoutes(app: Express, io: Server): void {
         packCounts,
         sounds: soundList
       });
-    } catch (err: any) {
-      res.status(500).json({ error: 'Không thể đọc thư mục âm thanh', message: err?.message });
+    } catch {
+      res.status(500).json({
+        success: false,
+        code: ErrorCode.SOUNDS_DIRECTORY_READ_ERROR,
+        error: ErrorCode.SOUNDS_DIRECTORY_READ_ERROR,
+        message: ErrorCode.SOUNDS_DIRECTORY_READ_ERROR
+      });
     }
   });
 }

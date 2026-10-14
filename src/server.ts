@@ -15,6 +15,17 @@ import {
   generateSecureUserId
 } from './services/auth.service';
 
+import {
+  ErrorCode,
+  SystemMessageCode,
+  GameMessageCode,
+  RoomCloseReasonCode,
+  StateLabelCode,
+  AiRemarkCode,
+  SoundPackNameCode,
+  SoundPackDescCode
+} from './config/messages';
+
 if (require.main === module) {
   server.listen(PORT, '0.0.0.0', () => {
     console.log('================================================================');
@@ -43,5 +54,13 @@ export {
   createAuthChallenge,
   verifyAppChallenge,
   destroyRoomData,
-  generateSecureUserId
+  generateSecureUserId,
+  ErrorCode,
+  SystemMessageCode,
+  GameMessageCode,
+  RoomCloseReasonCode,
+  StateLabelCode,
+  AiRemarkCode,
+  SoundPackNameCode,
+  SoundPackDescCode
 };

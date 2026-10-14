@@ -1,5 +1,6 @@
 import { Server } from 'socket.io';
 import { MAX_MEMBERS_PER_ROOM, MAX_CHAT_HISTORY_SIZE } from '../config/constants';
+import { ErrorCode, RoomCloseReasonCode, SystemMessageCode } from '../config/messages';
 import { MimicGameSession } from '../game/MimicGameSession';
 import {
   sanitizeUserName,
@@ -86,10 +87,16 @@ export function registerRoomHandlers(
           .toUpperCase()
           .slice(0, 16);
         const cleanUserName = sanitizeUserName(userName, socket.id);
-        const safeRoomName = String(roomName || `Phòng của ${cleanUserName}`).trim().slice(0, 40);
+        const safeRoomName = String(roomName || cleanUserName).trim().slice(0, 40);
 
         if (rooms.has(generatedRoomId)) {
-          if (callback) callback({ success: false, message: 'Mã phòng đã tồn tại. Hãy thử mã khác!' });
+          if (callback) {
+            callback({
+              success: false,
+              code: ErrorCode.ROOM_ID_ALREADY_EXISTS,
+              message: ErrorCode.ROOM_ID_ALREADY_EXISTS
+            });
+          }
           return;
         }
 
@@ -107,9 +114,14 @@ export function registerRoomHandlers(
 
         console.log(`[Room] 🏠 Đã tạo phòng mới: ${generatedRoomId} - "${safeRoomName}" (Host: ${socket.id})`);
         if (callback) callback({ success: true, roomId: generatedRoomId, roomName: safeRoomName, hostId: socket.id });
-      } catch (err: any) {
-        console.error('[Error create_room]:', err);
-        if (callback) callback({ success: false, message: err?.message });
+      } catch {
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.INTERNAL_SERVER_ERROR,
+            message: ErrorCode.INTERNAL_SERVER_ERROR
+          });
+        }
       }
     }
   );
@@ -125,7 +137,13 @@ export function registerRoomHandlers(
         const targetRoomId = String(roomId || '').trim().toUpperCase().slice(0, 24);
 
         if (!targetRoomId) {
-          if (callback) callback({ success: false, message: 'Vui lòng cung cấp mã phòng!' });
+          if (callback) {
+            callback({
+              success: false,
+              code: ErrorCode.ROOM_ID_REQUIRED,
+              message: ErrorCode.ROOM_ID_REQUIRED
+            });
+          }
           return;
         }
 
@@ -183,7 +201,7 @@ export function registerRoomHandlers(
         if (!rooms.has(targetRoomId)) {
           rooms.set(targetRoomId, {
             id: targetRoomId,
-            name: `Phòng ${targetRoomId}`,
+            name: targetRoomId,
             createdAt: Date.now(),
             hostId: socket.id,
             hostUserId: resolvedUserId,
@@ -218,7 +236,9 @@ export function registerRoomHandlers(
           if (callback) {
             callback({
               success: false,
-              message: `Phòng đã đầy (${MAX_MEMBERS_PER_ROOM}/${MAX_MEMBERS_PER_ROOM} người)!`
+              code: ErrorCode.ROOM_FULL,
+              message: ErrorCode.ROOM_FULL,
+              messageParams: { maxMembers: MAX_MEMBERS_PER_ROOM }
             });
           }
           return;
@@ -270,10 +290,17 @@ export function registerRoomHandlers(
           `[Room] 👤 [${currentUser.role}] ${currentUser.userName} (${socket.id}, UID: ${currentUser.userId}) đã vào phòng: ${targetRoomId}${restoreInfo.restored ? ` [Khôi phục ${restoreInfo.totalScore}đ]` : ''}`
         );
 
+        const joinSysCode =
+          currentUser.role === 'HOST'
+            ? SystemMessageCode.SYS_HOST_JOINED_ROOM
+            : SystemMessageCode.SYS_PLAYER_JOINED_ROOM;
+
         socket.to(targetRoomId).emit('user_joined', {
           user: currentUser,
           members: getRoomMembersArray(room),
-          systemMessage: `${currentUser.role === 'HOST' ? '👑 Chủ phòng' : '🎧'} ${currentUser.userName} đã tham gia phòng!`
+          systemMessage: joinSysCode,
+          messageCode: joinSysCode,
+          messageParams: { userName: currentUser.userName, role: currentUser.role }
         });
 
         const responseData = {
@@ -294,9 +321,14 @@ export function registerRoomHandlers(
 
         if (callback) callback(responseData);
         socket.emit('joined_room_success', responseData);
-      } catch (err: any) {
-        console.error('[Error join_room]:', err);
-        if (callback) callback({ success: false, message: err?.message });
+      } catch {
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.INTERNAL_SERVER_ERROR,
+            message: ErrorCode.INTERNAL_SERVER_ERROR
+          });
+        }
       }
     }
   );
@@ -319,21 +351,36 @@ export function registerRoomHandlers(
       const targetRoomId = String(roomId || sessionState.currentRoomId || '').trim().toUpperCase();
       const room = rooms.get(targetRoomId);
       if (!room) {
-        if (callback) callback({ success: false, message: 'Phòng không tồn tại!' });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.ROOM_NOT_FOUND,
+            message: ErrorCode.ROOM_NOT_FOUND
+          });
+        }
         return;
       }
 
       if (room.hostId !== socket.id) {
-        const errMsg = 'Chỉ có Chủ phòng (Host) mới có quyền đóng phòng!';
-        socket.emit('game_error', { message: errMsg });
-        if (callback) callback({ success: false, message: errMsg });
+        socket.emit('game_error', {
+          code: ErrorCode.ROOM_HOST_ONLY_CLOSE,
+          message: ErrorCode.ROOM_HOST_ONLY_CLOSE
+        });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.ROOM_HOST_ONLY_CLOSE,
+            message: ErrorCode.ROOM_HOST_ONLY_CLOSE
+          });
+        }
         return;
       }
 
       destroyRoomData(
         targetRoomId,
-        'HOST_CLOSED',
-        `👑 Chủ phòng ${currentUser.userName} đã đóng phòng đấu!`
+        RoomCloseReasonCode.HOST_CLOSED,
+        SystemMessageCode.SYS_HOST_CLOSED_ROOM,
+        { hostName: currentUser.userName }
       );
       sessionState.currentRoomId = null;
 
@@ -362,12 +409,18 @@ export function registerRoomHandlers(
           game.setPlayerReady(socket.id, Boolean(member.isReady));
         }
 
+        const readySysCode = member.isReady
+          ? SystemMessageCode.SYS_PLAYER_READY
+          : SystemMessageCode.SYS_PLAYER_UNREADY;
+
         io.to(targetRoom).emit('player_ready_changed', {
           socketId: socket.id,
           userName: member.userName,
           isReady: member.isReady,
           members: getRoomMembersArray(room),
-          systemMessage: `${member.userName} ${member.isReady ? 'đã SẴN SÀNG ✅' : 'đã hủy sẵn sàng ⏳'}`
+          systemMessage: readySysCode,
+          messageCode: readySysCode,
+          messageParams: { userName: member.userName, isReady: member.isReady }
         });
 
         if (callback) callback({ success: true, isReady: member.isReady });
@@ -382,26 +435,47 @@ export function registerRoomHandlers(
       const targetRoom = String(roomId || sessionState.currentRoomId || '').toUpperCase();
       const room = rooms.get(targetRoom);
       if (!room || room.hostId !== socket.id) {
-        const err = 'Chỉ có Chủ phòng mới có quyền mời thành viên ra khỏi phòng!';
-        socket.emit('game_error', { message: err });
-        if (callback) callback({ success: false, message: err });
+        socket.emit('game_error', {
+          code: ErrorCode.ROOM_HOST_ONLY_KICK,
+          message: ErrorCode.ROOM_HOST_ONLY_KICK
+        });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.ROOM_HOST_ONLY_KICK,
+            message: ErrorCode.ROOM_HOST_ONLY_KICK
+          });
+        }
         return;
       }
 
       if (targetSocketId === socket.id) {
-        if (callback) callback({ success: false, message: 'Bạn không thể tự kick chính mình!' });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.ROOM_CANNOT_KICK_SELF,
+            message: ErrorCode.ROOM_CANNOT_KICK_SELF
+          });
+        }
         return;
       }
 
       const targetSocket = io.sockets.sockets.get(String(targetSocketId || ''));
       if (targetSocket) {
         targetSocket.emit('kicked_from_room', {
-          message: 'Bạn đã bị Chủ phòng mời ra khỏi phòng!'
+          code: ErrorCode.ROOM_KICKED_BY_HOST,
+          message: ErrorCode.ROOM_KICKED_BY_HOST
         });
         leaveCurrentRoom(targetSocket, targetRoom, {});
         if (callback) callback({ success: true });
       } else {
-        if (callback) callback({ success: false, message: 'Người chơi không còn trong phòng!' });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.PLAYER_NOT_IN_ROOM,
+            message: ErrorCode.PLAYER_NOT_IN_ROOM
+          });
+        }
       }
     }
   );

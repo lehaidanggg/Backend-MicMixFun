@@ -1,5 +1,6 @@
 import { Server } from 'socket.io';
 import { MAX_CHAT_HISTORY_SIZE } from '../config/constants';
+import { ErrorCode, SystemMessageCode } from '../config/messages';
 import { rooms } from '../services/room.service';
 import { AuthenticatedSocket, ChatMessage, SocketSessionState } from '../types';
 
@@ -20,11 +21,23 @@ export function registerMediaHandlers(
     ) => {
       const currentRoomId = sessionState.currentRoomId;
       if (!currentRoomId || !rooms.has(currentRoomId)) {
-        if (callback) callback({ success: false, message: 'Bạn chưa tham gia phòng nào!' });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.ROOM_NOT_JOINED,
+            message: ErrorCode.ROOM_NOT_JOINED
+          });
+        }
         return;
       }
       if (!checkRateLimit('chat', 6, 3000)) {
-        if (callback) callback({ success: false, message: 'Bạn nhắn quá nhanh! Vui lòng đợi giây lát.' });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.RATE_LIMIT_CHAT_EXCEEDED,
+            message: ErrorCode.RATE_LIMIT_CHAT_EXCEEDED
+          });
+        }
         return;
       }
 
@@ -59,11 +72,23 @@ export function registerMediaHandlers(
     ) => {
       const currentRoomId = sessionState.currentRoomId;
       if (!currentRoomId || !rooms.has(currentRoomId)) {
-        if (callback) callback({ success: false, message: 'Chưa vào phòng!' });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.ROOM_NOT_JOINED,
+            message: ErrorCode.ROOM_NOT_JOINED
+          });
+        }
         return;
       }
       if (!checkRateLimit('sound', 5, 2000)) {
-        if (callback) callback({ success: false, message: 'Thao tác quá nhanh!' });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.RATE_LIMIT_SOUND_EXCEEDED,
+            message: ErrorCode.RATE_LIMIT_SOUND_EXCEEDED
+          });
+        }
         return;
       }
 
@@ -89,7 +114,7 @@ export function registerMediaHandlers(
         senderId: socket.id,
         senderName: currentUser.userName,
         avatar: currentUser.avatar,
-        message: `đã phát âm thanh "${payload.soundName}"`,
+        message: SystemMessageCode.SYS_SOUND_TRIGGERED,
         type: 'sound_trigger',
         audioMeta: payload,
         timestamp: Date.now()
@@ -120,7 +145,13 @@ export function registerMediaHandlers(
     ) => {
       const currentRoomId = sessionState.currentRoomId;
       if (!currentRoomId || !rooms.has(currentRoomId)) {
-        if (callback) callback({ success: false, message: 'Chưa vào phòng!' });
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.ROOM_NOT_JOINED,
+            message: ErrorCode.ROOM_NOT_JOINED
+          });
+        }
         return;
       }
 
@@ -129,7 +160,7 @@ export function registerMediaHandlers(
       const audioPayload = {
         id: `audio_${Date.now()}`,
         audioData,
-        audioName: audioName || `Bản ghi của ${currentUser.userName}`,
+        audioName: audioName || currentUser.userName,
         mimeType,
         duration,
         senderId: socket.id,
@@ -151,7 +182,7 @@ export function registerMediaHandlers(
         senderId: socket.id,
         senderName: currentUser.userName,
         avatar: currentUser.avatar,
-        message: 'đã chia sẻ một đoạn ghi âm giọng nói 🎙️',
+        message: SystemMessageCode.SYS_AUDIO_CLIP_SHARED,
         type: 'audio_share',
         audioMeta: historyMeta,
         timestamp: Date.now()
