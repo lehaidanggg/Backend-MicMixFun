@@ -18,8 +18,11 @@ const { buildOpenApiSpec, renderSwaggerHtml } = require('../config/swagger');
 function registerApiRoutes(app, io) {
   // Swagger / OpenAPI 3.0 Documentation
   const resolveServerUrl = (req) => {
-    const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0].trim();
     const host = (req.headers['x-forwarded-host'] || req.get('host') || 'localhost:3000').split(',')[0].trim();
+    const isLocal = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(host);
+    const proto = isLocal
+      ? (req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0].trim()
+      : 'https';
     return `${proto}://${host}`;
   };
 

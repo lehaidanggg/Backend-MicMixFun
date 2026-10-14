@@ -37,15 +37,9 @@ function buildOpenApiSpec(serverUrl = 'https://micmixfun.up.railway.app') {
     servers: [
       {
         url: serverUrl,
-        description: 'Current Server'
-      },
-      {
-        url: 'https://micmixfun.up.railway.app',
-        description: 'Railway Production Server (Singapore)'
-      },
-      {
-        url: 'http://localhost:3000',
-        description: 'Local Development Server'
+        description: serverUrl.includes('localhost')
+          ? 'Local Development Server'
+          : 'Railway Production Server (HTTPS)'
       }
     ],
     tags: [
@@ -200,6 +194,11 @@ function buildOpenApiSpec(serverUrl = 'https://micmixfun.up.railway.app') {
                     deviceId: { type: 'string', example: 'android-pixel-8', description: 'Mã định danh thiết bị (dùng tạo Fingerprint)' },
                     authToken: { type: 'string', description: 'Token cũ (nếu muốn gia hạn phiên và giữ nguyên userId)' },
                     firebaseIdToken: { type: 'string', description: 'Firebase ID Token (tùy chọn)' }
+                  },
+                  example: {
+                    userName: 'CaoThuNhaiGiong',
+                    avatar: '🦊',
+                    deviceId: 'android-pixel-8'
                   }
                 }
               }
