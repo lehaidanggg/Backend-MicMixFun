@@ -1,0 +1,2743 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mimic Party - Online Voice Challenge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #080b14;
+      --bg-card: #121727;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --accent: #ec4899;
+      --yellow: #f59e0b;
+      --green: #10b981;
+      --red: #ef4444;
+      --cyan: #06b6d4;
+      --purple: #8b5cf6;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --radius-xl: 20px;
+      --radius-lg: 16px;
+      --radius-md: 12px;
+      --radius-sm: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      background-image: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.15) 0%, transparent 60%),
+                        radial-gradient(circle at 90% 90%, rgba(236, 72, 153, 0.1) 0%, transparent 50%);
+    }
+
+    /* Header */
+    header {
+      background: rgba(18, 23, 39, 0.85);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-badge {
+      background: linear-gradient(135deg, #ec4899, #f59e0b);
+      color: #fff;
+      font-size: 1.5rem;
+      padding: 6px 12px;
+      border-radius: 12px;
+      display: inline-block;
+      box-shadow: 0 4px 15px rgba(236, 72, 153, 0.3);
+    }
+
+    .brand-title {
+      font-weight: 900;
+      font-size: 1.25rem;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #fff, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header-links {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .nav-btn {
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-decoration: none;
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+      background: rgba(255, 255, 255, 0.04);
+      transition: all 0.2s;
+    }
+    .nav-btn:hover {
+      color: #fff;
+      border-color: var(--primary);
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px 20px;
+      width: 100%;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 14px 24px;
+      border-radius: var(--radius-md);
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+      user-select: none;
+    }
+
+    .btn-party {
+      background: linear-gradient(135deg, #ec4899, #8b5cf6);
+      color: #fff;
+      box-shadow: 0 6px 20px rgba(236, 72, 153, 0.35);
+    }
+    .btn-party:hover {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 8px 25px rgba(236, 72, 153, 0.45);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+    }
+
+    /* VIEW 1: LOBBY */
+    #viewLobby {
+      max-width: 540px;
+      margin: 20px auto;
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-xl);
+      padding: 36px 30px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+      text-align: center;
+    }
+
+    .form-group {
+      text-align: left;
+      margin-bottom: 18px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-input {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border-color);
+      color: #fff;
+      padding: 14px 16px;
+      border-radius: var(--radius-md);
+      font-size: 1rem;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .form-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.2);
+    }
+
+    .avatar-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    .avatar-item {
+      font-size: 1.5rem;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid transparent;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .avatar-item.selected {
+      border-color: var(--accent);
+      background: rgba(236, 72, 153, 0.2);
+      transform: scale(1.1);
+    }
+
+    /* VIEW 2: ARENA GAMEPLAY */
+    #viewArena {
+      display: none;
+      flex-direction: column;
+      gap: 20px;
+      height: 100%;
+    }
+
+    .arena-top-bar {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .room-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(236, 72, 153, 0.15);
+      border: 1px solid rgba(236, 72, 153, 0.3);
+      color: #f472b6;
+      padding: 6px 14px;
+      border-radius: 10px;
+      font-weight: 800;
+      letter-spacing: 1px;
+    }
+
+    .round-indicator {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--yellow);
+    }
+
+    /* Arena Stage Box */
+    .arena-stage {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-xl);
+      padding: 30px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      min-height: 480px;
+      position: relative;
+      overflow-y: auto;
+      box-shadow: 0 15px 40px rgba(0,0,0,0.4);
+    }
+
+    /* GIAI ĐOẠN 1: QUAY CHỦ ĐỀ (THEME ROULETTE) */
+    .roulette-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      max-width: 600px;
+      width: 100%;
+    }
+
+    .roulette-slot-box {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      padding: 24px 30px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 2px solid var(--purple);
+      border-radius: var(--radius-xl);
+      box-shadow: 0 0 30px rgba(139, 92, 246, 0.3);
+      min-width: 320px;
+      transition: all 0.3s;
+    }
+
+    .roulette-slot-box.locked {
+      border-color: var(--yellow);
+      box-shadow: 0 0 40px rgba(245, 158, 11, 0.5);
+      animation: slotFlash 0.5s ease;
+    }
+
+    @keyframes slotFlash {
+      0% { transform: scale(0.95); }
+      50% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+
+    .roulette-emoji {
+      font-size: 3.8rem;
+    }
+
+    .roulette-text {
+      font-size: 1.8rem;
+      font-weight: 900;
+      color: #fff;
+    }
+
+    .pack-chips {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .pack-chip {
+      padding: 8px 16px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      font-size: 0.88rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .pack-chip.active {
+      background: rgba(245, 158, 11, 0.2);
+      border-color: var(--yellow);
+      color: var(--yellow);
+      transform: scale(1.05);
+    }
+
+    /* GIAI ĐOẠN 2: PHÁT AUDIO MẪU (LISTEN SAMPLE) */
+    .listen-sample-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      max-width: 550px;
+      width: 100%;
+    }
+
+    .theme-tag-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      font-weight: 800;
+      background: rgba(139, 92, 246, 0.2);
+      border: 1px solid var(--purple);
+      color: #c4b5fd;
+    }
+
+    .target-sound-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: var(--radius-xl);
+      padding: 24px;
+      width: 100%;
+    }
+
+    .target-emoji-icon {
+      font-size: 4.5rem;
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      width: 110px;
+      height: 110px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+      animation: pulse 1.2s infinite alternate;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      100% { transform: scale(1.08); box-shadow: 0 10px 40px rgba(236, 72, 153, 0.5); }
+    }
+
+    .target-sound-title {
+      font-size: 1.8rem;
+      font-weight: 900;
+    }
+
+    .target-sound-hint {
+      color: var(--yellow);
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      padding: 8px 18px;
+      border-radius: 20px;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .sample-play-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--cyan);
+      font-weight: 700;
+      font-size: 1rem;
+      margin-top: 8px;
+    }
+
+    .audio-progress-bar {
+      width: 100%;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .audio-progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(to right, var(--cyan), var(--primary));
+      transition: width 0.1s linear;
+    }
+
+    /* GIAI ĐOẠN 2.5: ĐỆM CHUẨN BỊ LẤY HƠI (PREPARE RECORDING) */
+    .prepare-stage-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      animation: fadeInScale 0.3s ease-out;
+    }
+
+    .prepare-icon {
+      font-size: 4.5rem;
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      background: rgba(245, 158, 11, 0.15);
+      border: 3px solid var(--yellow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 35px rgba(245, 158, 11, 0.4);
+      animation: pulse 1s infinite alternate;
+    }
+
+    .prepare-circle {
+      border-color: var(--yellow) !important;
+      background: rgba(245, 158, 11, 0.15) !important;
+      color: var(--yellow) !important;
+      font-size: 3rem;
+      width: 80px;
+      height: 80px;
+      animation: pulse 0.5s infinite alternate;
+    }
+
+    .prepare-duration-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: #c4b5fd;
+      padding: 8px 18px;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+
+    @keyframes fadeInScale {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    /* GIAI ĐOẠN 3: TỚI LƯỢT USER NHẠI LẠI (USER MIMIC RECORDING) */
+    .record-stage-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      width: 100%;
+      max-width: 580px;
+    }
+
+    .mic-live-icon {
+      font-size: 3.2rem;
+      width: 84px;
+      height: 84px;
+      border-radius: 50%;
+      background: var(--red);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      animation: liveRecordingGlow 0.8s infinite alternate;
+    }
+
+    @keyframes liveRecordingGlow {
+      from { box-shadow: 0 0 20px rgba(239, 68, 68, 0.5); transform: scale(0.98); }
+      to { box-shadow: 0 0 50px rgba(239, 68, 68, 0.9); transform: scale(1.08); }
+    }
+
+    .mic-waves {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 40px;
+    }
+
+    .wave-line {
+      width: 6px;
+      background: #ef4444;
+      border-radius: 3px;
+      animation: waveBounce 0.5s infinite alternate ease-in-out;
+    }
+    .wave-line:nth-child(2) { animation-delay: 0.15s; }
+    .wave-line:nth-child(3) { animation-delay: 0.3s; }
+    .wave-line:nth-child(4) { animation-delay: 0.1s; }
+    .wave-line:nth-child(5) { animation-delay: 0.25s; }
+
+    @keyframes waveBounce {
+      0% { height: 10px; }
+      100% { height: 45px; }
+    }
+
+    /* ======================================================== */
+    /* BIỂU ĐỒ SÓNG ÂM THANH ĐỘNG & DUAL OVERLAY WAVEFORM */
+    /* ======================================================== */
+    .waveform-box {
+      width: 100%;
+      background: rgba(10, 15, 30, 0.7);
+      border: 1px solid rgba(0, 229, 255, 0.25);
+      border-radius: var(--radius-lg);
+      padding: 14px 18px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-sizing: border-box;
+    }
+
+    .waveform-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+    }
+
+    .waveform-canvas {
+      width: 100%;
+      height: 120px;
+      background: #090d1a;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      display: block;
+      box-sizing: border-box;
+    }
+
+    .dual-waveform-box {
+      width: 100%;
+      max-width: 580px;
+      box-sizing: border-box;
+      background: rgba(10, 15, 30, 0.85);
+      border: 2px solid rgba(236, 72, 153, 0.45);
+      border-radius: var(--radius-lg);
+      padding: 14px 18px;
+      box-shadow: 0 0 35px rgba(236, 72, 153, 0.25);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .waveform-legend {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+
+    .legend-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .legend-pill.sample-pill {
+      color: #00e5ff;
+      border-color: rgba(0, 229, 255, 0.4);
+      background: rgba(0, 229, 255, 0.08);
+    }
+
+    .legend-pill.user-pill {
+      color: #f43f5e;
+      border-color: rgba(244, 63, 94, 0.4);
+      background: rgba(244, 63, 94, 0.08);
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .legend-dot.cyan-dot {
+      background: #00e5ff;
+      box-shadow: 0 0 8px #00e5ff;
+      opacity: 0.5;
+    }
+
+    .legend-dot.pink-dot {
+      background: #f43f5e;
+      box-shadow: 0 0 10px #f43f5e;
+      opacity: 0.95;
+    }
+
+    .live-match-status {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #cbd5e1;
+      padding-top: 4px;
+    }
+
+    /* ======================================================== */
+    /* AI SCORING SUSPENSE DRAMA (HỒI HỘP KỊCH TÍNH) */
+    /* ======================================================== */
+    .ai-suspense-radar {
+      position: relative;
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      border: 2px dashed rgba(6, 182, 212, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 40px rgba(6, 182, 212, 0.25);
+    }
+
+    .radar-sweep {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border-top: 3px solid var(--cyan);
+      border-right: 3px solid transparent;
+      border-bottom: 3px solid transparent;
+      border-left: 3px solid transparent;
+      animation: radarSpin 1s linear infinite;
+    }
+
+    @keyframes radarSpin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .radar-center-icon {
+      font-size: 3.2rem;
+      animation: pulse 0.7s infinite alternate;
+    }
+
+    .suspense-phase-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: var(--yellow);
+      min-height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .suspense-progress-bar {
+      width: 100%;
+      max-width: 420px;
+      height: 12px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .suspense-progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--cyan), var(--primary), var(--accent), var(--yellow));
+      transition: width 0.2s linear;
+      box-shadow: 0 0 15px rgba(236, 72, 153, 0.6);
+    }
+
+    .suspense-circle {
+      border-color: var(--yellow) !important;
+      background: rgba(245, 158, 11, 0.15) !important;
+      color: var(--yellow) !important;
+      animation: pulse 0.5s infinite alternate;
+    }
+
+    /* GIAI ĐOẠN 4: SHOWDOWN & KẾT QUẢ VÒNG */
+    .showdown-container {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .attempts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      width: 100%;
+    }
+
+    .attempt-card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: all 0.2s;
+    }
+
+    .attempt-card.winner {
+      border-color: var(--yellow);
+      background: rgba(245, 158, 11, 0.08);
+      box-shadow: 0 0 20px rgba(245, 158, 11, 0.2);
+    }
+
+    .attempt-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .attempt-score-badge {
+      font-size: 1.4rem;
+      font-weight: 900;
+      color: var(--yellow);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .attempt-grade {
+      background: var(--accent);
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+
+    .attempt-remark {
+      font-size: 0.85rem;
+      color: #e2e8f0;
+      font-style: italic;
+      background: rgba(0,0,0,0.25);
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+    }
+
+    .metrics-bar {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .reaction-bar {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 14px;
+    }
+
+    .btn-react {
+      font-size: 1.6rem;
+      padding: 8px 14px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-color);
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+    .btn-react:hover {
+      transform: scale(1.25);
+    }
+
+    .floating-emoji {
+      position: absolute;
+      font-size: 2.2rem;
+      animation: floatUp 1.8s forwards ease-out;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    @keyframes floatUp {
+      0% { opacity: 1; transform: translateY(0) scale(0.6); }
+      100% { opacity: 0; transform: translateY(-160px) scale(1.4); }
+    }
+
+    /* Roster */
+    .roster-bar {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding: 6px 0;
+    }
+
+    .roster-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      padding: 8px 16px;
+      border-radius: 30px;
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+
+    .role-badge-host {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .role-badge-player {
+      background: rgba(255, 255, 255, 0.1);
+      color: #cbd5e1;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 6px;
+    }
+
+    .ready-badge {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .ready-badge.is-ready {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+
+    .ready-badge.not-ready {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .btn-kick {
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-left: 4px;
+      transition: all 0.15s;
+    }
+    .btn-kick:hover {
+      background: var(--red);
+      color: #fff;
+    }
+
+    .host-panel-card {
+      background: rgba(245, 158, 11, 0.05);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+      max-width: 520px;
+      margin: 18px auto;
+      text-align: left;
+    }
+
+    .player-ready-card {
+      background: rgba(99, 102, 241, 0.06);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+      max-width: 520px;
+      margin: 18px auto;
+      text-align: center;
+    }
+
+    .config-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .config-select {
+      background: #121727;
+      border: 1px solid var(--border-color);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .config-select:focus {
+      border-color: var(--yellow);
+    }
+
+    .toast-banner {
+      position: fixed;
+      top: 65px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1e1b4b;
+      border: 1px solid var(--accent);
+      color: #fff;
+      padding: 10px 24px;
+      border-radius: 30px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      font-size: 0.92rem;
+      font-weight: 700;
+      z-index: 1000;
+      display: none;
+      animation: fadeInDown 0.3s ease-out;
+    }
+
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translate(-50%, -15px); }
+      to { opacity: 1; transform: translate(-50%, 0); }
+    }
+
+    .countdown-timer-circle {
+      font-size: 2.8rem;
+      font-weight: 900;
+      color: #fff;
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: 4px solid var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(236, 72, 153, 0.1);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="toastBanner" class="toast-banner"></div>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <span class="brand-badge">🎭</span>
+      <div>
+        <h1 class="brand-title">MIMIC PARTY</h1>
+        <small style="color: var(--text-muted); font-size: 0.72rem;">Online Voice Challenge & Sound Mimicry</small>
+      </div>
+    </div>
+    <div class="header-links">
+      <a href="/" class="nav-btn">🔊 Soundboard Room</a>
+      <a href="/studio" class="nav-btn">🎵 Studio Catalog</a>
+      <span id="connStatus" style="font-size: 0.8rem; font-weight: 700; color: var(--green);">🟢 Online</span>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- VIEW 1: LOBBY & CHỌN PHÒNG -->
+    <div id="viewLobby">
+      <div style="font-size: 3.5rem; margin-bottom: 12px;">🎪</div>
+      <h2 style="font-size: 1.6rem; font-weight: 900; margin-bottom: 6px;">Đấu Trường Nhại Giọng</h2>
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 24px;">
+        1. <b>Random Chủ Đề</b> ➔ 2. <b>Chọn 1 Sound</b> ➔ 3. <b>Phát Audio Mẫu</b> ➔ 4. <b>Tới Lượt User Nhại Lại</b> ➔ 5. <b>Vòng Tiếp Theo!</b>
+      </p>
+
+      <div class="form-group">
+        <label class="form-label">Tên người chơi</label>
+        <input type="text" id="inputUsername" class="form-input" placeholder="Ví dụ: Hoàng Long, Alex..." maxlength="20">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Chọn Avatar</label>
+        <div class="avatar-grid" id="avatarPicker">
+          <div class="avatar-item selected" onclick="pickAvatar(this, '🦊')">🦊</div>
+          <div class="avatar-item" onclick="pickAvatar(this, '🦁')">🦁</div>
+          <div class="avatar-item" onclick="pickAvatar(this, '🐸')">🐸</div>
+          <div class="avatar-item" onclick="pickAvatar(this, '🐼')">🐼</div>
+          <div class="avatar-item" onclick="pickAvatar(this, '🤖')">🤖</div>
+          <div class="avatar-item" onclick="pickAvatar(this, '👑')">👑</div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Mã Phòng (Room PIN)</label>
+        <input type="text" id="inputRoomCode" class="form-input" placeholder="Nhập mã phòng hoặc tạo phòng mới" style="text-transform: uppercase;">
+      </div>
+
+      <div style="display: flex; gap: 12px; margin-top: 26px;">
+        <button class="btn btn-party" style="flex: 1;" onclick="joinMimicParty()">
+          <span>🎮 Tham Gia Party</span>
+        </button>
+        <button class="btn btn-secondary" onclick="quickCreateRoom()">
+          <span>✨ Tạo Phòng Mới</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- VIEW 2: ARENA GAMEPLAY STAGE -->
+    <div id="viewArena">
+      <!-- Arena Top Bar -->
+      <div class="arena-top-bar">
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <div class="room-badge">
+            <span>PHÒNG:</span>
+            <span id="displayRoomCode">MIMIC</span>
+          </div>
+          <div class="room-badge" style="background: rgba(99, 102, 241, 0.2); border-color: var(--primary); color: #c4b5fd;">
+            <span id="stateDisplay">IDLE</span>
+          </div>
+          <div class="round-indicator" id="displayRoundText">VÒNG 1 / 3</div>
+          <div id="myRoleBadge" class="role-badge-player">🎧 Người chơi</div>
+        </div>
+
+        <div class="roster-bar" id="rosterBar">
+          <!-- Render người chơi -->
+        </div>
+
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <button class="btn btn-party" id="btnStartGame" style="padding: 8px 18px; font-size: 0.9rem;" onclick="startGameAction()">
+            <span>🚀 BẮT ĐẦU GAME</span>
+          </button>
+          <button class="btn btn-secondary" style="padding: 8px 14px; font-size: 0.85rem;" onclick="leaveArena()">
+            <span>Rời Phòng</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Stage -->
+      <div class="arena-stage" id="arenaStage">
+        <!-- 0. WAITING ROOM -->
+        <div id="stageWaiting">
+          <div style="font-size: 3.5rem; margin-bottom: 8px;">🎪</div>
+          <h2 style="font-size: 1.5rem; font-weight: 800; margin-bottom: 6px;" id="waitingTitle">Phòng Chờ Đấu Trường</h2>
+          <p style="color: var(--text-muted); max-width: 480px; margin: 0 auto 20px auto; font-size: 0.9rem;">
+            Mời bạn bè cùng tham gia bằng mã phòng bên trên. Người chơi cần sẵn sàng trước khi Chủ phòng bắt đầu!
+          </p>
+
+          <!-- Host Panel: Hiển thị khi người dùng là Host -->
+          <div id="hostControlPanel" class="host-panel-card" style="display: none;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
+              <span style="font-size: 1.3rem;">👑</span>
+              <b style="color: var(--yellow); font-size: 1.05rem;">Bảng Điều Khiển Của Chủ Phòng (Host)</b>
+            </div>
+
+            <div class="config-row">
+              <span style="font-size: 0.9rem; color: var(--text-muted);">Số vòng đấu (Rounds):</span>
+              <select id="configTotalRounds" class="config-select" onchange="updateRoomConfig()">
+                <option value="3" selected>3 Vòng (Nhanh)</option>
+                <option value="5">5 Vòng (Tiêu chuẩn)</option>
+                <option value="7">7 Vòng (Kéo dài)</option>
+              </select>
+            </div>
+
+            <div class="config-row">
+              <span style="font-size: 0.9rem; color: var(--text-muted);">Thời gian nhại âm (Record):</span>
+              <select id="configRecordDuration" class="config-select" onchange="updateRoomConfig()">
+                <option value="5" selected>5 Giây (Chuẩn)</option>
+                <option value="7">7 Giây (Thoải mái)</option>
+                <option value="10">10 Giây (Dài)</option>
+              </select>
+            </div>
+
+            <button class="btn btn-party" style="width: 100%; margin-top: 10px;" onclick="startGameAction()">
+              <span>🚀 BẮT ĐẦU TRẬN ĐẤU (CHỦ PHÒNG)</span>
+            </button>
+          </div>
+
+          <!-- Player Panel: Hiển thị khi người dùng là Player thường -->
+          <div id="playerControlPanel" class="player-ready-card" style="display: none;">
+            <div style="font-size: 1rem; font-weight: 700; color: #cbd5e1; margin-bottom: 12px;">
+              🎧 Bạn đang tham gia với tư cách <b>Người Chơi</b>
+            </div>
+            <button class="btn btn-party" id="btnToggleReady" style="padding: 12px 30px; font-size: 1rem; width: 100%;" onclick="toggleReadyAction()">
+              <span>✅ BẤM ĐỂ SẴN SÀNG</span>
+            </button>
+            <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 12px;">
+              ⏳ Đang đợi Chủ phòng cấu hình và khởi động trận đấu...
+            </div>
+          </div>
+        </div>
+
+        <!-- 1. GIAI ĐOẠN: RANDOM CHỦ ĐỀ (THEME ROULETTE) -->
+        <div id="stageRoulette" style="display: none;" class="roulette-container">
+          <div style="font-size: 1rem; font-weight: 800; color: var(--purple); text-transform: uppercase; letter-spacing: 1px;">
+            🎲 ĐANG RANDOM CHỦ ĐỀ ÂM THANH...
+          </div>
+
+          <div class="roulette-slot-box" id="rouletteSlotBox">
+            <span class="roulette-emoji" id="rouletteEmoji">🐾</span>
+            <span class="roulette-text" id="rouletteText">Đang quay...</span>
+          </div>
+
+          <p id="rouletteDesc" style="color: var(--text-muted); font-size: 0.95rem; min-height: 24px;">
+            Hệ thống đang chọn ngẫu nhiên 1 trong các chủ đề hấp dẫn...
+          </p>
+
+          <div class="pack-chips" id="packChipsList">
+            <!-- Render danh sách packs -->
+          </div>
+        </div>
+
+        <!-- 2. GIAI ĐOẠN: PHÁT AUDIO MẪU TRỌN VẸN (LISTEN SAMPLE) -->
+        <div id="stageListenSample" style="display: none;" class="listen-sample-container">
+          <div class="theme-tag-pill" id="currentThemePill">
+            <span id="themePillEmoji">🐾</span>
+            <span id="themePillName">Chủ đề: Động vật</span>
+          </div>
+
+          <div class="target-sound-card">
+            <div class="target-emoji-icon" id="sampleEmoji">🐱</div>
+            <div class="target-sound-title" id="sampleSoundName">Mèo kêu dễ thương</div>
+            <div class="target-sound-hint" id="sampleSoundHint">Kêu "Meo meo" điệu đà!</div>
+
+            <div class="sample-play-status">
+              <span>🔊</span>
+              <span>ĐANG PHÁT AUDIO MẪU - LẮNG NGHE KỸ!</span>
+            </div>
+
+            <!-- Biểu đồ sóng âm mẫu trực quan -->
+            <div class="waveform-box" style="margin-top: 10px;">
+              <div class="waveform-header">
+                <span style="font-size: 0.8rem; font-weight: 800; color: #00e5ff; letter-spacing: 0.5px;">
+                  📊 SÓNG ÂM MẪU (CYAN DYNAMIC WAVEFORM)
+                </span>
+                <span id="sampleWaveDurationLabel" style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">0.0s / 0.0s</span>
+              </div>
+              <canvas id="sampleWaveCanvas" width="540" height="100" class="waveform-canvas"></canvas>
+            </div>
+
+            <div class="audio-progress-bar" style="margin-top: 10px;">
+              <div class="audio-progress-fill" id="audioProgressFill"></div>
+            </div>
+          </div>
+
+          <div style="font-size: 0.85rem; color: var(--text-muted);">
+            Sau khi phát xong trọn vẹn âm thanh mẫu ➔ Sẽ đếm 3, 2, 1 để bạn bắt đầu nhại lại!
+          </div>
+
+          <div class="countdown-timer-circle" id="listenCountdown">5</div>
+        </div>
+
+        <!-- 2.5. GIAI ĐOẠN: ĐỆM CHUẨN BỊ LẤY HƠI & BẬT MIC (PREPARE RECORDING) -->
+        <div id="stagePrepare" style="display: none;" class="prepare-stage-box">
+          <div class="prepare-icon">🧘</div>
+          <h2 style="font-size: 2rem; font-weight: 900; color: var(--yellow); margin: 0;">CHUẨN BỊ LẤY HƠI!</h2>
+          <p style="color: #cbd5e1; font-size: 1.05rem; font-weight: 600; margin: 0;">
+            Sẵn sàng micro! Tới lượt bạn nhại lại <b id="prepareSoundName" style="color: var(--accent);">âm thanh mẫu</b> trong:
+          </p>
+          <div class="countdown-timer-circle prepare-circle" id="prepareCountdown">3</div>
+          <div class="prepare-duration-pill" id="prepareDurationHint">
+            ⏱️ Thời gian thu âm: 3s (bằng chuẩn âm thanh mẫu)
+          </div>
+        </div>
+
+        <!-- 3. GIAI ĐOẠN: TỚI LƯỢT USER BẬT MIC NHẠI LẠI (USER MIMIC RECORDING) -->
+        <div id="stageRecording" style="display: none;" class="record-stage-box">
+          <div class="mic-live-icon">🎙️</div>
+          <h2 style="font-size: 2.2rem; font-weight: 900; color: #ef4444; margin: 0;">TỚI LƯỢT BẠN!</h2>
+          <p style="color: #fca5a5; font-weight: 700; font-size: 1.05rem; margin: 0;">
+            Hét/kêu to vào Micro ngay bây giờ với phong cách giống mẫu nhất!
+          </p>
+
+          <!-- BIỂU ĐỒ SÓNG ÂM KÉP (DUAL OVERLAY WAVEFORM: SAMPLE + LIVE USER) -->
+          <div class="dual-waveform-box">
+            <div class="waveform-legend">
+              <div class="legend-pill sample-pill">
+                <span class="legend-dot cyan-dot"></span>
+                <span>Sóng mẫu gốc (Cyan - 40% Opacity)</span>
+              </div>
+              <div class="legend-pill user-pill">
+                <span class="legend-dot pink-dot"></span>
+                <span>Giọng nhại của bạn (Neon Pink - 95% Opacity)</span>
+              </div>
+            </div>
+            <canvas id="dualWaveCanvas" width="560" height="120" class="waveform-canvas"></canvas>
+            <div class="live-match-status">
+              <span>Độ trùng khớp nhịp & cao độ: <b id="liveMatchBadge" style="color: var(--yellow); font-size: 1.15rem;">0%</b></span>
+            </div>
+          </div>
+
+          <div class="countdown-timer-circle" id="recordCountdown" style="border-color: var(--red);">5</div>
+          <div style="font-size: 0.9rem; color: #fca5a5; font-weight: 700; margin-top: 2px;" id="recordDurationNote">
+            ⏱️ Thời gian thu âm: 5s (bằng đúng âm thanh mẫu)
+          </div>
+        </div>
+
+        <!-- 3.5. GIAI ĐOẠN: AI ĐANG PHÂN TÍCH & CHẤM ĐIỂM (AI_SCORING - HỒI HỘP KỊCH TÍNH) -->
+        <div id="stageAiScoring" style="display: none; flex-direction: column; align-items: center; gap: 16px; width: 100%; max-width: 520px; margin: 0 auto;">
+          <div class="ai-suspense-radar">
+            <div class="radar-sweep"></div>
+            <div class="radar-center-icon">🤖</div>
+          </div>
+          <h2 style="font-size: 1.8rem; font-weight: 900; color: var(--cyan); margin: 0;">AI ĐANG CHẤM ĐIỂM...</h2>
+          <div id="aiSuspensePhaseText" class="suspense-phase-title">
+            🔍 Đang bóc tách cao độ & tần số giọng hát...
+          </div>
+          <div class="suspense-progress-bar">
+            <div class="suspense-progress-fill" id="suspenseProgressFill"></div>
+          </div>
+          <div class="countdown-timer-circle suspense-circle" id="aiScoringCountdown">5</div>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">
+            Hồi hộp chờ đợi... AI đang đối chiếu phổ âm và chuẩn bị công bố bảng vàng!
+          </p>
+        </div>
+
+        <!-- 4. GIAI ĐOẠN: SHOWDOWN & AI CHẤM ĐIỂM -->
+        <div id="stageReveal" style="display: none;" class="showdown-container">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div>
+              <h2 style="font-size: 1.6rem; font-weight: 900; color: var(--yellow);">🏆 KẾT QUẢ VÒNG ĐẤU & SHOWDOWN</h2>
+              <p style="color: var(--text-muted); font-size: 0.9rem;">Bấm ▶️ để nghe lại xem bạn bè nhại âm thanh buồn cười thế nào!</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <button class="btn btn-secondary" id="btnSkipShowdown" style="padding: 8px 16px; font-size: 0.85rem;" onclick="skipToShowdownResultAction()">
+                <span>⏩ Xem Bảng Điểm Sớm (0/0)</span>
+              </button>
+              <div class="countdown-timer-circle" id="revealCountdown" style="width: 50px; height: 50px; font-size: 1.5rem;">25</div>
+            </div>
+          </div>
+
+          <div class="attempts-grid" id="attemptsGrid">
+            <!-- Javascript render -->
+          </div>
+
+          <div class="reaction-bar">
+            <button class="btn-react" onclick="sendReaction('😂')">😂</button>
+            <button class="btn-react" onclick="sendReaction('👏')">👏</button>
+            <button class="btn-react" onclick="sendReaction('💩')">💩</button>
+            <button class="btn-react" onclick="sendReaction('💯')">💯</button>
+            <button class="btn-react" onclick="sendReaction('💀')">💀</button>
+            <button class="btn-react" onclick="sendReaction('🔥')">🔥</button>
+          </div>
+        </div>
+
+        <!-- 5. GIAI ĐOẠN: BẢNG XẾP HẠNG VÒNG & XÁC NHẬN SẴN SÀNG -->
+        <div id="stageRoundResult" style="display: none; text-align: center; width: 100%;">
+          <h2 style="font-size: 1.8rem; font-weight: 900; color: var(--cyan); margin-bottom: 6px;">📊 BẢNG XẾP HẠNG VÒNG ĐẤU</h2>
+          <p id="roundResultSubtitle" style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 20px;">
+            Hãy xem lại thành tích vòng này trước khi sẵn sàng cho vòng tiếp theo!
+          </p>
+
+          <div id="roundLeaderboardList" style="max-width: 480px; margin: 0 auto 24px auto; text-align: left;">
+            <!-- Render leaderboard -->
+          </div>
+
+          <!-- Box Bắt Buộc TẤT CẢ Người Chơi Xác Nhận Sẵn Sàng -->
+          <div class="host-panel-card" style="border-color: var(--cyan); max-width: 480px; margin: 0 auto; text-align: center;">
+            <div style="font-weight: 800; font-size: 1.15rem; color: #fff; margin-bottom: 6px;" id="readyCounterTitle">
+              ⚡ XÁC NHẬN SẴN SÀNG VÒNG TIẾP THEO
+            </div>
+            <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 14px;" id="readyCounterDesc">
+              Tất cả người chơi cần bấm "Sẵn sàng" thì mới bắt đầu vòng đấu tiếp theo!
+            </p>
+
+            <!-- Danh sách người chơi và trạng thái sẵn sàng -->
+            <div id="roundReadyRoster" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 16px;">
+            </div>
+
+            <button class="btn btn-party" id="btnConfirmNextRound" style="width: 100%; font-size: 1.05rem; padding: 14px;" onclick="confirmNextRoundAction()">
+              <span>✅ TÔI ĐÃ SẴN SÀNG VÒNG KẾ TIẾP!</span>
+            </button>
+
+            <div id="nextRoundAlertCountdown" style="display: none; margin-top: 14px; font-weight: 800; color: var(--green); font-size: 1.1rem; animation: pulse 0.8s infinite alternate;">
+              🚀 TẤT CẢ ĐÃ SẴN SÀNG! Vòng tiếp theo bắt đầu sau 3s...
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. GIAI ĐOẠN: GAME OVER (TRAO CÚP & CHỜ SẴN SÀNG CHƠI LẠI) -->
+        <div id="stageGameOver" style="display: none; text-align: center;">
+          <div style="font-size: 5rem; margin-bottom: 12px;">👑</div>
+          <h2 style="font-size: 2.2rem; font-weight: 900; color: var(--yellow);" id="champTitle">QUÁN QUÂN NHẠI GIỌNG!</h2>
+          <p style="color: var(--text-muted); font-size: 1.1rem; margin-bottom: 24px;" id="champSubtitle">Chúc mừng nhà vô địch!</p>
+          
+          <div id="finalLeaderboardList" style="max-width: 480px; margin: 0 auto 24px auto; text-align: left;">
+            <!-- Render top ranking -->
+          </div>
+
+          <!-- Box Xác Nhận Sẵn Sàng Chơi Lại Trận Mới -->
+          <div class="host-panel-card" style="border-color: var(--yellow); max-width: 480px; margin: 0 auto; text-align: center;">
+            <div style="font-weight: 800; font-size: 1.15rem; color: #fff; margin-bottom: 6px;">
+              🔄 XÁC NHẬN CHƠI LẠI TRẬN MỚI
+            </div>
+            <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 14px;" id="gameOverReadyCounterDesc">
+              Tất cả người chơi cần xác nhận Sẵn sàng để khởi động lại trận đấu mới!
+            </p>
+
+            <div id="gameOverReadyRoster" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 16px;">
+            </div>
+
+            <button class="btn btn-party" id="btnConfirmNewGame" style="width: 100%; font-size: 1.05rem; padding: 14px;" onclick="confirmNextRoundAction()">
+              <span>🔄 TÔI ĐÃ SẴN SÀNG CHƠI TRẬN MỚI!</span>
+            </button>
+
+            <div id="newGameAlertCountdown" style="display: none; margin-top: 14px; font-weight: 800; color: var(--green); font-size: 1.1rem; animation: pulse 0.8s infinite alternate;">
+              🚀 TẤT CẢ ĐÃ SẴN SÀNG! Trận đấu mới bắt đầu sau 3s...
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <audio id="gameAudioPlayer"></audio>
+
+  <!-- Socket.IO -->
+  <script src="/socket.io/socket.io.js"></script>
+
+  <script>
+    let socket = null;
+    let currentRoomId = null;
+    let currentHostId = null;
+    let currentRoomMembers = [];
+    let myRole = 'PLAYER'; // 'HOST' | 'PLAYER'
+    let isMyReady = false;
+
+    let myUser = {
+      userName: 'Player_' + Math.floor(1000 + Math.random() * 9000),
+      avatar: '🦊'
+    };
+
+    const inputUsername = document.getElementById('inputUsername');
+    const inputRoomCode = document.getElementById('inputRoomCode');
+    const viewLobby = document.getElementById('viewLobby');
+    const viewArena = document.getElementById('viewArena');
+    const displayRoomCode = document.getElementById('displayRoomCode');
+    const displayRoundText = document.getElementById('displayRoundText');
+    const myRoleBadge = document.getElementById('myRoleBadge');
+    const rosterBar = document.getElementById('rosterBar');
+    const gameAudioPlayer = document.getElementById('gameAudioPlayer');
+    const toastBanner = document.getElementById('toastBanner');
+
+    // Controls
+    const btnStartGame = document.getElementById('btnStartGame');
+    const hostControlPanel = document.getElementById('hostControlPanel');
+    const playerControlPanel = document.getElementById('playerControlPanel');
+    const btnToggleReady = document.getElementById('btnToggleReady');
+    const configTotalRounds = document.getElementById('configTotalRounds');
+    const configRecordDuration = document.getElementById('configRecordDuration');
+
+    // Stage views
+    const stageWaiting = document.getElementById('stageWaiting');
+    const stageRoulette = document.getElementById('stageRoulette');
+    const stageListenSample = document.getElementById('stageListenSample');
+    const stagePrepare = document.getElementById('stagePrepare');
+    const stageRecording = document.getElementById('stageRecording');
+    const stageAiScoring = document.getElementById('stageAiScoring');
+    const stageReveal = document.getElementById('stageReveal');
+    const stageRoundResult = document.getElementById('stageRoundResult');
+    const stageGameOver = document.getElementById('stageGameOver');
+    const stateDisplay = document.getElementById('stateDisplay');
+
+    // Roulette elements
+    const rouletteSlotBox = document.getElementById('rouletteSlotBox');
+    const rouletteEmoji = document.getElementById('rouletteEmoji');
+    const rouletteText = document.getElementById('rouletteText');
+    const rouletteDesc = document.getElementById('rouletteDesc');
+    const packChipsList = document.getElementById('packChipsList');
+
+    // Listen sample elements
+    const themePillEmoji = document.getElementById('themePillEmoji');
+    const themePillName = document.getElementById('themePillName');
+    const sampleEmoji = document.getElementById('sampleEmoji');
+    const sampleSoundName = document.getElementById('sampleSoundName');
+    const sampleSoundHint = document.getElementById('sampleSoundHint');
+    const audioProgressFill = document.getElementById('audioProgressFill');
+    const listenCountdown = document.getElementById('listenCountdown');
+
+    // Prepare elements
+    const prepareCountdown = document.getElementById('prepareCountdown');
+    const prepareSoundName = document.getElementById('prepareSoundName');
+    const prepareDurationHint = document.getElementById('prepareDurationHint');
+
+    // Canvas & Waveform elements
+    const sampleWaveCanvas = document.getElementById('sampleWaveCanvas');
+    const sampleWaveDurationLabel = document.getElementById('sampleWaveDurationLabel');
+    const dualWaveCanvas = document.getElementById('dualWaveCanvas');
+    const liveMatchBadge = document.getElementById('liveMatchBadge');
+    const aiSuspensePhaseText = document.getElementById('aiSuspensePhaseText');
+    const suspenseProgressFill = document.getElementById('suspenseProgressFill');
+    const aiScoringCountdown = document.getElementById('aiScoringCountdown');
+
+    // MediaRecorder
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let progressInterval = null;
+    let toastTimer = null;
+
+    // ========================================================
+    // 🎵 WEB AUDIO API, PHÂN TÍCH SÓNG ÂM & DUAL WAVEFORM OVERLAY
+    // ========================================================
+    let audioCtx = null;
+    let sampleAudioSource = null;
+    let sampleAnalyser = null;
+    let isAudioSourceConnected = false;
+
+    let micStream = null;
+    let micAudioSource = null;
+    let micAnalyser = null;
+
+    let sampleWaveformPoints = []; // 70 điểm biên độ chuẩn của sound mẫu
+    let userWavePoints = [];       // 70 điểm biên độ live thu từ mic của user
+    let currentSampleExactDuration = 5.0;
+    let sampleAnimFrame = null;
+    let dualAnimFrame = null;
+    let recStartTime = 0;
+    let recDurationSec = 5;
+    let suspenseInterval = null;
+
+    function ensureAudioContext() {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          audioCtx = new AudioContextClass();
+        }
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    function setupSampleAudioAnalyser() {
+      ensureAudioContext();
+      if (!audioCtx || isAudioSourceConnected) return;
+      // Nếu phát trực tiếp từ CDN bên thứ 3 (Cloudflare R2 / S3 khác origin), không gắn createMediaElementSource
+      // để tránh trình duyệt tự động mute thẻ <audio> khi chưa bật CORS header
+      if (gameAudioPlayer.src && !gameAudioPlayer.src.startsWith(window.location.origin)) {
+        return;
+      }
+      try {
+        sampleAudioSource = audioCtx.createMediaElementSource(gameAudioPlayer);
+        sampleAnalyser = audioCtx.createAnalyser();
+        sampleAnalyser.fftSize = 256;
+        sampleAudioSource.connect(sampleAnalyser);
+        sampleAnalyser.connect(audioCtx.destination);
+        isAudioSourceConnected = true;
+      } catch (err) {
+        console.warn('AudioSource connection:', err);
+      }
+    }
+
+    // Helper vẽ bo góc tương thích mọi trình duyệt (tránh lỗi TypeError: ctx.roundRect is not a function)
+    function safeFillRoundRect(ctx, x, y, w, h, r = 2) {
+      if (typeof ctx.roundRect === 'function') {
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, r);
+        ctx.fill();
+      } else {
+        if (w < 2 * r) r = w / 2;
+        if (h < 2 * r) r = h / 2;
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    // Trích xuất biên độ thực tế của file âm thanh (AudioBuffer ChannelData)
+    async function loadAndExtractSampleWaveform(url, fallbackDuration = 5) {
+      currentSampleExactDuration = fallbackDuration;
+      // Khởi tạo ngay waveform mô phỏng sinh động để luôn có dữ liệu vẽ ngay lập tức
+      generateSyntheticWaveform(fallbackDuration);
+
+      try {
+        ensureAudioContext();
+        const res = await fetch(url);
+        const arrayBuffer = await res.arrayBuffer();
+        const decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        currentSampleExactDuration = parseFloat(decodedBuffer.duration.toFixed(1));
+
+        const rawData = decodedBuffer.getChannelData(0);
+        const numPoints = 70;
+        const blockSize = Math.floor(rawData.length / numPoints);
+        let maxVal = 0.001;
+        const realPoints = [];
+
+        for (let i = 0; i < numPoints; i++) {
+          let sum = 0;
+          for (let j = 0; j < blockSize; j++) {
+            sum += Math.abs(rawData[i * blockSize + j]);
+          }
+          const avg = sum / blockSize;
+          realPoints.push(avg);
+          if (avg > maxVal) maxVal = avg;
+        }
+        // Chuẩn hóa về dải 0.08 - 1.0 để hiển thị waveform đẹp mắt
+        sampleWaveformPoints = realPoints.map(v => Math.max(0.08, Math.min(1.0, v / maxVal)));
+      } catch (e) {
+        console.warn('Extracting waveform failed, using organic envelope:', e);
+        if (!sampleWaveformPoints || sampleWaveformPoints.length === 0) {
+          generateSyntheticWaveform(fallbackDuration);
+        }
+      }
+    }
+
+    function generateSyntheticWaveform(duration) {
+      sampleWaveformPoints = [];
+      const numPoints = 70;
+      for (let i = 0; i < numPoints; i++) {
+        const t = i / numPoints;
+        const wave = Math.sin(t * Math.PI) * (0.5 + 0.3 * Math.sin(t * 14)) + 0.15 * Math.sin(t * 28);
+        sampleWaveformPoints.push(Math.max(0.08, Math.min(1.0, Math.abs(wave))));
+      }
+    }
+
+    function startSampleWaveformAnimation() {
+      if (sampleAnimFrame) cancelAnimationFrame(sampleAnimFrame);
+      setupSampleAudioAnalyser();
+
+      function render() {
+        if (!sampleWaveCanvas) return;
+        const ctx = sampleWaveCanvas.getContext('2d');
+        if (!ctx) return;
+        const w = sampleWaveCanvas.width;
+        const h = sampleWaveCanvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        drawWaveGrid(ctx, w, h);
+
+        const currentTime = gameAudioPlayer.currentTime || 0;
+        const totalTime = (gameAudioPlayer.duration && !isNaN(gameAudioPlayer.duration) && gameAudioPlayer.duration > 0)
+          ? gameAudioPlayer.duration
+          : currentSampleExactDuration;
+        const progress = Math.min(1, currentTime / (totalTime || 1));
+
+        if (sampleWaveDurationLabel) {
+          sampleWaveDurationLabel.textContent = `${currentTime.toFixed(1)}s / ${totalTime.toFixed(1)}s`;
+        }
+
+        // Đọc năng lượng tần số thời gian thực từ AnalyserNode
+        let liveEnergy = 0;
+        if (sampleAnalyser) {
+          const freq = new Uint8Array(32);
+          sampleAnalyser.getByteFrequencyData(freq);
+          let s = 0;
+          for (let i = 0; i < freq.length; i++) s += freq[i];
+          liveEnergy = s / (freq.length * 255);
+        }
+
+        // Vẽ các cột sóng âm màu Cyan (#00e5ff)
+        const numBars = (sampleWaveformPoints && sampleWaveformPoints.length) ? sampleWaveformPoints.length : 70;
+        const barW = (w - (numBars * 1.5)) / numBars;
+        const midY = h / 2;
+
+        for (let i = 0; i < numBars; i++) {
+          const x = i * (barW + 1.5);
+          const baseAmp = (sampleWaveformPoints && sampleWaveformPoints[i]) ? sampleWaveformPoints[i] : 0.15;
+          const isPast = (i / numBars) <= progress;
+          const isCurrent = Math.abs((i / numBars) - progress) < (2.5 / numBars);
+
+          const dynAmp = (isCurrent && !gameAudioPlayer.paused)
+            ? Math.min(1.0, baseAmp * (1 + liveEnergy * 1.5))
+            : baseAmp;
+          const barH = Math.max(4, dynAmp * (h * 0.85));
+
+          if (isPast) {
+            ctx.fillStyle = '#00e5ff';
+            ctx.shadowColor = '#00e5ff';
+            ctx.shadowBlur = 6;
+          } else {
+            ctx.fillStyle = 'rgba(0, 229, 255, 0.35)';
+            ctx.shadowBlur = 0;
+          }
+
+          safeFillRoundRect(ctx, x, midY - barH / 2, barW, barH, 2);
+        }
+        ctx.shadowBlur = 0;
+
+        // Vạch kim quét tiến trình (Scanning playhead)
+        const cursorX = progress * w;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.shadowColor = '#00e5ff';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.moveTo(cursorX, 0);
+        ctx.lineTo(cursorX, h);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        if (!gameAudioPlayer.paused && !gameAudioPlayer.ended) {
+          sampleAnimFrame = requestAnimationFrame(render);
+        }
+      }
+
+      sampleAnimFrame = requestAnimationFrame(render);
+    }
+
+    function stopSampleAudio() {
+      if (gameAudioPlayer) {
+        gameAudioPlayer.pause();
+        gameAudioPlayer.currentTime = 0;
+      }
+      if (sampleAnimFrame) {
+        cancelAnimationFrame(sampleAnimFrame);
+        sampleAnimFrame = null;
+      }
+      clearInterval(progressInterval);
+    }
+
+    // BIỂU ĐỒ SÓNG ÂM KÉP (DUAL OVERLAY WAVEFORM TRONG LÚC USER NHẠI LẠI)
+    function startDualWaveformLive(durationSeconds) {
+      recDurationSec = durationSeconds || currentSampleExactDuration || 5;
+      if (!sampleWaveformPoints || sampleWaveformPoints.length === 0) {
+        generateSyntheticWaveform(recDurationSec);
+      }
+      userWavePoints = new Array(70).fill(0);
+      recStartTime = Date.now();
+
+      if (dualAnimFrame) {
+        cancelAnimationFrame(dualAnimFrame);
+        dualAnimFrame = null;
+      }
+
+      function renderDual() {
+        if (!dualWaveCanvas) return;
+        const ctx = dualWaveCanvas.getContext('2d');
+        if (!ctx) return;
+
+        const w = dualWaveCanvas.width;
+        const h = dualWaveCanvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        drawWaveGrid(ctx, w, h);
+
+        const elapsed = (Date.now() - recStartTime) / 1000;
+        const progress = Math.min(1.0, elapsed / recDurationSec);
+
+        // Đọc biên độ micro trực tiếp (RMS time-domain)
+        let currentMicAmp = 0;
+        if (micAnalyser) {
+          try {
+            const dataArray = new Uint8Array(micAnalyser.fftSize);
+            micAnalyser.getByteTimeDomainData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+              const val = (dataArray[i] - 128) / 128;
+              sum += val * val;
+            }
+            currentMicAmp = Math.min(1.0, Math.sqrt(sum / dataArray.length) * 3.8);
+          } catch (e) {
+            console.warn('Error reading micAnalyser:', e);
+          }
+        }
+
+        // Ghi nhận điểm sóng âm user tại thời điểm hiện tại
+        const numBars = (sampleWaveformPoints && sampleWaveformPoints.length) ? sampleWaveformPoints.length : 70;
+        const curIdx = Math.floor(progress * numBars);
+        if (curIdx < numBars) {
+          userWavePoints[curIdx] = Math.max(userWavePoints[curIdx] || 0, currentMicAmp);
+        }
+
+        // Tính toán độ trùng khớp nhịp & năng lượng theo thời gian thực
+        let matchSum = 0;
+        let counted = 0;
+        for (let i = 0; i <= curIdx && i < numBars; i++) {
+          const targetAmp = sampleWaveformPoints[i] || 0.1;
+          const userAmp = userWavePoints[i] || 0;
+          const diff = Math.abs(targetAmp - userAmp);
+          matchSum += Math.max(0, 1 - diff);
+          counted++;
+        }
+        const matchPct = counted > 0 ? Math.min(99, Math.round((matchSum / counted) * 100)) : 0;
+        if (liveMatchBadge) {
+          liveMatchBadge.textContent = `${matchPct}% 🔥`;
+        }
+
+        const barW = (w - (numBars * 1.5)) / numBars;
+        const midY = h / 2;
+
+        // LAYER 1: SÓNG MẪU GỐC (CYAN - 40% OPACITY)
+        ctx.fillStyle = 'rgba(0, 229, 255, 0.40)';
+        for (let i = 0; i < numBars; i++) {
+          const x = i * (barW + 1.5);
+          const baseAmp = (sampleWaveformPoints && sampleWaveformPoints[i]) ? sampleWaveformPoints[i] : 0.15;
+          const barH = Math.max(4, baseAmp * (h * 0.82));
+          safeFillRoundRect(ctx, x, midY - barH / 2, barW, barH, 2);
+        }
+
+        // LAYER 2: GIỌNG NHẠI CỦA USER ĐÈ LÊN (NEON PINK - 95% OPACITY)
+        ctx.fillStyle = 'rgba(244, 63, 94, 0.95)';
+        ctx.shadowColor = '#f43f5e';
+        ctx.shadowBlur = 8;
+        for (let i = 0; i <= curIdx && i < numBars; i++) {
+          const x = i * (barW + 1.5);
+          const userAmp = userWavePoints[i] || 0;
+          if (userAmp > 0.03) {
+            const barH = Math.max(4, userAmp * (h * 0.88));
+            safeFillRoundRect(ctx, x, midY - barH / 2, barW, barH, 2);
+          }
+        }
+        ctx.shadowBlur = 0;
+
+        // Vạch playhead quét theo thời gian thực
+        const cursorX = progress * w;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = '#f43f5e';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.moveTo(cursorX, 0);
+        ctx.lineTo(cursorX, h);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        if (progress < 1.0) {
+          dualAnimFrame = requestAnimationFrame(renderDual);
+        }
+      }
+
+      // Render ngay frame 0 lập tức để người dùng thấy ngay biểu đồ sóng khi vừa vào state
+      renderDual();
+      dualAnimFrame = requestAnimationFrame(renderDual);
+    }
+
+    function drawWaveGrid(ctx, w, h) {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+      ctx.lineWidth = 1;
+      const midY = h / 2;
+      ctx.beginPath();
+      ctx.moveTo(0, midY);
+      ctx.lineTo(w, midY);
+      ctx.stroke();
+
+      for (let gx = 0; gx < w; gx += w / 8) {
+        ctx.beginPath();
+        ctx.moveTo(gx, 0);
+        ctx.lineTo(gx, h);
+        ctx.stroke();
+      }
+    }
+
+    // ========================================================
+    // 🤖 AI SCORING SUSPENSE DRAMA (HỒI HỘP KỊCH TÍNH 5s)
+    // ========================================================
+    function triggerSuspenseScoring(totalDuration = 5) {
+      const countdownEl = document.getElementById('aiScoringCountdown');
+      const phaseEl = document.getElementById('aiSuspensePhaseText');
+      const fillEl = document.getElementById('suspenseProgressFill');
+
+      if (countdownEl) countdownEl.textContent = totalDuration;
+      if (fillEl) fillEl.style.width = '0%';
+
+      const suspensePhases = [
+        '🔍 Đang bóc tách cao độ & tần số giọng hát...',
+        '⚡ Đang đối chiếu phổ tần số của từng người chơi...',
+        '🤖 Tính toán điểm số năng lượng & độ tương đồng...',
+        '🥁 HỒI HỘP! Chuẩn bị lật mở bảng điểm vàng...'
+      ];
+
+      let remaining = totalDuration;
+      clearInterval(suspenseInterval);
+
+      playHeartbeatTone();
+
+      suspenseInterval = setInterval(() => {
+        remaining--;
+        if (countdownEl) countdownEl.textContent = Math.max(0, remaining);
+
+        const pct = Math.min(100, Math.round(((totalDuration - remaining) / totalDuration) * 100));
+        if (fillEl) fillEl.style.width = `${pct}%`;
+
+        const phaseIdx = Math.min(suspensePhases.length - 1, Math.floor(((totalDuration - remaining) / totalDuration) * suspensePhases.length));
+        if (phaseEl) phaseEl.textContent = suspensePhases[phaseIdx];
+
+        if (remaining > 0) {
+          playHeartbeatTone();
+        } else {
+          clearInterval(suspenseInterval);
+        }
+      }, 1000);
+    }
+
+    function playHeartbeatTone() {
+      try {
+        ensureAudioContext();
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(65, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(32, audioCtx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.18, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.16);
+      } catch (e) {}
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      inputUsername.value = myUser.userName;
+      inputRoomCode.value = 'MIMIC99';
+      initSocket();
+    });
+
+    function pickAvatar(el, avatar) {
+      document.querySelectorAll('.avatar-item').forEach(i => i.classList.remove('selected'));
+      el.classList.add('selected');
+      myUser.avatar = avatar;
+    }
+
+    function initSocket() {
+      const savedAuthToken = localStorage.getItem('micmix_auth_token') || '';
+      socket = io({
+        auth: { token: savedAuthToken }
+      });
+
+      // Sự kiện audio mẫu phát xong toàn bộ -> báo ngay cho server để chuyển sang đếm 3, 2, 1
+      gameAudioPlayer.onended = () => {
+        console.log('[Mimic] 🔊 Âm thanh mẫu đã phát xong trọn vẹn (onended)!');
+        stopSampleAudio();
+        if (currentRoomId) {
+          socket.emit('sample_playback_done', { roomId: currentRoomId });
+        }
+      };
+
+      socket.on('connect', () => {
+        document.getElementById('connStatus').textContent = '🟢 Online';
+      });
+
+      socket.on('disconnect', () => {
+        document.getElementById('connStatus').textContent = '🔴 Disconnected';
+      });
+
+      // ========================================================
+      // 🔄 LẮNG NGHE TOÀN BỘ GAMEPLAY THEO STATE MACHINE CHUẨN HÓA
+      // ========================================================
+      socket.on('game_state_changed', (stateData) => {
+        handleGameStateChanged(stateData);
+      });
+
+      socket.on('game_state_tick', ({ state, timeRemaining, totalDuration, progressPercent }) => {
+        if (state === 'PLAYING_SAMPLE') {
+          listenCountdown.textContent = timeRemaining;
+        } else if (state === 'PREPARE_RECORDING') {
+          if (prepareCountdown) prepareCountdown.textContent = timeRemaining;
+        } else if (state === 'USER_RECORDING') {
+          document.getElementById('recordCountdown').textContent = timeRemaining;
+        } else if (state === 'AI_SCORING') {
+          if (aiScoringCountdown) aiScoringCountdown.textContent = timeRemaining;
+        } else if (state === 'SHOWDOWN_REVEAL') {
+          document.getElementById('revealCountdown').textContent = timeRemaining;
+        }
+      });
+
+      socket.on('game_reaction_broadcast', (emoji) => spawnFloatingEmoji(emoji));
+
+      socket.on('user_joined', ({ user, members, systemMessage }) => {
+        currentRoomMembers = members || [];
+        showToast(systemMessage || `${user.userName} đã tham gia!`);
+        updateRoster(currentRoomMembers);
+      });
+
+      socket.on('user_left', ({ user, members, systemMessage }) => {
+        currentRoomMembers = members || [];
+        showToast(systemMessage || `${user.userName} đã rời phòng.`);
+        updateRoster(currentRoomMembers);
+      });
+
+      // ========================================================
+      // 👑 SỰ KIỆN QUẢN LÝ ROLE: HOST & PLAYER
+      // ========================================================
+      socket.on('host_changed', ({ newHostId, newHostName, members, systemMessage }) => {
+        currentHostId = newHostId;
+        currentRoomMembers = members || [];
+        showToast(systemMessage || `👑 ${newHostName} đã trở thành Chủ phòng mới!`);
+        updateRoleUI();
+        updateRoster(currentRoomMembers);
+      });
+
+      socket.on('player_ready_changed', ({ socketId, userName, isReady, members, systemMessage }) => {
+        currentRoomMembers = members || [];
+        if (socketId === socket.id) {
+          isMyReady = isReady;
+          updateReadyButton();
+        }
+        showToast(systemMessage || `${userName} ${isReady ? 'đã sẵn sàng' : 'hủy sẵn sàng'}`);
+        updateRoster(currentRoomMembers);
+      });
+
+      socket.on('game_config_changed', ({ totalRounds, recordDuration, updatedBy, systemMessage }) => {
+        if (configTotalRounds) configTotalRounds.value = totalRounds;
+        if (configRecordDuration) configRecordDuration.value = recordDuration;
+        showToast(systemMessage || `⚙️ Cấu hình: ${totalRounds} vòng, ${recordDuration}s`);
+      });
+
+      socket.on('kicked_from_room', ({ message }) => {
+        stopSampleAudio();
+        alert(message || 'Bạn đã bị Chủ phòng mời ra khỏi phòng!');
+        currentRoomId = null;
+        currentRoomMembers = [];
+        viewArena.style.display = 'none';
+        viewLobby.style.display = 'block';
+      });
+
+      socket.on('room_closed', ({ message }) => {
+        stopSampleAudio();
+        alert(message || 'Phòng đấu đã được đóng!');
+        currentRoomId = null;
+        currentHostId = null;
+        currentRoomMembers = [];
+        sampleWaveformPoints = [];
+        userWavePoints = [];
+        viewArena.style.display = 'none';
+        viewLobby.style.display = 'block';
+      });
+
+      socket.on('game_error', ({ message }) => {
+        showToast(`⚠️ ${message}`);
+      });
+
+      // ========================================================
+      // ⚡ XÁC NHẬN SẴN SÀNG CHO VÒNG / GAME TIẾP THEO & BỎ QUA SHOWDOWN
+      // ========================================================
+      socket.on('showdown_skip_updated', (data) => {
+        handleShowdownSkipUpdated(data);
+      });
+
+      socket.on('round_ready_updated', (data) => {
+        handleRoundReadyUpdated(data);
+      });
+
+      socket.on('all_players_ready', ({ message, countdown }) => {
+        showToast(message || '🎉 Tất cả người chơi đã sẵn sàng!');
+        const alertRound = document.getElementById('nextRoundAlertCountdown');
+        if (alertRound) {
+          alertRound.style.display = 'block';
+          alertRound.textContent = message;
+        }
+        const alertGame = document.getElementById('newGameAlertCountdown');
+        if (alertGame) {
+          alertGame.style.display = 'block';
+          alertGame.textContent = message;
+        }
+        spawnFloatingEmoji('🎉');
+        spawnFloatingEmoji('🔥');
+      });
+    }
+
+    // ========================================================
+    // XỬ LÝ CHUYỂN TRẠNG THÁI GAMEPLAY (CENTRAL STATE HANDLER)
+    // ========================================================
+    function handleGameStateChanged(data) {
+      if (!data) return;
+      console.log('[GameStateChanged] =>', data.state, data);
+      stateDisplay.textContent = data.state;
+      displayRoundText.textContent = `VÒNG ${data.round || 1} / ${data.totalRounds || 3}`;
+
+      switch (data.state) {
+        case 'IDLE':
+          switchStage('waiting');
+          break;
+
+        case 'THEME_SELECTION':
+          switchStage('roulette');
+          packChipsList.innerHTML = '';
+          (data.payload.allPacks || []).forEach(p => {
+            const chip = document.createElement('div');
+            chip.className = `pack-chip chip-${p.id}`;
+            chip.textContent = `${p.emoji} ${p.name}`;
+            packChipsList.appendChild(chip);
+          });
+
+          rouletteSlotBox.classList.remove('locked');
+          let spinIndex = 0;
+          const packs = data.payload.allPacks || [];
+          const spinInterval = setInterval(() => {
+            if (packs.length > 0) {
+              const p = packs[spinIndex % packs.length];
+              rouletteEmoji.textContent = p.emoji;
+              rouletteText.textContent = p.name;
+              spinIndex++;
+            }
+          }, 120);
+
+          setTimeout(() => {
+            clearInterval(spinInterval);
+            if (data.payload.selectedPack) {
+              rouletteEmoji.textContent = data.payload.selectedPack.emoji;
+              rouletteText.textContent = data.payload.selectedPack.name;
+              rouletteDesc.textContent = data.payload.selectedPack.description || 'Chủ đề đã được chọn!';
+              rouletteSlotBox.classList.add('locked');
+              document.querySelectorAll('.pack-chip').forEach(c => c.classList.remove('active'));
+              const targetChip = document.querySelector(`.chip-${data.payload.selectedPack.id}`);
+              if (targetChip) targetChip.classList.add('active');
+            }
+          }, 2000);
+          break;
+
+        case 'PLAYING_SAMPLE':
+          stopSampleAudio();
+          switchStage('listensample');
+          const pack = data.payload.pack || {};
+          const target = data.payload.targetSound || {};
+          themePillEmoji.textContent = pack.emoji || '🐾';
+          themePillName.textContent = `Chủ đề: ${pack.name || ''}`;
+
+          sampleEmoji.textContent = target.emoji || '🔊';
+          sampleSoundName.textContent = target.name || '';
+          sampleSoundHint.textContent = target.hint || '';
+
+          const sampleDur = target.exactDuration || target.rawDuration || data.duration || 5;
+          currentSampleExactDuration = sampleDur;
+          listenCountdown.textContent = data.duration || Math.ceil(sampleDur);
+
+          if (target.audioUrl) {
+            loadAndExtractSampleWaveform(target.audioUrl, sampleDur);
+
+            gameAudioPlayer.src = target.audioUrl;
+            gameAudioPlayer.play().then(() => {
+              startSampleWaveformAnimation();
+            }).catch(e => {
+              console.warn('Autoplay prevented, will play on tap:', e);
+              startSampleWaveformAnimation();
+            });
+
+            clearInterval(progressInterval);
+            audioProgressFill.style.width = '0%';
+            progressInterval = setInterval(() => {
+              if (gameAudioPlayer.duration) {
+                const pct = (gameAudioPlayer.currentTime / gameAudioPlayer.duration) * 100;
+                audioProgressFill.style.width = `${Math.min(100, pct)}%`;
+              }
+            }, 100);
+          }
+          break;
+
+        case 'PREPARE_RECORDING':
+          stopSampleAudio();
+          switchStage('prepare');
+          prepareCountdown.textContent = data.duration || 3;
+          if (data.payload && data.payload.targetSound && prepareSoundName) {
+            prepareSoundName.textContent = `${data.payload.targetSound.emoji || '🔊'} ${data.payload.targetSound.name || ''}`;
+          }
+          const prepExact = (data.payload && (data.payload.exactDuration || data.payload.recordingDuration)) || currentSampleExactDuration || 5;
+          if (prepareDurationHint) {
+            prepareDurationHint.textContent = `⏱️ Thời gian thu âm: ${prepExact}s (bằng chuẩn âm thanh mẫu)`;
+          }
+          break;
+
+        case 'USER_RECORDING':
+          stopSampleAudio();
+          switchStage('recording');
+          const recExact = (data.payload && (data.payload.exactDuration || data.payload.duration)) || data.duration || currentSampleExactDuration || 5;
+          document.getElementById('recordCountdown').textContent = Math.ceil(recExact);
+          const noteEl = document.getElementById('recordDurationNote');
+          if (noteEl) noteEl.textContent = `⏱️ Thời gian thu âm: ${recExact}s (bằng đúng âm thanh mẫu)`;
+          // Khởi động NGAY LẬP TỨC biểu đồ sóng kép đè lên nhau (Cyan 40% & Neon Pink 95%) không đợi mic permission
+          startDualWaveformLive(recExact);
+          startMicCaptureAndRecord(recExact);
+          break;
+
+        case 'AI_SCORING':
+          stopSampleAudio();
+          switchStage('aiscoring');
+          triggerSuspenseScoring(data.duration || 5);
+          break;
+
+        case 'SHOWDOWN_REVEAL':
+          switchStage('reveal');
+          renderAttempts(data.payload.attempts, data.payload.roundWinner);
+          const totalShowdownCount = data.payload.totalCount || currentRoomMembers.length || 1;
+          const initialSkipCount = data.payload.skipCount || 0;
+          const btnSkipInit = document.getElementById('btnSkipShowdown');
+          if (btnSkipInit) {
+            btnSkipInit.className = 'btn btn-secondary';
+            btnSkipInit.innerHTML = `<span>⏩ Xem Bảng Điểm Sớm (${initialSkipCount}/${totalShowdownCount})</span>`;
+          }
+          break;
+
+        case 'ROUND_RESULT':
+          switchStage('roundresult');
+          const listEl = document.getElementById('roundLeaderboardList');
+          listEl.innerHTML = '';
+
+          (data.payload.leaderboard || []).forEach((p, idx) => {
+            const div = document.createElement('div');
+            div.className = 'roster-pill';
+            div.style.marginBottom = '8px';
+            div.innerHTML = `
+              <span style="font-weight: 800; color: var(--yellow); width: 26px;">#${idx + 1}</span>
+              <span>${p.avatar}</span>
+              <span style="flex: 1; font-weight: 700;">${escapeHtml(p.userName)}</span>
+              <span style="font-weight: 700; color: var(--text-muted); font-size: 0.85rem;">Vòng: +${p.roundScore}đ</span>
+              <span style="font-weight: 900; color: var(--accent); margin-left: 8px;">Tổng: ${p.totalScore}đ</span>
+            `;
+            listEl.appendChild(div);
+          });
+
+          // Reset nút Sẵn sàng cho vòng tiếp theo
+          const btnRound = document.getElementById('btnConfirmNextRound');
+          if (btnRound) {
+            btnRound.disabled = false;
+            btnRound.className = 'btn btn-party';
+            btnRound.innerHTML = data.payload.isLastRound
+              ? '<span>🏆 XEM KẾT QUẢ CHUNG CUỘC!</span>'
+              : '<span>✅ TÔI ĐÃ SẴN SÀNG VÒNG KẾ TIẾP!</span>';
+          }
+          const alertRound = document.getElementById('nextRoundAlertCountdown');
+          if (alertRound) alertRound.style.display = 'none';
+
+          handleRoundReadyUpdated({
+            readyCount: data.payload.readyCount || 0,
+            totalCount: data.payload.totalCount || (data.payload.leaderboard || []).length,
+            players: data.payload.leaderboard || []
+          });
+          break;
+
+        case 'GAME_OVER':
+          switchStage('gameover');
+          if (data.payload.champion) {
+            document.getElementById('champTitle').textContent = `🏆 ${data.payload.champion.userName} LÀ VUA NHẠI GIỌNG!`;
+            document.getElementById('champSubtitle').textContent = `Chiến thắng với tổng điểm ${data.payload.champion.totalScore}đ!`;
+          }
+          const finalEl = document.getElementById('finalLeaderboardList');
+          finalEl.innerHTML = '';
+          (data.payload.finalRanking || []).forEach((p, idx) => {
+            const div = document.createElement('div');
+            div.className = 'roster-pill';
+            div.style.marginBottom = '8px';
+            div.innerHTML = `
+              <span style="font-weight: 800; color: var(--yellow); width: 26px;">#${idx + 1}</span>
+              <span>${p.avatar}</span>
+              <span style="flex: 1; font-weight: 700;">${escapeHtml(p.userName)}</span>
+              <span style="font-weight: 900; color: var(--accent);">${p.totalScore}đ</span>
+            `;
+            finalEl.appendChild(div);
+          });
+
+          const btnGame = document.getElementById('btnConfirmNewGame');
+          if (btnGame) {
+            btnGame.disabled = false;
+            btnGame.className = 'btn btn-party';
+            btnGame.innerHTML = '<span>🔄 TÔI ĐÃ SẴN SÀNG CHƠI TRẬN MỚI!</span>';
+          }
+          const alertGame = document.getElementById('newGameAlertCountdown');
+          if (alertGame) alertGame.style.display = 'none';
+
+          handleRoundReadyUpdated({
+            readyCount: data.payload.readyCount || 0,
+            totalCount: data.payload.totalCount || (data.payload.finalRanking || []).length,
+            players: data.payload.finalRanking || []
+          });
+          break;
+      }
+    }
+
+    function switchStage(stage) {
+      if (stage !== 'listensample') {
+        stopSampleAudio();
+      }
+      if (stage !== 'recording') {
+        if (dualAnimFrame) {
+          cancelAnimationFrame(dualAnimFrame);
+          dualAnimFrame = null;
+        }
+      }
+      if (stage !== 'aiscoring') {
+        clearInterval(suspenseInterval);
+      }
+
+      stageWaiting.style.display = 'none';
+      stageRoulette.style.display = 'none';
+      stageListenSample.style.display = 'none';
+      if (stagePrepare) stagePrepare.style.display = 'none';
+      stageRecording.style.display = 'none';
+      stageAiScoring.style.display = 'none';
+      stageReveal.style.display = 'none';
+      stageRoundResult.style.display = 'none';
+      stageGameOver.style.display = 'none';
+
+      if (stage === 'waiting') stageWaiting.style.display = 'block';
+      if (stage === 'roulette') stageRoulette.style.display = 'flex';
+      if (stage === 'listensample') stageListenSample.style.display = 'flex';
+      if (stage === 'prepare' && stagePrepare) stagePrepare.style.display = 'flex';
+      if (stage === 'recording') stageRecording.style.display = 'flex';
+      if (stage === 'aiscoring') stageAiScoring.style.display = 'flex';
+      if (stage === 'reveal') stageReveal.style.display = 'flex';
+      if (stage === 'roundresult') stageRoundResult.style.display = 'block';
+      if (stage === 'gameover') stageGameOver.style.display = 'block';
+    }
+
+    function quickCreateRoom() {
+      inputRoomCode.value = 'MIMIC' + Math.floor(1000 + Math.random() * 9000);
+      joinMimicParty();
+    }
+
+    function joinMimicParty() {
+      const uname = inputUsername.value.trim() || myUser.userName;
+      const rCode = inputRoomCode.value.trim().toUpperCase();
+
+      if (!rCode) {
+        alert('Vui lòng nhập Mã phòng!');
+        return;
+      }
+
+      myUser.userName = uname;
+
+      socket.emit('join_room', {
+        roomId: rCode,
+        userName: myUser.userName,
+        avatar: myUser.avatar,
+        authToken: localStorage.getItem('micmix_auth_token') || null
+      }, (res) => {
+        if (res.success) {
+          if (res.authToken) {
+            localStorage.setItem('micmix_auth_token', res.authToken);
+          }
+          if (res.user && res.user.userId) {
+            localStorage.setItem('micmix_user_id', res.user.userId);
+          }
+          currentRoomId = res.room.id;
+          currentHostId = res.room.hostId;
+          currentRoomMembers = res.room.members || [];
+          displayRoomCode.textContent = currentRoomId;
+
+          // Xác định trạng thái sẵn sàng của bản thân
+          const me = currentRoomMembers.find(m => m.socketId === socket.id);
+          if (me) {
+            isMyReady = me.isReady;
+          }
+
+          // Cập nhật cấu hình vòng đấu nếu có trong gameState
+          if (res.gameState) {
+            if (configTotalRounds && res.gameState.totalRounds) {
+              configTotalRounds.value = res.gameState.totalRounds;
+            }
+            if (configRecordDuration && res.gameState.recordDuration) {
+              configRecordDuration.value = res.gameState.recordDuration;
+            }
+          }
+
+          updateRoleUI();
+          updateRoster(currentRoomMembers);
+
+          viewLobby.style.display = 'none';
+          viewArena.style.display = 'flex';
+
+          // Đồng bộ State hiện tại của phòng (nếu trận đấu đang diễn ra)
+          if (res.gameState && res.gameState.state && res.gameState.state !== 'IDLE') {
+            handleGameStateChanged(res.gameState);
+          } else {
+            switchStage('waiting');
+          }
+        } else {
+          alert('Không thể vào phòng: ' + res.message);
+        }
+      });
+    }
+
+    function leaveArena() {
+      if (!confirm('Bạn có chắc muốn thoát khỏi phòng đấu?')) return;
+      socket.emit('leave_room', {}, () => {
+        currentRoomId = null;
+        currentHostId = null;
+        currentRoomMembers = [];
+        myRole = 'PLAYER';
+        viewArena.style.display = 'none';
+        viewLobby.style.display = 'block';
+      });
+    }
+
+    function startGameAction() {
+      if (!currentRoomId) return;
+      if (myRole !== 'HOST') {
+        showToast('⚠️ Chỉ có Chủ phòng (Host) mới có quyền bắt đầu trận đấu!');
+        return;
+      }
+      socket.emit('game_start', { roomId: currentRoomId }, (res) => {
+        if (res && !res.success) {
+          showToast(`⚠️ ${res.message || 'Không thể bắt đầu'}`);
+        }
+      });
+    }
+
+    function updateRoleUI() {
+      const isHost = (currentHostId === socket.id);
+      myRole = isHost ? 'HOST' : 'PLAYER';
+
+      if (isHost) {
+        myRoleBadge.className = 'role-badge-host';
+        myRoleBadge.innerHTML = '👑 Bạn là Chủ phòng';
+        btnStartGame.style.display = 'inline-flex';
+        btnStartGame.disabled = false;
+        btnStartGame.title = 'Bắt đầu trận đấu';
+        hostControlPanel.style.display = 'block';
+        playerControlPanel.style.display = 'none';
+      } else {
+        myRoleBadge.className = 'role-badge-player';
+        myRoleBadge.innerHTML = '🎧 Bạn là Người chơi';
+        btnStartGame.style.display = 'none'; // Ẩn nút start trên header đối với người chơi thường
+        hostControlPanel.style.display = 'none';
+        playerControlPanel.style.display = 'block';
+        updateReadyButton();
+      }
+    }
+
+    function updateReadyButton() {
+      if (!btnToggleReady) return;
+      if (isMyReady) {
+        btnToggleReady.className = 'btn btn-secondary';
+        btnToggleReady.innerHTML = '<span>⏸️ HỦY SẴN SÀNG</span>';
+        btnToggleReady.style.borderColor = 'var(--yellow)';
+        btnToggleReady.style.color = 'var(--yellow)';
+      } else {
+        btnToggleReady.className = 'btn btn-party';
+        btnToggleReady.innerHTML = '<span>✅ BẤM ĐỂ SẴN SÀNG</span>';
+        btnToggleReady.style.borderColor = '';
+        btnToggleReady.style.color = '#fff';
+      }
+    }
+
+    function toggleReadyAction() {
+      if (!currentRoomId) return;
+      socket.emit('player_ready_toggle', { roomId: currentRoomId, isReady: !isMyReady }, (res) => {
+        if (res && res.success) {
+          isMyReady = res.isReady;
+          updateReadyButton();
+        }
+      });
+    }
+
+    function updateRoomConfig() {
+      if (!currentRoomId || myRole !== 'HOST') return;
+      const rounds = Number(configTotalRounds.value);
+      const dur = Number(configRecordDuration.value);
+      socket.emit('game_update_config', {
+        roomId: currentRoomId,
+        totalRounds: rounds,
+        recordDuration: dur
+      }, (res) => {
+        if (res && res.success) {
+          showToast(`⚙️ Đã lưu cấu hình: ${rounds} vòng, ${dur}s ghi âm`);
+        }
+      });
+    }
+
+    function kickPlayerAction(targetSocketId, targetName) {
+      if (!currentRoomId || myRole !== 'HOST') return;
+      if (confirm(`Bạn có chắc chắn muốn kick "${targetName}" ra khỏi phòng?`)) {
+        socket.emit('kick_player', {
+          roomId: currentRoomId,
+          targetSocketId
+        }, (res) => {
+          if (res && !res.success) {
+            showToast(`⚠️ ${res.message}`);
+          }
+        });
+      }
+    }
+
+    function showToast(msg) {
+      if (!toastBanner) return;
+      toastBanner.textContent = msg;
+      toastBanner.style.display = 'block';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toastBanner.style.display = 'none';
+      }, 3500);
+    }
+
+    // Xác nhận sẵn sàng cho vòng tiếp theo / game tiếp theo
+    function confirmNextRoundAction() {
+      if (!currentRoomId) return;
+      socket.emit('confirm_next_round_ready', { roomId: currentRoomId }, (res) => {
+        if (res && res.success) {
+          const btnRound = document.getElementById('btnConfirmNextRound');
+          if (btnRound) {
+            btnRound.disabled = true;
+            btnRound.className = 'btn btn-secondary';
+            btnRound.innerHTML = '<span>👍 BẠN ĐÃ SẴN SÀNG (Đang đợi bạn bè...)</span>';
+          }
+          const btnGame = document.getElementById('btnConfirmNewGame');
+          if (btnGame) {
+            btnGame.disabled = true;
+            btnGame.className = 'btn btn-secondary';
+            btnGame.innerHTML = '<span>👍 BẠN ĐÃ SẴN SÀNG (Đang đợi bạn bè...)</span>';
+          }
+        }
+      });
+    }
+
+    // Bỏ qua thời gian Showdown để xem ngay bảng điểm (Yêu cầu TẤT CẢ người chơi xác nhận)
+    function skipToShowdownResultAction() {
+      if (!currentRoomId) return;
+      socket.emit('skip_to_round_result', { roomId: currentRoomId }, (res) => {
+        if (res && res.success) {
+          const btn = document.getElementById('btnSkipShowdown');
+          if (btn) {
+            if (res.isVoted) {
+              btn.className = 'btn btn-party';
+              btn.innerHTML = `<span>✅ Bạn đã đồng ý xem sớm (${res.skipCount}/${res.totalCount})</span>`;
+            } else {
+              btn.className = 'btn btn-secondary';
+              btn.innerHTML = `<span>⏩ Xem Bảng Điểm Sớm (${res.skipCount}/${res.totalCount})</span>`;
+            }
+          }
+        }
+      });
+    }
+
+    // Cập nhật giao diện tiến độ đồng ý xem bảng điểm sớm của mọi người trong phòng
+    function handleShowdownSkipUpdated(data) {
+      if (!data) return;
+      const skipCount = data.skipCount || 0;
+      const totalCount = data.totalCount || currentRoomMembers.length || 1;
+      const votedSockets = data.votedSockets || [];
+      const isMyVoted = votedSockets.includes(socket.id);
+
+      const btn = document.getElementById('btnSkipShowdown');
+      if (btn) {
+        if (isMyVoted) {
+          btn.className = 'btn btn-party';
+          btn.innerHTML = `<span>✅ Bạn đã đồng ý xem sớm (${skipCount}/${totalCount})</span>`;
+        } else {
+          btn.className = 'btn btn-secondary';
+          btn.innerHTML = `<span>⏩ Xem Bảng Điểm Sớm (${skipCount}/${totalCount})</span>`;
+        }
+      }
+
+      if (data.userName && data.userName !== 'System') {
+        showToast(`⏩ ${data.userName} ${data.isVoted ? 'đồng ý' : 'hủy'} xem sớm (${skipCount}/${totalCount})`);
+      }
+    }
+
+    // Cập nhật giao diện tiến độ sẵn sàng của các thành viên trong phòng
+    function handleRoundReadyUpdated(data) {
+      if (!data) return;
+      const readyCount = data.readyCount || 0;
+      const totalCount = data.totalCount || 0;
+      const players = data.players || [];
+
+      // Cập nhật thẻ hiển thị ROUND_RESULT
+      const readyDesc = document.getElementById('readyCounterDesc');
+      if (readyDesc) {
+        readyDesc.innerHTML = `Đã sẵn sàng: <b style="color: var(--cyan);">${readyCount}/${totalCount}</b> người chơi. Tất cả cần xác nhận thì mới bắt đầu vòng tiếp theo!`;
+      }
+      const roundRoster = document.getElementById('roundReadyRoster');
+      if (roundRoster) {
+        roundRoster.innerHTML = '';
+        players.forEach(p => {
+          const pill = document.createElement('div');
+          pill.className = 'roster-pill';
+          pill.style.padding = '6px 12px';
+          pill.innerHTML = `
+            <span>${p.avatar || '🎧'}</span>
+            <span style="font-size: 0.85rem; font-weight: 700;">${escapeHtml(p.userName)}</span>
+            ${p.isReady ? '<span class="ready-badge is-ready">✅ Sẵn sàng</span>' : '<span class="ready-badge not-ready">⏳ Đang xem</span>'}
+          `;
+          roundRoster.appendChild(pill);
+        });
+      }
+
+      // Cập nhật thẻ hiển thị GAME_OVER
+      const gameOverDesc = document.getElementById('gameOverReadyCounterDesc');
+      if (gameOverDesc) {
+        gameOverDesc.innerHTML = `Đã sẵn sàng: <b style="color: var(--yellow);">${readyCount}/${totalCount}</b> người chơi. Tất cả cần xác nhận thì mới bắt đầu trận mới!`;
+      }
+      const gameOverRoster = document.getElementById('gameOverReadyRoster');
+      if (gameOverRoster) {
+        gameOverRoster.innerHTML = '';
+        players.forEach(p => {
+          const pill = document.createElement('div');
+          pill.className = 'roster-pill';
+          pill.style.padding = '6px 12px';
+          pill.innerHTML = `
+            <span>${p.avatar || '🎧'}</span>
+            <span style="font-size: 0.85rem; font-weight: 700;">${escapeHtml(p.userName)}</span>
+            ${p.isReady ? '<span class="ready-badge is-ready">✅ Sẵn sàng</span>' : '<span class="ready-badge not-ready">⏳ Đang xem</span>'}
+          `;
+          gameOverRoster.appendChild(pill);
+        });
+      }
+
+      // Kiểm tra trạng thái của chính user hiện tại
+      const me = players.find(p => p.socketId === socket.id);
+      if (me && me.isReady) {
+        const btnRound = document.getElementById('btnConfirmNextRound');
+        if (btnRound) {
+          btnRound.disabled = true;
+          btnRound.className = 'btn btn-secondary';
+          btnRound.innerHTML = '<span>👍 BẠN ĐÃ SẴN SÀNG (Đang đợi bạn bè...)</span>';
+        }
+        const btnGame = document.getElementById('btnConfirmNewGame');
+        if (btnGame) {
+          btnGame.disabled = true;
+          btnGame.className = 'btn btn-secondary';
+          btnGame.innerHTML = '<span>👍 BẠN ĐÃ SẴN SÀNG (Đang đợi bạn bè...)</span>';
+        }
+      }
+    }
+
+    function updateRoster(members) {
+      currentRoomMembers = members || [];
+      rosterBar.innerHTML = '';
+      currentRoomMembers.forEach(m => {
+        const isHost = (m.role === 'HOST' || m.socketId === currentHostId);
+        const div = document.createElement('div');
+        div.className = 'roster-pill';
+
+        let badgeHtml = '';
+        if (isHost) {
+          badgeHtml = '<span class="role-badge-host">👑 Host</span>';
+        } else {
+          badgeHtml = m.isReady
+            ? '<span class="ready-badge is-ready">✅ Sẵn sàng</span>'
+            : '<span class="ready-badge not-ready">⏳ Chờ</span>';
+        }
+
+        let kickBtnHtml = '';
+        if (myRole === 'HOST' && m.socketId !== socket.id) {
+          kickBtnHtml = `<button class="btn-kick" title="Kick khỏi phòng" onclick="kickPlayerAction('${m.socketId}', '${escapeHtml(m.userName)}')">❌</button>`;
+        }
+
+        div.innerHTML = `
+          <span>${m.avatar || '🎧'}</span>
+          <span style="font-weight: 700;">${escapeHtml(m.userName)}</span>
+          ${badgeHtml}
+          ${kickBtnHtml}
+        `;
+        rosterBar.appendChild(div);
+      });
+    }
+
+    // Thu âm Micro Nhại Lại & Kết nối tới Analyser để cấp dữ liệu sóng âm thời gian thực
+    async function startMicCaptureAndRecord(durationSeconds) {
+      try {
+        ensureAudioContext();
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micStream = stream;
+
+        // Kết nối micro tới Web Audio Analyser để trích xuất biên độ thời gian thực
+        if (audioCtx) {
+          try {
+            micAudioSource = audioCtx.createMediaStreamSource(stream);
+            micAnalyser = audioCtx.createAnalyser();
+            micAnalyser.fftSize = 128;
+            micAudioSource.connect(micAnalyser);
+          } catch (e) {
+            console.warn('Mic analyser setup:', e);
+          }
+        }
+
+        mediaRecorder = new MediaRecorder(stream);
+        recordedChunks = [];
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+          const reader = new FileReader();
+          reader.readAsDataURL(blob);
+          reader.onloadend = () => {
+            const base64Data = reader.result;
+            // Tính toán chỉ số năng lượng & độ khớp thực tế từ sóng âm thu được
+            let matchSum = 0;
+            let energySum = 0;
+            let activeCount = 0;
+            const totalBars = (sampleWaveformPoints && sampleWaveformPoints.length) ? sampleWaveformPoints.length : 70;
+            for (let i = 0; i < totalBars; i++) {
+              const sAmp = (sampleWaveformPoints && sampleWaveformPoints[i]) ? sampleWaveformPoints[i] : 0.2;
+              const uAmp = (userWavePoints && userWavePoints[i]) ? userWavePoints[i] : 0;
+              matchSum += Math.max(0, 1 - Math.abs(sAmp - uAmp));
+              energySum += uAmp;
+              if (uAmp > 0.04) activeCount++;
+            }
+            const activeRatio = totalBars > 0 ? (activeCount / totalBars) : 0;
+            const matchPct = totalBars > 0 ? Math.min(99, Math.round((matchSum / totalBars) * 100)) : 0;
+            const energyScore = Math.min(100, Math.round((energySum / Math.max(1, activeCount)) * 115));
+
+            console.log('[Mimic] Nộp bản thu nhại lại kèm metrics:', { matchPct, activeRatio, energyScore });
+            socket.emit('game_submit_audio', {
+              roomId: currentRoomId,
+              audioData: base64Data,
+              mimeType: 'audio/webm',
+              metrics: {
+                matchPct,
+                activeRatio,
+                energyScore,
+                rhythmScore: Math.min(98, Math.round(matchPct * 0.96 + activeRatio * 10))
+              }
+            });
+          };
+
+          // Tắt toàn bộ mic tracks và ngắt kết nối audio
+          stream.getTracks().forEach(t => t.stop());
+          if (micAudioSource) {
+            try { micAudioSource.disconnect(); } catch (e) {}
+            micAudioSource = null;
+          }
+        };
+
+        mediaRecorder.start();
+
+        setTimeout(() => {
+          if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+          }
+          if (dualAnimFrame) {
+            cancelAnimationFrame(dualAnimFrame);
+            dualAnimFrame = null;
+          }
+        }, durationSeconds * 1000);
+
+      } catch (err) {
+        console.warn('Không mở được micro hoặc người dùng từ chối cấp quyền:', err);
+        showToast('🎙️ Micro chưa được cấp quyền (Đang thu âm mặc định)...');
+        socket.emit('game_submit_audio', {
+          roomId: currentRoomId,
+          audioData: null
+        });
+      }
+    }
+
+    function renderAttempts(attempts, winner) {
+      const grid = document.getElementById('attemptsGrid');
+      grid.innerHTML = '';
+
+      (attempts || []).forEach(att => {
+        const isWinner = winner && winner.socketId === att.socketId;
+        const evalData = att.evaluation || {};
+        const card = document.createElement('div');
+        card.className = `attempt-card ${isWinner ? 'winner' : ''}`;
+
+        card.innerHTML = `
+          <div class="attempt-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 1.4rem;">${att.avatar}</span>
+              <div>
+                <b style="font-size: 0.95rem;">${escapeHtml(att.userName)}</b>
+                ${isWinner ? '<span style="font-size: 0.75rem; color: var(--yellow); font-weight: 800; margin-left: 4px;">👑 THẮNG VÒNG</span>' : ''}
+              </div>
+            </div>
+            <div class="attempt-score-badge">
+              <span>${evalData.totalScore || 0}</span>
+              <span class="attempt-grade">Hạng ${evalData.grade || 'F'}</span>
+            </div>
+          </div>
+
+          <div class="attempt-remark">${escapeHtml(evalData.remark || '')}</div>
+
+          <div class="metrics-bar">
+            <span>Cao độ: <b>${evalData.pitchScore || 0}%</b></span>
+            <span>Nhịp điệu: <b>${evalData.rhythmScore || 0}%</b></span>
+            <span>Năng lượng: <b>${evalData.energyScore || 0}%</b></span>
+          </div>
+
+          ${att.audioUrl ? `
+            <audio controls src="${att.audioUrl}" style="width: 100%; height: 34px; margin-top: 6px; border-radius: 8px;"></audio>
+          ` : '<small style="color: var(--red);">Không nộp âm thanh</small>'}
+        `;
+
+        grid.appendChild(card);
+      });
+    }
+
+    function sendReaction(emoji) {
+      if (!currentRoomId) return;
+      socket.emit('game_emoji_reaction', { roomId: currentRoomId, emoji });
+      spawnFloatingEmoji(emoji);
+    }
+
+    function spawnFloatingEmoji(emoji) {
+      const el = document.createElement('div');
+      el.className = 'floating-emoji';
+      el.textContent = emoji;
+      el.style.left = `${30 + Math.random() * 40}%`;
+      el.style.bottom = '80px';
+      document.getElementById('arenaStage').appendChild(el);
+      setTimeout(() => el.remove(), 1800);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+  </script>
+</body>
+</html>

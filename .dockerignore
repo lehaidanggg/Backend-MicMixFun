@@ -1,0 +1,14 @@
+node_modules
+npm-debug.log*
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+test_*.js
+scripts/*.json
+README.md
+API_DOCS.md
+CLIENT_OPTIMIZATION_GUIDE.md
+sounds/*/*.mp3
+!sounds/catalog.json

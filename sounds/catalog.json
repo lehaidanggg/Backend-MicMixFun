@@ -1,0 +1,2030 @@
+{
+  "generatedAt": "2026-10-14T04:44:57.777Z",
+  "totalSounds": 251,
+  "totalSizeKB": 16810.8,
+  "packCounts": {
+    "animals": 44,
+    "anime": 39,
+    "everyday": 6,
+    "funny": 11,
+    "melody": 10,
+    "meme": 23,
+    "robots": 16,
+    "signals": 9,
+    "space": 4,
+    "vehicles": 5,
+    "voice1": 30,
+    "voices": 45,
+    "yankee": 9
+  },
+  "sounds": [
+    {
+      "id": "alligator",
+      "pack": "animals",
+      "fileName": "alligator.mp3",
+      "relativePath": "animals/alligator.mp3",
+      "duration": 0.5,
+      "sizeBytes": 8149
+    },
+    {
+      "id": "angry-cat",
+      "pack": "animals",
+      "fileName": "angry-cat.mp3",
+      "relativePath": "animals/angry-cat.mp3",
+      "duration": 1.49,
+      "sizeBytes": 12093
+    },
+    {
+      "id": "bat",
+      "pack": "animals",
+      "fileName": "bat.mp3",
+      "relativePath": "animals/bat.mp3",
+      "duration": 1.5,
+      "sizeBytes": 4178
+    },
+    {
+      "id": "bear-growl",
+      "pack": "animals",
+      "fileName": "bear-growl.mp3",
+      "relativePath": "animals/bear-growl.mp3",
+      "duration": 3.6,
+      "sizeBytes": 57886
+    },
+    {
+      "id": "bee-buzz",
+      "pack": "animals",
+      "fileName": "bee-buzz.mp3",
+      "relativePath": "animals/bee-buzz.mp3",
+      "duration": 4.34,
+      "sizeBytes": 69589
+    },
+    {
+      "id": "bird-trill",
+      "pack": "animals",
+      "fileName": "bird-trill.mp3",
+      "relativePath": "animals/bird-trill.mp3",
+      "duration": 1.87,
+      "sizeBytes": 30144
+    },
+    {
+      "id": "cat-purr",
+      "pack": "animals",
+      "fileName": "cat-purr.mp3",
+      "relativePath": "animals/cat-purr.mp3",
+      "duration": 9.98,
+      "sizeBytes": 199680
+    },
+    {
+      "id": "cat-two",
+      "pack": "animals",
+      "fileName": "cat-two.mp3",
+      "relativePath": "animals/cat-two.mp3",
+      "duration": 0.97,
+      "sizeBytes": 11556
+    },
+    {
+      "id": "chick",
+      "pack": "animals",
+      "fileName": "chick.mp3",
+      "relativePath": "animals/chick.mp3",
+      "duration": 4.02,
+      "sizeBytes": 64573
+    },
+    {
+      "id": "chicken",
+      "pack": "animals",
+      "fileName": "chicken.mp3",
+      "relativePath": "animals/chicken.mp3",
+      "duration": 2.4,
+      "sizeBytes": 38660
+    },
+    {
+      "id": "chimpanzee",
+      "pack": "animals",
+      "fileName": "chimpanzee.mp3",
+      "relativePath": "animals/chimpanzee.mp3",
+      "duration": 2.53,
+      "sizeBytes": 40750
+    },
+    {
+      "id": "cow-moo",
+      "pack": "animals",
+      "fileName": "cow-moo.mp3",
+      "relativePath": "animals/cow-moo.mp3",
+      "duration": 1.65,
+      "sizeBytes": 26539
+    },
+    {
+      "id": "cricket-chirp",
+      "pack": "animals",
+      "fileName": "cricket-chirp.mp3",
+      "relativePath": "animals/cricket-chirp.mp3",
+      "duration": 5.38,
+      "sizeBytes": 10970
+    },
+    {
+      "id": "cricket",
+      "pack": "animals",
+      "fileName": "cricket.mp3",
+      "relativePath": "animals/cricket.mp3",
+      "duration": 5.04,
+      "sizeBytes": 80874
+    },
+    {
+      "id": "crow-caw",
+      "pack": "animals",
+      "fileName": "crow-caw.mp3",
+      "relativePath": "animals/crow-caw.mp3",
+      "duration": 0.39,
+      "sizeBytes": 6477
+    },
+    {
+      "id": "dog_laugh_demo",
+      "pack": "animals",
+      "fileName": "dog_laugh_demo.mp3",
+      "relativePath": "animals/dog_laugh_demo.mp3",
+      "duration": 5.02,
+      "sizeBytes": 80665
+    },
+    {
+      "id": "dog-bark",
+      "pack": "animals",
+      "fileName": "dog-bark.mp3",
+      "relativePath": "animals/dog-bark.mp3",
+      "duration": 1.25,
+      "sizeBytes": 51199
+    },
+    {
+      "id": "dolphin",
+      "pack": "animals",
+      "fileName": "dolphin.mp3",
+      "relativePath": "animals/dolphin.mp3",
+      "duration": 1.2,
+      "sizeBytes": 19434
+    },
+    {
+      "id": "donkey",
+      "pack": "animals",
+      "fileName": "donkey.mp3",
+      "relativePath": "animals/donkey.mp3",
+      "duration": 3.76,
+      "sizeBytes": 60394
+    },
+    {
+      "id": "duck-quack",
+      "pack": "animals",
+      "fileName": "duck-quack.mp3",
+      "relativePath": "animals/duck-quack.mp3",
+      "duration": 0.47,
+      "sizeBytes": 7731
+    },
+    {
+      "id": "eagle",
+      "pack": "animals",
+      "fileName": "eagle.mp3",
+      "relativePath": "animals/eagle.mp3",
+      "duration": 9.98,
+      "sizeBytes": 113931
+    },
+    {
+      "id": "elephant-trumpet",
+      "pack": "animals",
+      "fileName": "elephant-trumpet.mp3",
+      "relativePath": "animals/elephant-trumpet.mp3",
+      "duration": 1.72,
+      "sizeBytes": 13974
+    },
+    {
+      "id": "elephant",
+      "pack": "animals",
+      "fileName": "elephant.mp3",
+      "relativePath": "animals/elephant.mp3",
+      "duration": 1.98,
+      "sizeBytes": 32256
+    },
+    {
+      "id": "frog-croak",
+      "pack": "animals",
+      "fileName": "frog-croak.mp3",
+      "relativePath": "animals/frog-croak.mp3",
+      "duration": 1.25,
+      "sizeBytes": 20270
+    },
+    {
+      "id": "goose",
+      "pack": "animals",
+      "fileName": "goose.mp3",
+      "relativePath": "animals/goose.mp3",
+      "duration": 0.34,
+      "sizeBytes": 5641
+    },
+    {
+      "id": "gorilla",
+      "pack": "animals",
+      "fileName": "gorilla.mp3",
+      "relativePath": "animals/gorilla.mp3",
+      "duration": 2.5,
+      "sizeBytes": 40128
+    },
+    {
+      "id": "horse-neigh",
+      "pack": "animals",
+      "fileName": "horse-neigh.mp3",
+      "relativePath": "animals/horse-neigh.mp3",
+      "duration": 5.83,
+      "sizeBytes": 93412
+    },
+    {
+      "id": "hyena",
+      "pack": "animals",
+      "fileName": "hyena.mp3",
+      "relativePath": "animals/hyena.mp3",
+      "duration": 5.43,
+      "sizeBytes": 87143
+    },
+    {
+      "id": "lion-roar",
+      "pack": "animals",
+      "fileName": "lion-roar.mp3",
+      "relativePath": "animals/lion-roar.mp3",
+      "duration": 1.1,
+      "sizeBytes": 17762
+    },
+    {
+      "id": "mosquito",
+      "pack": "animals",
+      "fileName": "mosquito.mp3",
+      "relativePath": "animals/mosquito.mp3",
+      "duration": 7.55,
+      "sizeBytes": 120998
+    },
+    {
+      "id": "owl-hoot",
+      "pack": "animals",
+      "fileName": "owl-hoot.mp3",
+      "relativePath": "animals/owl-hoot.mp3",
+      "duration": 1.66,
+      "sizeBytes": 26688
+    },
+    {
+      "id": "pig-oink",
+      "pack": "animals",
+      "fileName": "pig-oink.mp3",
+      "relativePath": "animals/pig-oink.mp3",
+      "duration": 0.84,
+      "sizeBytes": 13582
+    },
+    {
+      "id": "pigeon",
+      "pack": "animals",
+      "fileName": "pigeon.mp3",
+      "relativePath": "animals/pigeon.mp3",
+      "duration": 5.46,
+      "sizeBytes": 87770
+    },
+    {
+      "id": "puppy",
+      "pack": "animals",
+      "fileName": "puppy.mp3",
+      "relativePath": "animals/puppy.mp3",
+      "duration": 5.75,
+      "sizeBytes": 138552
+    },
+    {
+      "id": "rooster",
+      "pack": "animals",
+      "fileName": "rooster.mp3",
+      "relativePath": "animals/rooster.mp3",
+      "duration": 1.36,
+      "sizeBytes": 21941
+    },
+    {
+      "id": "seagull",
+      "pack": "animals",
+      "fileName": "seagull.mp3",
+      "relativePath": "animals/seagull.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "seal",
+      "pack": "animals",
+      "fileName": "seal.mp3",
+      "relativePath": "animals/seal.mp3",
+      "duration": 0.6,
+      "sizeBytes": 9792
+    },
+    {
+      "id": "sheep-baa",
+      "pack": "animals",
+      "fileName": "sheep-baa.mp3",
+      "relativePath": "animals/sheep-baa.mp3",
+      "duration": 2.93,
+      "sizeBytes": 47019
+    },
+    {
+      "id": "snake",
+      "pack": "animals",
+      "fileName": "snake.mp3",
+      "relativePath": "animals/snake.mp3",
+      "duration": 2.72,
+      "sizeBytes": 21915
+    },
+    {
+      "id": "tiger",
+      "pack": "animals",
+      "fileName": "tiger.mp3",
+      "relativePath": "animals/tiger.mp3",
+      "duration": 5.47,
+      "sizeBytes": 124896
+    },
+    {
+      "id": "turkey",
+      "pack": "animals",
+      "fileName": "turkey.mp3",
+      "relativePath": "animals/turkey.mp3",
+      "duration": 1.07,
+      "sizeBytes": 17344
+    },
+    {
+      "id": "whale",
+      "pack": "animals",
+      "fileName": "whale.mp3",
+      "relativePath": "animals/whale.mp3",
+      "duration": 4.05,
+      "sizeBytes": 97030
+    },
+    {
+      "id": "wolf-howl",
+      "pack": "animals",
+      "fileName": "wolf-howl.mp3",
+      "relativePath": "animals/wolf-howl.mp3",
+      "duration": 5.93,
+      "sizeBytes": 95084
+    },
+    {
+      "id": "woodpecker",
+      "pack": "animals",
+      "fileName": "woodpecker.mp3",
+      "relativePath": "animals/woodpecker.mp3",
+      "duration": 3.87,
+      "sizeBytes": 31110
+    },
+    {
+      "id": "anime-gasp",
+      "pack": "anime",
+      "fileName": "anime-gasp.mp3",
+      "relativePath": "anime/anime-gasp.mp3",
+      "duration": 1.02,
+      "sizeBytes": 11181
+    },
+    {
+      "id": "anime-wow",
+      "pack": "anime",
+      "fileName": "anime-wow.mp3",
+      "relativePath": "anime/anime-wow.mp3",
+      "duration": 4.02,
+      "sizeBytes": 64573
+    },
+    {
+      "id": "ara-ara",
+      "pack": "anime",
+      "fileName": "ara-ara.mp3",
+      "relativePath": "anime/ara-ara.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "baka",
+      "pack": "anime",
+      "fileName": "baka.mp3",
+      "relativePath": "anime/baka.mp3",
+      "duration": 6.69,
+      "sizeBytes": 107205
+    },
+    {
+      "id": "bankai",
+      "pack": "anime",
+      "fileName": "bankai.mp3",
+      "relativePath": "anime/bankai.mp3",
+      "duration": 1.65,
+      "sizeBytes": 26539
+    },
+    {
+      "id": "chidori",
+      "pack": "anime",
+      "fileName": "chidori.mp3",
+      "relativePath": "anime/chidori.mp3",
+      "duration": 8.05,
+      "sizeBytes": 128939
+    },
+    {
+      "id": "chika-dance",
+      "pack": "anime",
+      "fileName": "chika-dance.mp3",
+      "relativePath": "anime/chika-dance.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159936
+    },
+    {
+      "id": "death-note",
+      "pack": "anime",
+      "fileName": "death-note.mp3",
+      "relativePath": "anime/death-note.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "domain-expansion",
+      "pack": "anime",
+      "fileName": "domain-expansion.mp3",
+      "relativePath": "anime/domain-expansion.mp3",
+      "duration": 9.14,
+      "sizeBytes": 146493
+    },
+    {
+      "id": "geass",
+      "pack": "anime",
+      "fileName": "geass.mp3",
+      "relativePath": "anime/geass.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159936
+    },
+    {
+      "id": "giorno-piano",
+      "pack": "anime",
+      "fileName": "giorno-piano.mp3",
+      "relativePath": "anime/giorno-piano.mp3",
+      "duration": 9.98,
+      "sizeBytes": 80012
+    },
+    {
+      "id": "goku-hi",
+      "pack": "anime",
+      "fileName": "goku-hi.mp3",
+      "relativePath": "anime/goku-hi.mp3",
+      "duration": 4.88,
+      "sizeBytes": 78366
+    },
+    {
+      "id": "kame-charge",
+      "pack": "anime",
+      "fileName": "kame-charge.mp3",
+      "relativePath": "anime/kame-charge.mp3",
+      "duration": 7.63,
+      "sizeBytes": 122252
+    },
+    {
+      "id": "kamehameha",
+      "pack": "anime",
+      "fileName": "kamehameha.mp3",
+      "relativePath": "anime/kamehameha.mp3",
+      "duration": 6.56,
+      "sizeBytes": 105115
+    },
+    {
+      "id": "katana",
+      "pack": "anime",
+      "fileName": "katana.mp3",
+      "relativePath": "anime/katana.mp3",
+      "duration": 1.44,
+      "sizeBytes": 23195
+    },
+    {
+      "id": "kono-dio-da",
+      "pack": "anime",
+      "fileName": "kono-dio-da.mp3",
+      "relativePath": "anime/kono-dio-da.mp3",
+      "duration": 1.7,
+      "sizeBytes": 27456
+    },
+    {
+      "id": "muda-muda",
+      "pack": "anime",
+      "fileName": "muda-muda.mp3",
+      "relativePath": "anime/muda-muda.mp3",
+      "duration": 4.83,
+      "sizeBytes": 77530
+    },
+    {
+      "id": "nani-sound",
+      "pack": "anime",
+      "fileName": "nani-sound.mp3",
+      "relativePath": "anime/nani-sound.mp3",
+      "duration": 5.49,
+      "sizeBytes": 87979
+    },
+    {
+      "id": "nani",
+      "pack": "anime",
+      "fileName": "nani.mp3",
+      "relativePath": "anime/nani.mp3",
+      "duration": 5.09,
+      "sizeBytes": 81710
+    },
+    {
+      "id": "naruto-flute",
+      "pack": "anime",
+      "fileName": "naruto-flute.mp3",
+      "relativePath": "anime/naruto-flute.mp3",
+      "duration": 9.98,
+      "sizeBytes": 80012
+    },
+    {
+      "id": "one-punch",
+      "pack": "anime",
+      "fileName": "one-punch.mp3",
+      "relativePath": "anime/one-punch.mp3",
+      "duration": 3.74,
+      "sizeBytes": 59976
+    },
+    {
+      "id": "ora-ora",
+      "pack": "anime",
+      "fileName": "ora-ora.mp3",
+      "relativePath": "anime/ora-ora.mp3",
+      "duration": 8.36,
+      "sizeBytes": 133954
+    },
+    {
+      "id": "pikachu",
+      "pack": "anime",
+      "fileName": "pikachu.mp3",
+      "relativePath": "anime/pikachu.mp3",
+      "duration": 4.83,
+      "sizeBytes": 19513
+    },
+    {
+      "id": "power-up",
+      "pack": "anime",
+      "fileName": "power-up.mp3",
+      "relativePath": "anime/power-up.mp3",
+      "duration": 7.39,
+      "sizeBytes": 118490
+    },
+    {
+      "id": "rasengan-spin",
+      "pack": "anime",
+      "fileName": "rasengan-spin.mp3",
+      "relativePath": "anime/rasengan-spin.mp3",
+      "duration": 3.32,
+      "sizeBytes": 53288
+    },
+    {
+      "id": "rasengan",
+      "pack": "anime",
+      "fileName": "rasengan.mp3",
+      "relativePath": "anime/rasengan.mp3",
+      "duration": 6.43,
+      "sizeBytes": 103025
+    },
+    {
+      "id": "senpai",
+      "pack": "anime",
+      "fileName": "senpai.mp3",
+      "relativePath": "anime/senpai.mp3",
+      "duration": 0.89,
+      "sizeBytes": 14418
+    },
+    {
+      "id": "sharingan",
+      "pack": "anime",
+      "fileName": "sharingan.mp3",
+      "relativePath": "anime/sharingan.mp3",
+      "duration": 3.03,
+      "sizeBytes": 12303
+    },
+    {
+      "id": "shinra-tensei",
+      "pack": "anime",
+      "fileName": "shinra-tensei.mp3",
+      "relativePath": "anime/shinra-tensei.mp3",
+      "duration": 9.98,
+      "sizeBytes": 80012
+    },
+    {
+      "id": "smash",
+      "pack": "anime",
+      "fileName": "smash.mp3",
+      "relativePath": "anime/smash.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "sukuna-laugh",
+      "pack": "anime",
+      "fileName": "sukuna-laugh.mp3",
+      "relativePath": "anime/sukuna-laugh.mp3",
+      "duration": 3.21,
+      "sizeBytes": 51617
+    },
+    {
+      "id": "sword-slash",
+      "pack": "anime",
+      "fileName": "sword-slash.mp3",
+      "relativePath": "anime/sword-slash.mp3",
+      "duration": 0.76,
+      "sizeBytes": 31346
+    },
+    {
+      "id": "teleport-dash",
+      "pack": "anime",
+      "fileName": "teleport-dash.mp3",
+      "relativePath": "anime/teleport-dash.mp3",
+      "duration": 0.94,
+      "sizeBytes": 15254
+    },
+    {
+      "id": "teleport",
+      "pack": "anime",
+      "fileName": "teleport.mp3",
+      "relativePath": "anime/teleport.mp3",
+      "duration": 1.68,
+      "sizeBytes": 13632
+    },
+    {
+      "id": "titan-roar",
+      "pack": "anime",
+      "fileName": "titan-roar.mp3",
+      "relativePath": "anime/titan-roar.mp3",
+      "duration": 6.03,
+      "sizeBytes": 96756
+    },
+    {
+      "id": "tuturu",
+      "pack": "anime",
+      "fileName": "tuturu.mp3",
+      "relativePath": "anime/tuturu.mp3",
+      "duration": 1.22,
+      "sizeBytes": 19776
+    },
+    {
+      "id": "ultra-instinct",
+      "pack": "anime",
+      "fileName": "ultra-instinct.mp3",
+      "relativePath": "anime/ultra-instinct.mp3",
+      "duration": 7.16,
+      "sizeBytes": 114728
+    },
+    {
+      "id": "unravel",
+      "pack": "anime",
+      "fileName": "unravel.mp3",
+      "relativePath": "anime/unravel.mp3",
+      "duration": 7.58,
+      "sizeBytes": 121416
+    },
+    {
+      "id": "yamcha",
+      "pack": "anime",
+      "fileName": "yamcha.mp3",
+      "relativePath": "anime/yamcha.mp3",
+      "duration": 2.74,
+      "sizeBytes": 37494
+    },
+    {
+      "id": "alarm-clock",
+      "pack": "everyday",
+      "fileName": "alarm-clock.mp3",
+      "relativePath": "everyday/alarm-clock.mp3",
+      "duration": 9.98,
+      "sizeBytes": 240116
+    },
+    {
+      "id": "door-slam",
+      "pack": "everyday",
+      "fileName": "door-slam.mp3",
+      "relativePath": "everyday/door-slam.mp3",
+      "duration": 1.07,
+      "sizeBytes": 17344
+    },
+    {
+      "id": "glass-break",
+      "pack": "everyday",
+      "fileName": "glass-break.mp3",
+      "relativePath": "everyday/glass-break.mp3",
+      "duration": 1.38,
+      "sizeBytes": 22359
+    },
+    {
+      "id": "hiccups",
+      "pack": "everyday",
+      "fileName": "hiccups.mp3",
+      "relativePath": "everyday/hiccups.mp3",
+      "duration": 0.6,
+      "sizeBytes": 9792
+    },
+    {
+      "id": "sleepy-yawn",
+      "pack": "everyday",
+      "fileName": "sleepy-yawn.mp3",
+      "relativePath": "everyday/sleepy-yawn.mp3",
+      "duration": 1.65,
+      "sizeBytes": 26539
+    },
+    {
+      "id": "zipper",
+      "pack": "everyday",
+      "fileName": "zipper.mp3",
+      "relativePath": "everyday/zipper.mp3",
+      "duration": 4.68,
+      "sizeBytes": 74814
+    },
+    {
+      "id": "baby-giggle",
+      "pack": "funny",
+      "fileName": "baby-giggle.mp3",
+      "relativePath": "funny/baby-giggle.mp3",
+      "duration": 3.06,
+      "sizeBytes": 24632
+    },
+    {
+      "id": "boing-spring",
+      "pack": "funny",
+      "fileName": "boing-spring.mp3",
+      "relativePath": "funny/boing-spring.mp3",
+      "duration": 0.94,
+      "sizeBytes": 7705
+    },
+    {
+      "id": "burp-slide",
+      "pack": "funny",
+      "fileName": "burp-slide.mp3",
+      "relativePath": "funny/burp-slide.mp3",
+      "duration": 1.68,
+      "sizeBytes": 27072
+    },
+    {
+      "id": "cartoon-slip",
+      "pack": "funny",
+      "fileName": "cartoon-slip.mp3",
+      "relativePath": "funny/cartoon-slip.mp3",
+      "duration": 1.5,
+      "sizeBytes": 3969
+    },
+    {
+      "id": "crazy-whistle",
+      "pack": "funny",
+      "fileName": "crazy-whistle.mp3",
+      "relativePath": "funny/crazy-whistle.mp3",
+      "duration": 2.04,
+      "sizeBytes": 32808
+    },
+    {
+      "id": "evil-laugh",
+      "pack": "funny",
+      "fileName": "evil-laugh.mp3",
+      "relativePath": "funny/evil-laugh.mp3",
+      "duration": 6.58,
+      "sizeBytes": 105533
+    },
+    {
+      "id": "kiss-smack",
+      "pack": "funny",
+      "fileName": "kiss-smack.mp3",
+      "relativePath": "funny/kiss-smack.mp3",
+      "duration": 1.85,
+      "sizeBytes": 14976
+    },
+    {
+      "id": "laugh-ha",
+      "pack": "funny",
+      "fileName": "laugh-ha.mp3",
+      "relativePath": "funny/laugh-ha.mp3",
+      "duration": 2.59,
+      "sizeBytes": 41585
+    },
+    {
+      "id": "pop-cork",
+      "pack": "funny",
+      "fileName": "pop-cork.mp3",
+      "relativePath": "funny/pop-cork.mp3",
+      "duration": 0.42,
+      "sizeBytes": 3525
+    },
+    {
+      "id": "snore-saw",
+      "pack": "funny",
+      "fileName": "snore-saw.mp3",
+      "relativePath": "funny/snore-saw.mp3",
+      "duration": 4.88,
+      "sizeBytes": 39261
+    },
+    {
+      "id": "whip-crack",
+      "pack": "funny",
+      "fileName": "whip-crack.mp3",
+      "relativePath": "funny/whip-crack.mp3",
+      "duration": 4.31,
+      "sizeBytes": 34663
+    },
+    {
+      "id": "accordion",
+      "pack": "melody",
+      "fileName": "accordion.mp3",
+      "relativePath": "melody/accordion.mp3",
+      "duration": 7.08,
+      "sizeBytes": 284211
+    },
+    {
+      "id": "flute",
+      "pack": "melody",
+      "fileName": "flute.mp3",
+      "relativePath": "melody/flute.mp3",
+      "duration": 2.81,
+      "sizeBytes": 55248
+    },
+    {
+      "id": "happy-whistle",
+      "pack": "melody",
+      "fileName": "happy-whistle.mp3",
+      "relativePath": "melody/happy-whistle.mp3",
+      "duration": 9.98,
+      "sizeBytes": 40097
+    },
+    {
+      "id": "harp",
+      "pack": "melody",
+      "fileName": "harp.mp3",
+      "relativePath": "melody/harp.mp3",
+      "duration": 5.38,
+      "sizeBytes": 86307
+    },
+    {
+      "id": "level-up",
+      "pack": "melody",
+      "fileName": "level-up.mp3",
+      "relativePath": "melody/level-up.mp3",
+      "duration": 1.96,
+      "sizeBytes": 31764
+    },
+    {
+      "id": "piano-riff",
+      "pack": "melody",
+      "fileName": "piano-riff.mp3",
+      "relativePath": "melody/piano-riff.mp3",
+      "duration": 9.98,
+      "sizeBytes": 40128
+    },
+    {
+      "id": "quest-complete",
+      "pack": "melody",
+      "fileName": "quest-complete.mp3",
+      "relativePath": "melody/quest-complete.mp3",
+      "duration": 3.79,
+      "sizeBytes": 60864
+    },
+    {
+      "id": "trumpet",
+      "pack": "melody",
+      "fileName": "trumpet.mp3",
+      "relativePath": "melody/trumpet.mp3",
+      "duration": 7,
+      "sizeBytes": 112221
+    },
+    {
+      "id": "victory-chime",
+      "pack": "melody",
+      "fileName": "victory-chime.mp3",
+      "relativePath": "melody/victory-chime.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "xylophone",
+      "pack": "melody",
+      "fileName": "xylophone.mp3",
+      "relativePath": "melody/xylophone.mp3",
+      "duration": 4.28,
+      "sizeBytes": 51722
+    },
+    {
+      "id": "airhorn-triple",
+      "pack": "meme",
+      "fileName": "airhorn-triple.mp3",
+      "relativePath": "meme/airhorn-triple.mp3",
+      "duration": 3,
+      "sizeBytes": 48273
+    },
+    {
+      "id": "bonk-metal",
+      "pack": "meme",
+      "fileName": "bonk-metal.mp3",
+      "relativePath": "meme/bonk-metal.mp3",
+      "duration": 1.04,
+      "sizeBytes": 16926
+    },
+    {
+      "id": "bruh-sound",
+      "pack": "meme",
+      "fileName": "bruh-sound.mp3",
+      "relativePath": "meme/bruh-sound.mp3",
+      "duration": 1.18,
+      "sizeBytes": 19016
+    },
+    {
+      "id": "bye-bye-mewing",
+      "pack": "meme",
+      "fileName": "bye-bye-mewing.mp3",
+      "relativePath": "meme/bye-bye-mewing.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159660
+    },
+    {
+      "id": "coffin-dance",
+      "pack": "meme",
+      "fileName": "coffin-dance.mp3",
+      "relativePath": "meme/coffin-dance.mp3",
+      "duration": 9.98,
+      "sizeBytes": 80064
+    },
+    {
+      "id": "dun-dun-dun",
+      "pack": "meme",
+      "fileName": "dun-dun-dun.mp3",
+      "relativePath": "meme/dun-dun-dun.mp3",
+      "duration": 5.43,
+      "sizeBytes": 87143
+    },
+    {
+      "id": "emotional-damage",
+      "pack": "meme",
+      "fileName": "emotional-damage.mp3",
+      "relativePath": "meme/emotional-damage.mp3",
+      "duration": 3.37,
+      "sizeBytes": 54124
+    },
+    {
+      "id": "fail-horn",
+      "pack": "meme",
+      "fileName": "fail-horn.mp3",
+      "relativePath": "meme/fail-horn.mp3",
+      "duration": 3.66,
+      "sizeBytes": 29439
+    },
+    {
+      "id": "fart-reverb",
+      "pack": "meme",
+      "fileName": "fart-reverb.mp3",
+      "relativePath": "meme/fart-reverb.mp3",
+      "duration": 3.24,
+      "sizeBytes": 52034
+    },
+    {
+      "id": "gigachad-theme",
+      "pack": "meme",
+      "fileName": "gigachad-theme.mp3",
+      "relativePath": "meme/gigachad-theme.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "oh-no-laugh",
+      "pack": "meme",
+      "fileName": "oh-no-laugh.mp3",
+      "relativePath": "meme/oh-no-laugh.mp3",
+      "duration": 1.88,
+      "sizeBytes": 75233
+    },
+    {
+      "id": "oof-roblox",
+      "pack": "meme",
+      "fileName": "oof-roblox.mp3",
+      "relativePath": "meme/oof-roblox.mp3",
+      "duration": 0.97,
+      "sizeBytes": 15672
+    },
+    {
+      "id": "record-scratch",
+      "pack": "meme",
+      "fileName": "record-scratch.mp3",
+      "relativePath": "meme/record-scratch.mp3",
+      "duration": 0.97,
+      "sizeBytes": 7914
+    },
+    {
+      "id": "rick-roll-riff",
+      "pack": "meme",
+      "fileName": "rick-roll-riff.mp3",
+      "relativePath": "meme/rick-roll-riff.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "run-meme",
+      "pack": "meme",
+      "fileName": "run-meme.mp3",
+      "relativePath": "meme/run-meme.mp3",
+      "duration": 2.14,
+      "sizeBytes": 34480
+    },
+    {
+      "id": "sad-violin",
+      "pack": "meme",
+      "fileName": "sad-violin.mp3",
+      "relativePath": "meme/sad-violin.mp3",
+      "duration": 5.15,
+      "sizeBytes": 82545
+    },
+    {
+      "id": "screaming-goat",
+      "pack": "meme",
+      "fileName": "screaming-goat.mp3",
+      "relativePath": "meme/screaming-goat.mp3",
+      "duration": 1.88,
+      "sizeBytes": 30301
+    },
+    {
+      "id": "sheesh-whistle",
+      "pack": "meme",
+      "fileName": "sheesh-whistle.mp3",
+      "relativePath": "meme/sheesh-whistle.mp3",
+      "duration": 1.87,
+      "sizeBytes": 2088
+    },
+    {
+      "id": "slap-sound",
+      "pack": "meme",
+      "fileName": "slap-sound.mp3",
+      "relativePath": "meme/slap-sound.mp3",
+      "duration": 1.49,
+      "sizeBytes": 24031
+    },
+    {
+      "id": "sponge-fail",
+      "pack": "meme",
+      "fileName": "sponge-fail.mp3",
+      "relativePath": "meme/sponge-fail.mp3",
+      "duration": 3.41,
+      "sizeBytes": 54720
+    },
+    {
+      "id": "vine-boom",
+      "pack": "meme",
+      "fileName": "vine-boom.mp3",
+      "relativePath": "meme/vine-boom.mp3",
+      "duration": 1.31,
+      "sizeBytes": 21105
+    },
+    {
+      "id": "windows-xp-error",
+      "pack": "meme",
+      "fileName": "windows-xp-error.mp3",
+      "relativePath": "meme/windows-xp-error.mp3",
+      "duration": 1.06,
+      "sizeBytes": 17088
+    },
+    {
+      "id": "yeah-boi",
+      "pack": "meme",
+      "fileName": "yeah-boi.mp3",
+      "relativePath": "meme/yeah-boi.mp3",
+      "duration": 3.5,
+      "sizeBytes": 65112
+    },
+    {
+      "id": "access-granted",
+      "pack": "robots",
+      "fileName": "access-granted.mp3",
+      "relativePath": "robots/access-granted.mp3",
+      "duration": 1.49,
+      "sizeBytes": 24031
+    },
+    {
+      "id": "cyber-reload",
+      "pack": "robots",
+      "fileName": "cyber-reload.mp3",
+      "relativePath": "robots/cyber-reload.mp3",
+      "duration": 1.07,
+      "sizeBytes": 17344
+    },
+    {
+      "id": "danger",
+      "pack": "robots",
+      "fileName": "danger.mp3",
+      "relativePath": "robots/danger.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159936
+    },
+    {
+      "id": "dialup",
+      "pack": "robots",
+      "fileName": "dialup.mp3",
+      "relativePath": "robots/dialup.mp3",
+      "duration": 6.19,
+      "sizeBytes": 49710
+    },
+    {
+      "id": "error",
+      "pack": "robots",
+      "fileName": "error.mp3",
+      "relativePath": "robots/error.mp3",
+      "duration": 2.9,
+      "sizeBytes": 93622
+    },
+    {
+      "id": "glitch",
+      "pack": "robots",
+      "fileName": "glitch.mp3",
+      "relativePath": "robots/glitch.mp3",
+      "duration": 1.33,
+      "sizeBytes": 32600
+    },
+    {
+      "id": "laser-blast",
+      "pack": "robots",
+      "fileName": "laser-blast.mp3",
+      "relativePath": "robots/laser-blast.mp3",
+      "duration": 2.77,
+      "sizeBytes": 11258
+    },
+    {
+      "id": "mecha-stomp",
+      "pack": "robots",
+      "fileName": "mecha-stomp.mp3",
+      "relativePath": "robots/mecha-stomp.mp3",
+      "duration": 4.41,
+      "sizeBytes": 105952
+    },
+    {
+      "id": "power-down",
+      "pack": "robots",
+      "fileName": "power-down.mp3",
+      "relativePath": "robots/power-down.mp3",
+      "duration": 4.62,
+      "sizeBytes": 136531
+    },
+    {
+      "id": "r2d2",
+      "pack": "robots",
+      "fileName": "r2d2.mp3",
+      "relativePath": "robots/r2d2.mp3",
+      "duration": 3.06,
+      "sizeBytes": 49109
+    },
+    {
+      "id": "red-alert",
+      "pack": "robots",
+      "fileName": "red-alert.mp3",
+      "relativePath": "robots/red-alert.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "scanning",
+      "pack": "robots",
+      "fileName": "scanning.mp3",
+      "relativePath": "robots/scanning.mp3",
+      "duration": 1.31,
+      "sizeBytes": 10630
+    },
+    {
+      "id": "terminator",
+      "pack": "robots",
+      "fileName": "terminator.mp3",
+      "relativePath": "robots/terminator.mp3",
+      "duration": 8.78,
+      "sizeBytes": 140736
+    },
+    {
+      "id": "transformer",
+      "pack": "robots",
+      "fileName": "transformer.mp3",
+      "relativePath": "robots/transformer.mp3",
+      "duration": 1.54,
+      "sizeBytes": 24867
+    },
+    {
+      "id": "walle",
+      "pack": "robots",
+      "fileName": "walle.mp3",
+      "relativePath": "robots/walle.mp3",
+      "duration": 1.12,
+      "sizeBytes": 27584
+    },
+    {
+      "id": "warp",
+      "pack": "robots",
+      "fileName": "warp.mp3",
+      "relativePath": "robots/warp.mp3",
+      "duration": 4.18,
+      "sizeBytes": 67081
+    },
+    {
+      "id": "clock-tick",
+      "pack": "signals",
+      "fileName": "clock-tick.mp3",
+      "relativePath": "signals/clock-tick.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159744
+    },
+    {
+      "id": "doorbell",
+      "pack": "signals",
+      "fileName": "doorbell.mp3",
+      "relativePath": "signals/doorbell.mp3",
+      "duration": 1.33,
+      "sizeBytes": 10839
+    },
+    {
+      "id": "elevator-ding",
+      "pack": "signals",
+      "fileName": "elevator-ding.mp3",
+      "relativePath": "signals/elevator-ding.mp3",
+      "duration": 4.6,
+      "sizeBytes": 73768
+    },
+    {
+      "id": "fire-alarm",
+      "pack": "signals",
+      "fileName": "fire-alarm.mp3",
+      "relativePath": "signals/fire-alarm.mp3",
+      "duration": 1.66,
+      "sizeBytes": 26688
+    },
+    {
+      "id": "morse-5",
+      "pack": "signals",
+      "fileName": "morse-5.mp3",
+      "relativePath": "signals/morse-5.mp3",
+      "duration": 6.77,
+      "sizeBytes": 108459
+    },
+    {
+      "id": "phone-ring",
+      "pack": "signals",
+      "fileName": "phone-ring.mp3",
+      "relativePath": "signals/phone-ring.mp3",
+      "duration": 1.67,
+      "sizeBytes": 26957
+    },
+    {
+      "id": "radar-ping",
+      "pack": "signals",
+      "fileName": "radar-ping.mp3",
+      "relativePath": "signals/radar-ping.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "school-bell",
+      "pack": "signals",
+      "fileName": "school-bell.mp3",
+      "relativePath": "signals/school-bell.mp3",
+      "duration": 2.66,
+      "sizeBytes": 42816
+    },
+    {
+      "id": "siren-up-down",
+      "pack": "signals",
+      "fileName": "siren-up-down.mp3",
+      "relativePath": "signals/siren-up-down.mp3",
+      "duration": 2.21,
+      "sizeBytes": 26496
+    },
+    {
+      "id": "alien-chatter",
+      "pack": "space",
+      "fileName": "alien-chatter.mp3",
+      "relativePath": "space/alien-chatter.mp3",
+      "duration": 1.59,
+      "sizeBytes": 6556
+    },
+    {
+      "id": "force-field",
+      "pack": "space",
+      "fileName": "force-field.mp3",
+      "relativePath": "space/force-field.mp3",
+      "duration": 0.89,
+      "sizeBytes": 25265
+    },
+    {
+      "id": "space-robot",
+      "pack": "space",
+      "fileName": "space-robot.mp3",
+      "relativePath": "space/space-robot.mp3",
+      "duration": 4.1,
+      "sizeBytes": 16587
+    },
+    {
+      "id": "warp-speed",
+      "pack": "space",
+      "fileName": "warp-speed.mp3",
+      "relativePath": "space/warp-speed.mp3",
+      "duration": 0.89,
+      "sizeBytes": 3735
+    },
+    {
+      "id": "air-raid-horn",
+      "pack": "vehicles",
+      "fileName": "air-raid-horn.mp3",
+      "relativePath": "vehicles/air-raid-horn.mp3",
+      "duration": 6.3,
+      "sizeBytes": 100936
+    },
+    {
+      "id": "boxing-bell",
+      "pack": "vehicles",
+      "fileName": "boxing-bell.mp3",
+      "relativePath": "vehicles/boxing-bell.mp3",
+      "duration": 8.28,
+      "sizeBytes": 132701
+    },
+    {
+      "id": "car-horn-honk",
+      "pack": "vehicles",
+      "fileName": "car-horn-honk.mp3",
+      "relativePath": "vehicles/car-horn-honk.mp3",
+      "duration": 2.02,
+      "sizeBytes": 32448
+    },
+    {
+      "id": "ship-foghorn",
+      "pack": "vehicles",
+      "fileName": "ship-foghorn.mp3",
+      "relativePath": "vehicles/ship-foghorn.mp3",
+      "duration": 2.95,
+      "sizeBytes": 47424
+    },
+    {
+      "id": "train-horn",
+      "pack": "vehicles",
+      "fileName": "train-horn.mp3",
+      "relativePath": "vehicles/train-horn.mp3",
+      "duration": 8.83,
+      "sizeBytes": 70817
+    },
+    {
+      "id": "among-us",
+      "pack": "voice1",
+      "fileName": "among-us.mp3",
+      "relativePath": "voice1/among-us.mp3",
+      "duration": 4.41,
+      "sizeBytes": 70843
+    },
+    {
+      "id": "bing-chilling",
+      "pack": "voice1",
+      "fileName": "bing-chilling.mp3",
+      "relativePath": "voice1/bing-chilling.mp3",
+      "duration": 2.53,
+      "sizeBytes": 40750
+    },
+    {
+      "id": "bonk",
+      "pack": "voice1",
+      "fileName": "bonk.mp3",
+      "relativePath": "voice1/bonk.mp3",
+      "duration": 2.14,
+      "sizeBytes": 17318
+    },
+    {
+      "id": "bruh",
+      "pack": "voice1",
+      "fileName": "bruh.mp3",
+      "relativePath": "voice1/bruh.mp3",
+      "duration": 0.86,
+      "sizeBytes": 14016
+    },
+    {
+      "id": "curb-theme",
+      "pack": "voice1",
+      "fileName": "curb-theme.mp3",
+      "relativePath": "voice1/curb-theme.mp3",
+      "duration": 7.05,
+      "sizeBytes": 113057
+    },
+    {
+      "id": "discord",
+      "pack": "voice1",
+      "fileName": "discord.mp3",
+      "relativePath": "voice1/discord.mp3",
+      "duration": 0.5,
+      "sizeBytes": 8256
+    },
+    {
+      "id": "dramatic",
+      "pack": "voice1",
+      "fileName": "dramatic.mp3",
+      "relativePath": "voice1/dramatic.mp3",
+      "duration": 5.46,
+      "sizeBytes": 87561
+    },
+    {
+      "id": "fbi-open-up",
+      "pack": "voice1",
+      "fileName": "fbi-open-up.mp3",
+      "relativePath": "voice1/fbi-open-up.mp3",
+      "duration": 2.04,
+      "sizeBytes": 32808
+    },
+    {
+      "id": "gigachad",
+      "pack": "voice1",
+      "fileName": "gigachad.mp3",
+      "relativePath": "voice1/gigachad.mp3",
+      "duration": 9.98,
+      "sizeBytes": 80012
+    },
+    {
+      "id": "gta-mission-passed",
+      "pack": "voice1",
+      "fileName": "gta-mission-passed.mp3",
+      "relativePath": "voice1/gta-mission-passed.mp3",
+      "duration": 7.52,
+      "sizeBytes": 120580
+    },
+    {
+      "id": "gta-wasted",
+      "pack": "voice1",
+      "fileName": "gta-wasted.mp3",
+      "relativePath": "voice1/gta-wasted.mp3",
+      "duration": 7.11,
+      "sizeBytes": 113892
+    },
+    {
+      "id": "he-need-some-milk",
+      "pack": "voice1",
+      "fileName": "he-need-some-milk.mp3",
+      "relativePath": "voice1/he-need-some-milk.mp3",
+      "duration": 1.67,
+      "sizeBytes": 26957
+    },
+    {
+      "id": "metal-pipe",
+      "pack": "voice1",
+      "fileName": "metal-pipe.mp3",
+      "relativePath": "voice1/metal-pipe.mp3",
+      "duration": 2.82,
+      "sizeBytes": 45556
+    },
+    {
+      "id": "no-god-please-no",
+      "pack": "voice1",
+      "fileName": "no-god-please-no.mp3",
+      "relativePath": "voice1/no-god-please-no.mp3",
+      "duration": 9.3,
+      "sizeBytes": 149001
+    },
+    {
+      "id": "oh-hell-no",
+      "pack": "voice1",
+      "fileName": "oh-hell-no.mp3",
+      "relativePath": "voice1/oh-hell-no.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "okay",
+      "pack": "voice1",
+      "fileName": "okay.mp3",
+      "relativePath": "voice1/okay.mp3",
+      "duration": 7.97,
+      "sizeBytes": 127685
+    },
+    {
+      "id": "rick-roll",
+      "pack": "voice1",
+      "fileName": "rick-roll.mp3",
+      "relativePath": "voice1/rick-roll.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "run",
+      "pack": "voice1",
+      "fileName": "run.mp3",
+      "relativePath": "voice1/run.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "sheesh",
+      "pack": "voice1",
+      "fileName": "sheesh.mp3",
+      "relativePath": "voice1/sheesh.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "shut-up",
+      "pack": "voice1",
+      "fileName": "shut-up.mp3",
+      "relativePath": "voice1/shut-up.mp3",
+      "duration": 5.98,
+      "sizeBytes": 95920
+    },
+    {
+      "id": "sigma",
+      "pack": "voice1",
+      "fileName": "sigma.mp3",
+      "relativePath": "voice1/sigma.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "siuuu",
+      "pack": "voice1",
+      "fileName": "siuuu.mp3",
+      "relativePath": "voice1/siuuu.mp3",
+      "duration": 6.66,
+      "sizeBytes": 106787
+    },
+    {
+      "id": "skibidi",
+      "pack": "voice1",
+      "fileName": "skibidi.mp3",
+      "relativePath": "voice1/skibidi.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "smurf-cat",
+      "pack": "voice1",
+      "fileName": "smurf-cat.mp3",
+      "relativePath": "voice1/smurf-cat.mp3",
+      "duration": 9.98,
+      "sizeBytes": 240116
+    },
+    {
+      "id": "to-be-continued",
+      "pack": "voice1",
+      "fileName": "to-be-continued.mp3",
+      "relativePath": "voice1/to-be-continued.mp3",
+      "duration": 9.98,
+      "sizeBytes": 80012
+    },
+    {
+      "id": "what-the-dog-doin",
+      "pack": "voice1",
+      "fileName": "what-the-dog-doin.mp3",
+      "relativePath": "voice1/what-the-dog-doin.mp3",
+      "duration": 1.28,
+      "sizeBytes": 20688
+    },
+    {
+      "id": "who-are-you",
+      "pack": "voice1",
+      "fileName": "who-are-you.mp3",
+      "relativePath": "voice1/who-are-you.mp3",
+      "duration": 6.64,
+      "sizeBytes": 106369
+    },
+    {
+      "id": "why-are-you-running",
+      "pack": "voice1",
+      "fileName": "why-are-you-running.mp3",
+      "relativePath": "voice1/why-are-you-running.mp3",
+      "duration": 6.66,
+      "sizeBytes": 106787
+    },
+    {
+      "id": "xp-error",
+      "pack": "voice1",
+      "fileName": "xp-error.mp3",
+      "relativePath": "voice1/xp-error.mp3",
+      "duration": 1.02,
+      "sizeBytes": 8332
+    },
+    {
+      "id": "xp-startup",
+      "pack": "voice1",
+      "fileName": "xp-startup.mp3",
+      "relativePath": "voice1/xp-startup.mp3",
+      "duration": 4.88,
+      "sizeBytes": 78366
+    },
+    {
+      "id": "applause",
+      "pack": "voices",
+      "fileName": "applause.mp3",
+      "relativePath": "voices/applause.mp3",
+      "duration": 6.82,
+      "sizeBytes": 109248
+    },
+    {
+      "id": "blah-blah",
+      "pack": "voices",
+      "fileName": "blah-blah.mp3",
+      "relativePath": "voices/blah-blah.mp3",
+      "duration": 9.98,
+      "sizeBytes": 80064
+    },
+    {
+      "id": "burp",
+      "pack": "voices",
+      "fileName": "burp.mp3",
+      "relativePath": "voices/burp.mp3",
+      "duration": 9.98,
+      "sizeBytes": 69851
+    },
+    {
+      "id": "cheer",
+      "pack": "voices",
+      "fileName": "cheer.mp3",
+      "relativePath": "voices/cheer.mp3",
+      "duration": 5.02,
+      "sizeBytes": 80456
+    },
+    {
+      "id": "chewing",
+      "pack": "voices",
+      "fileName": "chewing.mp3",
+      "relativePath": "voices/chewing.mp3",
+      "duration": 5.06,
+      "sizeBytes": 40704
+    },
+    {
+      "id": "crying",
+      "pack": "voices",
+      "fileName": "crying.mp3",
+      "relativePath": "voices/crying.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "evil-laugh",
+      "pack": "voices",
+      "fileName": "evil-laugh.mp3",
+      "relativePath": "voices/evil-laugh.mp3",
+      "duration": 4.75,
+      "sizeBytes": 9717
+    },
+    {
+      "id": "eww",
+      "pack": "voices",
+      "fileName": "eww.mp3",
+      "relativePath": "voices/eww.mp3",
+      "duration": 9.98,
+      "sizeBytes": 160077
+    },
+    {
+      "id": "ghost",
+      "pack": "voices",
+      "fileName": "ghost.mp3",
+      "relativePath": "voices/ghost.mp3",
+      "duration": 3.92,
+      "sizeBytes": 62901
+    },
+    {
+      "id": "good-job",
+      "pack": "voices",
+      "fileName": "good-job.mp3",
+      "relativePath": "voices/good-job.mp3",
+      "duration": 1.12,
+      "sizeBytes": 18180
+    },
+    {
+      "id": "goofy-laugh",
+      "pack": "voices",
+      "fileName": "goofy-laugh.mp3",
+      "relativePath": "voices/goofy-laugh.mp3",
+      "duration": 2.53,
+      "sizeBytes": 40750
+    },
+    {
+      "id": "hello",
+      "pack": "voices",
+      "fileName": "hello.mp3",
+      "relativePath": "voices/hello.mp3",
+      "duration": 0.86,
+      "sizeBytes": 14000
+    },
+    {
+      "id": "karate",
+      "pack": "voices",
+      "fileName": "karate.mp3",
+      "relativePath": "voices/karate.mp3",
+      "duration": 0.55,
+      "sizeBytes": 9024
+    },
+    {
+      "id": "lets-go",
+      "pack": "voices",
+      "fileName": "lets-go.mp3",
+      "relativePath": "voices/lets-go.mp3",
+      "duration": 4.52,
+      "sizeBytes": 72514
+    },
+    {
+      "id": "mmm",
+      "pack": "voices",
+      "fileName": "mmm.mp3",
+      "relativePath": "voices/mmm.mp3",
+      "duration": 0.6,
+      "sizeBytes": 9821
+    },
+    {
+      "id": "monster",
+      "pack": "voices",
+      "fileName": "monster.mp3",
+      "relativePath": "voices/monster.mp3",
+      "duration": 4.81,
+      "sizeBytes": 77112
+    },
+    {
+      "id": "ninja",
+      "pack": "voices",
+      "fileName": "ninja.mp3",
+      "relativePath": "voices/ninja.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159744
+    },
+    {
+      "id": "no",
+      "pack": "voices",
+      "fileName": "no.mp3",
+      "relativePath": "voices/no.mp3",
+      "duration": 5.36,
+      "sizeBytes": 21602
+    },
+    {
+      "id": "ouch",
+      "pack": "voices",
+      "fileName": "ouch.mp3",
+      "relativePath": "voices/ouch.mp3",
+      "duration": 1.04,
+      "sizeBytes": 16926
+    },
+    {
+      "id": "pirate",
+      "pack": "voices",
+      "fileName": "pirate.mp3",
+      "relativePath": "voices/pirate.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "santa",
+      "pack": "voices",
+      "fileName": "santa.mp3",
+      "relativePath": "voices/santa.mp3",
+      "duration": 3.6,
+      "sizeBytes": 115968
+    },
+    {
+      "id": "scream",
+      "pack": "voices",
+      "fileName": "scream.mp3",
+      "relativePath": "voices/scream.mp3",
+      "duration": 5.74,
+      "sizeBytes": 91776
+    },
+    {
+      "id": "shh",
+      "pack": "voices",
+      "fileName": "shh.mp3",
+      "relativePath": "voices/shh.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "sigh",
+      "pack": "voices",
+      "fileName": "sigh.mp3",
+      "relativePath": "voices/sigh.mp3",
+      "duration": 2.66,
+      "sizeBytes": 42816
+    },
+    {
+      "id": "slurp",
+      "pack": "voices",
+      "fileName": "slurp.mp3",
+      "relativePath": "voices/slurp.mp3",
+      "duration": 1.07,
+      "sizeBytes": 17344
+    },
+    {
+      "id": "snoring",
+      "pack": "voices",
+      "fileName": "snoring.mp3",
+      "relativePath": "voices/snoring.mp3",
+      "duration": 9.9,
+      "sizeBytes": 158614
+    },
+    {
+      "id": "tada",
+      "pack": "voices",
+      "fileName": "tada.mp3",
+      "relativePath": "voices/tada.mp3",
+      "duration": 1.33,
+      "sizeBytes": 21523
+    },
+    {
+      "id": "throat-clear",
+      "pack": "voices",
+      "fileName": "throat-clear.mp3",
+      "relativePath": "voices/throat-clear.mp3",
+      "duration": 2.25,
+      "sizeBytes": 36152
+    },
+    {
+      "id": "voice-cheer",
+      "pack": "voices",
+      "fileName": "voice-cheer.mp3",
+      "relativePath": "voices/voice-cheer.mp3",
+      "duration": 4.15,
+      "sizeBytes": 66663
+    },
+    {
+      "id": "voice-cough",
+      "pack": "voices",
+      "fileName": "voice-cough.mp3",
+      "relativePath": "voices/voice-cough.mp3",
+      "duration": 6.48,
+      "sizeBytes": 103861
+    },
+    {
+      "id": "voice-gasp",
+      "pack": "voices",
+      "fileName": "voice-gasp.mp3",
+      "relativePath": "voices/voice-gasp.mp3",
+      "duration": 1.08,
+      "sizeBytes": 17472
+    },
+    {
+      "id": "voice-hihi",
+      "pack": "voices",
+      "fileName": "voice-hihi.mp3",
+      "relativePath": "voices/voice-hihi.mp3",
+      "duration": 1.44,
+      "sizeBytes": 11675
+    },
+    {
+      "id": "voice-opera",
+      "pack": "voices",
+      "fileName": "voice-opera.mp3",
+      "relativePath": "voices/voice-opera.mp3",
+      "duration": 6.58,
+      "sizeBytes": 105533
+    },
+    {
+      "id": "voice-sneeze",
+      "pack": "voices",
+      "fileName": "voice-sneeze.mp3",
+      "relativePath": "voices/voice-sneeze.mp3",
+      "duration": 5.8,
+      "sizeBytes": 233011
+    },
+    {
+      "id": "voice-uoa",
+      "pack": "voices",
+      "fileName": "voice-uoa.mp3",
+      "relativePath": "voices/voice-uoa.mp3",
+      "duration": 9.94,
+      "sizeBytes": 10152
+    },
+    {
+      "id": "voice-whistle",
+      "pack": "voices",
+      "fileName": "voice-whistle.mp3",
+      "relativePath": "voices/voice-whistle.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "wheeze",
+      "pack": "voices",
+      "fileName": "wheeze.mp3",
+      "relativePath": "voices/wheeze.mp3",
+      "duration": 3.63,
+      "sizeBytes": 58096
+    },
+    {
+      "id": "whisper",
+      "pack": "voices",
+      "fileName": "whisper.mp3",
+      "relativePath": "voices/whisper.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159868
+    },
+    {
+      "id": "whistle",
+      "pack": "voices",
+      "fileName": "whistle.mp3",
+      "relativePath": "voices/whistle.mp3",
+      "duration": 8.12,
+      "sizeBytes": 130193
+    },
+    {
+      "id": "winner",
+      "pack": "voices",
+      "fileName": "winner.mp3",
+      "relativePath": "voices/winner.mp3",
+      "duration": 1.49,
+      "sizeBytes": 24031
+    },
+    {
+      "id": "woohoo",
+      "pack": "voices",
+      "fileName": "woohoo.mp3",
+      "relativePath": "voices/woohoo.mp3",
+      "duration": 0.72,
+      "sizeBytes": 11712
+    },
+    {
+      "id": "wow",
+      "pack": "voices",
+      "fileName": "wow.mp3",
+      "relativePath": "voices/wow.mp3",
+      "duration": 4.02,
+      "sizeBytes": 64573
+    },
+    {
+      "id": "yay",
+      "pack": "voices",
+      "fileName": "yay.mp3",
+      "relativePath": "voices/yay.mp3",
+      "duration": 4.7,
+      "sizeBytes": 75440
+    },
+    {
+      "id": "yes",
+      "pack": "voices",
+      "fileName": "yes.mp3",
+      "relativePath": "voices/yes.mp3",
+      "duration": 2.06,
+      "sizeBytes": 33216
+    },
+    {
+      "id": "zombie",
+      "pack": "voices",
+      "fileName": "zombie.mp3",
+      "relativePath": "voices/zombie.mp3",
+      "duration": 2.04,
+      "sizeBytes": 32808
+    },
+    {
+      "id": "boke",
+      "pack": "yankee",
+      "fileName": "boke.mp3",
+      "relativePath": "yankee/boke.mp3",
+      "duration": 9.98,
+      "sizeBytes": 159936
+    },
+    {
+      "id": "gang-whistle",
+      "pack": "yankee",
+      "fileName": "gang-whistle.mp3",
+      "relativePath": "yankee/gang-whistle.mp3",
+      "duration": 9.98,
+      "sizeBytes": 47398
+    },
+    {
+      "id": "heavy-punch",
+      "pack": "yankee",
+      "fileName": "heavy-punch.mp3",
+      "relativePath": "yankee/heavy-punch.mp3",
+      "duration": 0.67,
+      "sizeBytes": 10944
+    },
+    {
+      "id": "kisama",
+      "pack": "yankee",
+      "fileName": "kisama.mp3",
+      "relativePath": "yankee/kisama.mp3",
+      "duration": 1.38,
+      "sizeBytes": 22359
+    },
+    {
+      "id": "knuckle-crack",
+      "pack": "yankee",
+      "fileName": "knuckle-crack.mp3",
+      "relativePath": "yankee/knuckle-crack.mp3",
+      "duration": 6.87,
+      "sizeBytes": 55143
+    },
+    {
+      "id": "metal-bat",
+      "pack": "yankee",
+      "fileName": "metal-bat.mp3",
+      "relativePath": "yankee/metal-bat.mp3",
+      "duration": 0.5,
+      "sizeBytes": 8149
+    },
+    {
+      "id": "motorcycle-rev",
+      "pack": "yankee",
+      "fileName": "motorcycle-rev.mp3",
+      "relativePath": "yankee/motorcycle-rev.mp3",
+      "duration": 2.51,
+      "sizeBytes": 40332
+    },
+    {
+      "id": "spit",
+      "pack": "yankee",
+      "fileName": "spit.mp3",
+      "relativePath": "yankee/spit.mp3",
+      "duration": 0.65,
+      "sizeBytes": 25920
+    },
+    {
+      "id": "temee",
+      "pack": "yankee",
+      "fileName": "temee.mp3",
+      "relativePath": "yankee/temee.mp3",
+      "duration": 5.3,
+      "sizeBytes": 85053
+    }
+  ]
+}

@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Micmic Fun - Sound Catalog & Audio Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0f111a;
+      --bg-card: #181c2b;
+      --bg-card-hover: #22273d;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --accent: #ec4899;
+      --cyan: #06b6d4;
+      --green: #10b981;
+      --yellow: #f59e0b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --radius-lg: 16px;
+      --radius-md: 12px;
+      --radius-sm: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding-bottom: 95px;
+    }
+
+    header {
+      background: rgba(24, 28, 43, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 16px 32px;
+    }
+
+    .header-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, #6366f1, #ec4899);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+    }
+
+    .brand-text h1 {
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(to right, #ffffff, #c7d2fe);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-text p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn {
+      padding: 10px 18px;
+      border-radius: var(--radius-md);
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: white;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .main-layout {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 32px;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 32px;
+    }
+
+    /* Filters */
+    .filter-section {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .search-row {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .search-box {
+      flex: 1;
+      min-width: 280px;
+      position: relative;
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 12px 16px 12px 42px;
+      border-radius: var(--radius-md);
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .search-box input:focus {
+      border-color: var(--primary);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 16px;
+    }
+
+    .categories-bar {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding-bottom: 6px;
+      scrollbar-width: thin;
+    }
+
+    .cat-pill {
+      padding: 8px 16px;
+      border-radius: 9999px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .cat-pill:hover, .cat-pill.active {
+      color: white;
+      background: var(--primary);
+      border-color: var(--primary);
+      transform: translateY(-1px);
+    }
+
+    /* Studio / Upload Section */
+    .studio-panel {
+      background: linear-gradient(145deg, rgba(34, 39, 61, 0.7), rgba(24, 28, 43, 0.9));
+      border: 1px dashed rgba(99, 102, 241, 0.4);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      position: relative;
+    }
+
+    .studio-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .studio-title h2 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .studio-title p {
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      margin-top: 4px;
+    }
+
+    .drop-zone {
+      border: 2px dashed rgba(255, 255, 255, 0.15);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      text-align: center;
+      background: rgba(15, 17, 26, 0.4);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--cyan);
+      background: rgba(6, 182, 212, 0.05);
+    }
+
+    .drop-icon {
+      font-size: 28px;
+      margin-bottom: 4px;
+      color: var(--cyan);
+    }
+
+    .drop-zone p {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    .drop-zone span {
+      color: var(--cyan);
+      font-weight: 600;
+    }
+
+    .local-audio-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 14px;
+      margin-top: 6px;
+    }
+
+    .audio-item-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .audio-item-top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .play-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--primary);
+      border: none;
+      color: white;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: 0.2s;
+      flex-shrink: 0;
+    }
+
+    .play-btn:hover {
+      transform: scale(1.08);
+      background: var(--accent);
+    }
+
+    .audio-info {
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .audio-info .name {
+      font-size: 0.88rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .audio-info .meta {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Cards Grid */
+    .section-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 20px;
+    }
+
+    .section-title h2 {
+      font-size: 1.3rem;
+      font-weight: 800;
+    }
+
+    .section-title span {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .packs-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+      gap: 24px;
+    }
+
+    .pack-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+    }
+
+    .pack-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 16px 32px rgba(0, 0, 0, 0.3);
+      border-color: rgba(99, 102, 241, 0.4);
+    }
+
+    .card-cover {
+      width: 100%;
+      height: 160px;
+      background: #1e293b;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .card-cover img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.3s ease;
+    }
+
+    .pack-card:hover .card-cover img {
+      transform: scale(1.05);
+    }
+
+    .cover-fallback {
+      font-size: 48px;
+    }
+
+    .badge-clips {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(15, 17, 26, 0.9);
+      backdrop-filter: blur(8px);
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.4);
+    }
+
+    .badge-source {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      background: rgba(15, 17, 26, 0.85);
+      backdrop-filter: blur(8px);
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #34d399;
+      border: 1px solid rgba(52, 211, 153, 0.3);
+    }
+
+    .card-content {
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    .card-category-tag {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: var(--primary);
+      margin-bottom: 6px;
+    }
+
+    .card-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    .card-descr {
+      font-size: 0.825rem;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      line-height: 1.4;
+      flex: 1;
+    }
+
+    .card-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .pattern-tag {
+      font-size: 0.72rem;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      color: #cbd5e1;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .pattern-tag:hover {
+      background: var(--primary);
+      color: white;
+    }
+
+    .tag-more {
+      font-size: 0.72rem;
+      color: var(--cyan);
+      padding: 3px 6px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Card Audio Controls */
+    .card-audio-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border-color);
+      margin-top: auto;
+    }
+
+    .btn-pack-play {
+      flex: 1;
+      padding: 8px 12px;
+      background: rgba(99, 102, 241, 0.15);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: var(--radius-md);
+      font-size: 0.82rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-pack-play:hover, .btn-pack-play.playing {
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: white;
+      border-color: transparent;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    }
+
+    .btn-pack-detail {
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .btn-pack-detail:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: white;
+    }
+
+    /* Sound Wave Animation */
+    .wave-bars {
+      display: inline-flex;
+      align-items: flex-end;
+      gap: 2px;
+      height: 12px;
+    }
+
+    .wave-bar {
+      width: 2px;
+      height: 4px;
+      background: currentColor;
+      border-radius: 1px;
+    }
+
+    .playing .wave-bar:nth-child(1) { animation: bounce 0.6s infinite ease-in-out; }
+    .playing .wave-bar:nth-child(2) { animation: bounce 0.8s infinite 0.1s ease-in-out; }
+    .playing .wave-bar:nth-child(3) { animation: bounce 0.5s infinite 0.2s ease-in-out; }
+    .playing .wave-bar:nth-child(4) { animation: bounce 0.7s infinite 0.3s ease-in-out; }
+
+    @keyframes bounce {
+      0%, 100% { height: 3px; }
+      50% { height: 12px; }
+    }
+
+    /* Sticky Bottom Player */
+    .bottom-player {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 76px;
+      background: rgba(18, 22, 36, 0.95);
+      backdrop-filter: blur(16px);
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      z-index: 500;
+      box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
+      transform: translateY(100%);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .bottom-player.active {
+      transform: translateY(0);
+    }
+
+    .player-track-info {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      width: 280px;
+    }
+
+    .player-track-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+
+    .player-track-text .title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+    }
+
+    .player-track-text .subtitle {
+      font-size: 0.75rem;
+      color: var(--cyan);
+    }
+
+    .player-center-controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      flex: 1;
+      max-width: 500px;
+    }
+
+    .player-buttons {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .btn-main-play {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--primary);
+      border: none;
+      color: white;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .btn-main-play:hover {
+      background: var(--accent);
+      transform: scale(1.05);
+    }
+
+    .player-progress-bar {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .player-progress-fill {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--cyan), var(--primary));
+      transition: width 0.1s linear;
+    }
+
+    .player-right-controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      width: 240px;
+      justify-content: flex-end;
+    }
+
+    .volume-slider {
+      width: 80px;
+      accent-color: var(--primary);
+    }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 720px;
+      max-height: 88vh;
+      overflow-y: auto;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 24px;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .modal-close:hover {
+      color: white;
+    }
+
+    .soundboard-item {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: var(--radius-md);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      transition: all 0.2s;
+    }
+
+    .soundboard-item:hover, .soundboard-item.playing-item {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: rgba(99, 102, 241, 0.5);
+    }
+
+    .soundboard-item.playing-item {
+      box-shadow: inset 0 0 12px rgba(99, 102, 241, 0.3);
+    }
+
+    .btn-synth-play {
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      background: var(--primary);
+      color: white;
+      border: none;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: 0.2s;
+      flex-shrink: 0;
+    }
+
+    .btn-synth-play:hover {
+      background: var(--accent);
+      transform: scale(1.03);
+    }
+
+    .clip-number-badge {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #94a3b8;
+      flex-shrink: 0;
+    }
+
+    .playing-item .clip-number-badge {
+      background: var(--primary);
+      color: white;
+    }
+
+    .clip-tag-badge {
+      font-size: 0.68rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      margin-left: 6px;
+      font-weight: 600;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 96px;
+      right: 24px;
+      background: #1e293b;
+      color: white;
+      padding: 12px 20px;
+      border-radius: var(--radius-md);
+      border-left: 4px solid var(--cyan);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+      z-index: 9999;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-icon">🎙️</div>
+        <div class="brand-text">
+          <h1>Micmic Fun: Voice Party Studio</h1>
+          <p>Duyệt, Phát Âm Thanh Thật Chuẩn Xác & Tải Lên Audio Từ Máy</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="triggerMicRecord()" id="micBtn">
+          <span>🎤</span> Thu Âm Trực Tiếp
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-layout">
+
+    <!-- Studio / Local Audio Section -->
+    <section class="studio-panel">
+      <div class="studio-header">
+        <div class="studio-title">
+          <h2><span>🎧</span> Local Sound Lab (Tải & Thử Âm Thanh Từ Máy)</h2>
+          <p>Kéo thả hoặc chọn các file âm thanh (.mp3, .wav, .ogg, .m4a) từ máy của bạn để nghe thử và phân loại</p>
+        </div>
+        <input type="file" id="fileInput" multiple accept="audio/*" style="display: none;" onchange="handleFileSelect(event)">
+        <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+          <span>📁</span> Chọn File Từ Máy
+        </button>
+      </div>
+
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <div class="drop-icon">🎵</div>
+        <p>Kéo thả các file âm thanh vào đây hoặc <span>bấm để duyệt file</span></p>
+        <p style="font-size: 0.75rem; margin-top: 6px; color: #64748b;">Hỗ trợ: MP3, WAV, OGG, M4A, FLAC, AAC...</p>
+      </div>
+
+      <div id="localAudioContainer" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+          <h4 style="font-size: 0.95rem; font-weight: 700; color: #38bdf8;">
+            Các Âm Thanh Vừa Tải Lên (<span id="localAudioCount">0</span>)
+          </h4>
+          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="clearLocalAudios()">
+            Xóa Tất Cả
+          </button>
+        </div>
+        <div class="local-audio-list" id="localAudioList"></div>
+      </div>
+    </section>
+
+    <!-- Filters & Search -->
+    <section class="filter-section">
+      <div class="search-row">
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="searchInput" placeholder="Tìm kiếm theo tên gói, mã, hoặc pattern (vd: cat, dog, animal, meme, siren)..." oninput="filterPacks()">
+        </div>
+      </div>
+
+      <!-- Category Pills -->
+      <div class="categories-bar" id="categoryBar">
+        <div class="cat-pill active" onclick="selectCategory('all', this)">
+          <span>🌐</span> Tất cả (<span id="totalPacksCount">0</span>)
+        </div>
+      </div>
+    </section>
+
+    <!-- Sound Packs Catalog -->
+    <section>
+      <div class="section-title">
+        <h2>Danh Sách Sound Packs (Chủ Đề & Đầy Đủ 100% Âm Thanh Thật)</h2>
+        <span id="filteredCountText">Đang hiển thị...</span>
+      </div>
+
+      <div class="packs-grid" id="packsGrid"></div>
+    </section>
+
+  </main>
+
+  <!-- Sticky Bottom Player -->
+  <div class="bottom-player" id="bottomPlayer">
+    <div class="player-track-info">
+      <div class="player-track-icon" id="bottomPlayerEmoji">🔊</div>
+      <div class="player-track-text">
+        <div class="title" id="bottomPlayerTitle">Đang phát âm thanh</div>
+        <div class="subtitle" id="bottomPlayerSubtitle">File âm thanh thực tế (.mp3/.wav)</div>
+      </div>
+    </div>
+
+    <div class="player-center-controls">
+      <div class="player-buttons">
+        <button class="btn-main-play" id="bottomPlayBtn" onclick="toggleBottomPlayer()">⏸</button>
+        <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.75rem;" onclick="stopAllAudio()">⏹ Dừng</button>
+      </div>
+      <div class="player-progress-bar">
+        <div class="player-progress-fill" id="bottomProgress"></div>
+      </div>
+    </div>
+
+    <div class="player-right-controls">
+      <span style="font-size: 0.8rem; color: var(--text-muted);">🔊</span>
+      <input type="range" class="volume-slider" id="volumeControl" min="0" max="1" step="0.05" value="0.8" oninput="changeMasterVolume(this.value)">
+    </div>
+  </div>
+
+  <!-- Pack Detail Modal with FULL CLIPS SOUNDBOARD -->
+  <div class="modal-backdrop" id="packModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span id="modalEmoji" style="font-size: 28px;">📦</span>
+          <div>
+            <h3 id="modalTitle" style="font-size: 1.25rem;">Chi tiết Sound Pack</h3>
+            <p id="modalCategory" style="font-size: 0.8rem; color: var(--cyan);"></p>
+          </div>
+        </div>
+        <button class="modal-close" onclick="closePackModal()">&times;</button>
+      </div>
+
+      <div id="modalCoverWrap" style="height: 180px; border-radius: 12px; overflow: hidden; background: #0f172a; display: flex; align-items: center; justify-content: center; position: relative;">
+        <img id="modalCoverImg" src="" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'">
+        <div style="position: absolute; bottom: 12px; right: 12px; display: flex; gap: 8px;">
+          <button class="btn btn-secondary" id="modalAutoPlayBtn" style="backdrop-filter: blur(8px); background: rgba(0,0,0,0.6);" onclick="startAutoPlayPack()">
+            <span>🔁</span> Tự Động Phát Hết Pack
+          </button>
+          <button class="btn btn-primary" id="modalPlayAllBtn" onclick="playCurrentPackDemo()">
+            <span>▶</span> Phát Mẫu
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <h4 style="font-size: 0.85rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px;">Mô tả gói</h4>
+        <p id="modalDescr" style="font-size: 0.95rem; line-height: 1.5; color: #cbd5e1;"></p>
+      </div>
+
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <h4 style="font-size: 0.85rem; text-transform: uppercase; color: var(--cyan); font-weight: 700;">
+            Danh Sách Đầy Đủ Tất Cả Các Clip (<span id="modalPatternCount">0</span> CLIPS)
+          </h4>
+          <span style="font-size: 0.75rem; color: #34d399;">● 100% Clip đã sẵn sàng file âm thanh thật</span>
+        </div>
+        
+        <div id="modalPatternList" style="display: flex; flex-direction: column; gap: 8px; max-height: 380px; overflow-y: auto; padding-right: 4px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">Thông báo</div>
+
+  <script>
+    // DỮ LIỆU ĐÃ TÍCH HỢP TOÀN BỘ 402 FILE ÂM THANH THẬT
+    const MASTER_DATA = {"categories": [{"id": "funny", "name": "Funny", "emoji": "😄"}, {"id": "animals", "name": "Animals", "emoji": "🐾"}, {"id": "melody", "name": "Melodies", "emoji": "🎵"}, {"id": "signals", "name": "Signals", "emoji": "📟"}, {"id": "voice", "name": "Voice", "emoji": "🗣"}, {"id": "everyday", "name": "Everyday", "emoji": "🏠"}, {"id": "space", "name": "Space", "emoji": "👽"}], "packs": [{"id": "p_2cdoatemd7", "name": "Animals", "emoji": "🔊", "descr": "", "category": "funny", "color": "#6C8CFF", "cover": "https://api.micmicparty.com/api/catalog/cover/p_2cdoatemd7/856364b87aebc983d75a7c5361d7626858c2b7bf2b1572ccb2a06266b4e6ec0a.webp", "clipCount": 42, "patternIds": ["p_2cdoatemd7_dog-bark", "cat-meow", "p_2cdoatemd7_lion-roar", "p_2cdoatemd7_wolf-howl", "p_2cdoatemd7_rooster", "p_2cdoatemd7_cow-moo", "p_2cdoatemd7_horse-neigh", "elephant", "p_2cdoatemd7_sheep-baa", "p_2cdoatemd7_pig-oink", "p_2cdoatemd7_duck-quack", "p_2cdoatemd7_frog-croak", "monkey-screech", "chimpanzee", "bear-growl", "p_2cdoatemd7_screaming-goat", "owl-hoot", "crow-caw", "pigeon", "seagull", "eagle", "bee-buzz", "mosquito", "cricket", "snake", "tiger", "donkey", "turkey", "chicken", "chick", "puppy", "cat-purr", "angry-cat", "whale", "dolphin", "gorilla", "bat", "hyena", "woodpecker", "goose", "seal", "alligator"]}, {"id": "p_srnqjzjnb4", "name": "Anime Soundboard", "emoji": "⚡", "descr": "37 âm thanh Anime nổi tiếng: Nani, Kamehameha, Rasengan, Power-Up, Chém kiếm, Teleport...", "category": "funny", "color": "#6C8CFF", "cover": "https://api.micmicparty.com/api/catalog/cover/p_srnqjzjnb4/7f5a16e54254e3b56e6741d4056f7bed85febde9d267bca9c8183ace1ad1db17.webp", "clipCount": 37, "patternIds": ["nani", "kamehameha", "rasengan", "teleport", "power-up", "ssj-scream", "za-warudo", "ora-ora", "muda-muda", "omae-wa", "katana", "shinra-tensei", "chidori", "sharingan", "tuturu", "titan-roar", "smash", "one-punch", "senpai", "pikachu", "naruto-flute", "death-note", "unravel", "giorno-piano", "domain-expansion", "sukuna-laugh", "bankai", "kono-dio-da", "yamcha", "anime-wow", "baka", "ara-ara", "chika-dance", "ultra-instinct", "goku-hi", "geass", "anime-gasp"]}, {"id": "p_7mixu3ezyr", "name": "Meme Pack 1", "emoji": "🤣", "descr": "Đầy đủ 17 âm thanh Meme huyền thoại: Emotional Damage, Bruh, Vine Boom, Fart Reverb...", "category": "funny", "color": "#6C8CFF", "cover": "https://api.micmicparty.com/api/catalog/cover/p_7mixu3ezyr/a6391cc1b87c3e1225a12d21485516f43577562726b056830c79a6eb0335efa2.webp", "clipCount": 17, "patternIds": ["bonk-metal", "fail-horn", "wow-anime", "vine-boom", "bruh-sound", "emotional-damage", "fart-reverb", "screaming-goat", "oh-no-laugh", "coffin-dance", "slap-sound", "quack-duck", "sponge-fail", "run-meme", "yeah-boi", "sheesh-whistle", "bye-bye-mewing"]}, {"id": "p_g435z2ivl5", "name": "Meme Global", "emoji": "😎", "descr": "26 âm thanh Meme đỉnh cao: Gigachad, Airhorn, Windows XP Error, Sad Violin, Oof Roblox...", "category": "funny", "color": "#3B82F6", "cover": "https://api.micmicparty.com/api/catalog/cover/p_g435z2ivl5/2d1d2d97b6af616490d993af86eb2f41e30c0b6c3a8668bc3c257de8a8ed9e3b.webp", "clipCount": 26, "patternIds": ["gigachad-theme", "airhorn-triple", "windows-xp-error", "sad-violin", "oof-roblox", "rick-roll-riff", "dun-dun-dun", "record-scratch", "vine-boom", "bonk-metal", "bruh-sound", "emotional-damage", "fail-horn", "fart-reverb", "screaming-goat", "oh-no-laugh", "coffin-dance", "slap-sound", "quack-duck", "sponge-fail", "run-meme", "yeah-boi", "sheesh-whistle", "bye-bye-mewing", "p_g435z2ivl5-clip-25", "p_g435z2ivl5-clip-26"]}, {"id": "p_ordy2tfokj", "name": "Yankee", "emoji": "🔊", "descr": "", "category": "funny", "color": "#3B82F6", "cover": "https://api.micmicparty.com/api/catalog/cover/p_ordy2tfokj/d66c0062cc961657086cd188d4df8f952e07715f8269f52b6181c2f5442de825.webp", "clipCount": 11, "patternIds": ["ora", "kisama", "temee", "boke", "metal-bat", "motorcycle-rev", "heavy-punch", "spit", "knuckle-crack", "gang-whistle", "delinquent-laugh"]}, {"id": "p_7t37k4s46v", "name": "Voices", "emoji": "🔊", "descr": "", "category": "funny", "color": "#3B82F6", "cover": "https://api.micmicparty.com/api/catalog/cover/p_7t37k4s46v/7d42034b3c7c52e7f329ff490b93016ff42dd8c753c9717c10cde20db73d6e81.webp", "clipCount": 53, "patternIds": ["cheer", "boo", "scream", "baby-laugh", "p_7t37k4s46v_evil-laugh", "crying", "cough", "sneeze", "snoring", "chewing", "burp", "whistle", "yawn", "sigh", "gasp", "yes", "no", "wow", "what", "omg", "hello", "bye", "lets-go", "good-job", "winner", "game-over", "yay", "oof", "wheeze", "goofy-laugh", "giggle", "throat-clear", "slurp", "hiccup", "kiss", "whisper", "lalala", "opera", "applause", "woohoo", "ouch", "eww", "mmm", "shh", "tada", "blah-blah", "karate", "ninja", "pirate", "santa", "zombie", "ghost", "monster"]}, {"id": "p_bi2oyatrbn", "name": "Robots", "emoji": "🔊", "descr": "", "category": "funny", "color": "#3B82F6", "cover": "https://api.micmicparty.com/api/catalog/cover/p_bi2oyatrbn/da3066cf4362afc4149468e40173bbd855bf7dbcf5cef5ce35e498e2b0c3b791.webp", "clipCount": 19, "patternIds": ["r2d2", "walle", "transformer", "startup", "laser-blast", "scanning", "red-alert", "dialup", "danger", "error", "servo", "mecha-stomp", "glitch", "p_bi2oyatrbn_force-field", "warp", "terminator", "access-granted", "cyber-reload", "power-down"]}, {"id": "p_2q2wx4xovx", "name": "Voice 1", "emoji": "🔊", "descr": "", "category": "funny", "color": "#3B82F6", "cover": "https://api.micmicparty.com/api/catalog/cover/p_2q2wx4xovx/089bb7ed80542d5f0ae067516e0616a39971acb01a5825c45cf0f94ed170962b.webp", "clipCount": 45, "patternIds": ["fbi-open-up", "why-are-you-running", "no-god-please-no", "p_2q2wx4xovx_emotional-damage", "he-need-some-milk", "oh-hell-no", "siuuu", "bing-chilling", "what-the-dog-doin", "run", "p_2q2wx4xovx_yeah-boi", "okay", "shut-up", "bruh", "p_2q2wx4xovx_wow", "gigachad", "sheesh", "p_2q2wx4xovx_coffin-dance", "curb-theme", "to-be-continued", "p_2q2wx4xovx_oh-no-laugh", "who-are-you", "rick-roll", "p_2q2wx4xovx_sad-violin", "p_2q2wx4xovx_fail-horn", "airhorn", "spongebob-fail", "p_2q2wx4xovx_vine-boom", "bonk", "fart", "metal-pipe", "gta-mission-passed", "gta-wasted", "among-us", "skibidi", "sigma", "smurf-cat", "mewing", "p_2q2wx4xovx_whistle", "john-cena", "xp-startup", "xp-error", "dramatic", "p_2q2wx4xovx_record-scratch", "discord"]}, {"id": "dong-vat", "name": "Animal Sounds", "emoji": "🐔", "descr": "Đầy đủ 22 tiếng kêu động vật thực tế: Chó, mèo, gà gáy, chim hót, bò, cừu, sư tử...", "category": "animals", "color": "#00A3FF", "cover": "https://api.micmicparty.com/api/catalog/cover/dong-vat/bfcfe9e58ba05562ab39ba7c9aad972a438e7814e00d62b9c2ea6b908d63ea66.webp", "clipCount": 22, "patternIds": ["cat-meow", "dong-vat_rooster", "dong-vat_dog-bark", "bird-trill", "dong-vat_cow-moo", "dong-vat_sheep-baa", "dong-vat_pig-oink", "dong-vat_duck-quack", "dong-vat_frog-croak", "dong-vat_lion-roar", "dong-vat_wolf-howl", "dong-vat_horse-neigh", "elephant", "bee-buzz", "owl-hoot", "dong-vat_monkey-screech", "cricket", "tiger", "donkey", "turkey", "goose", "dolphin"]}, {"id": "coi-bao", "name": "Sirens & Bells", "emoji": "🚨", "descr": "Đầy đủ 11 âm thanh còi cứu hỏa, cứu thương, cảnh sát, chuông điện thoại, báo động...", "category": "signals", "color": "#FF3B56", "cover": "https://api.micmicparty.com/api/catalog/cover/coi-bao/e08b6a2faf8bd119178e9edc9773ed549b2eb169a01a613e12c2b5bfd722da9c.webp", "clipCount": 11, "patternIds": ["siren-up-down", "ambulance", "phone-ring", "air-raid-horn", "fire-alarm", "school-bell", "boxing-bell", "car-horn-honk", "train-horn", "ship-foghorn", "doorbell"]}, {"id": "giai-dieu", "name": "Melodies", "emoji": "🎵", "descr": "Đầy đủ 14 giai điệu ngắn, fanfare, nốt luyến thăng/trầm vui nhộn.", "category": "melody", "color": "#8438FF", "cover": "https://api.micmicparty.com/api/catalog/cover/giai-dieu/745bcfbf346020d515eab0a3a01e41724475e1ed95164f8d9ccdd9e97fe59ff1.webp", "clipCount": 14, "patternIds": ["fanfare-4", "glide-up", "glide-down", "victory-chime", "level-up-arpeggio", "harp-glissando", "piano-riff", "flute-run", "trumpet-call", "xylophone-scale", "game-over-tune", "quest-complete", "happy-whistle", "accordion-waltz"]}, {"id": "hai-huoc", "name": "Funny Sounds", "emoji": "🤡", "descr": "Đầy đủ 16 âm thanh bựa, ngộ nghĩnh: Tiếng ợ, cười, lò xo boing, roi quất, ngáy ngủ...", "category": "funny", "color": "#FFB800", "cover": "https://api.micmicparty.com/api/catalog/cover/hai-huoc/64d4c515f221ced8f196a4de3aeae53acd96821c79f762b1fdae02844c3cabaf.webp", "clipCount": 16, "patternIds": ["burp-slide", "laugh-ha", "boing-spring", "rubber-duck", "cartoon-slip", "whip-crack", "snore-saw", "evil-laugh", "baby-giggle", "pop-cork", "slurp-drink", "kiss-smack", "gasp-surprise", "chewing-crunch", "crazy-whistle", "ufo"]}, {"id": "tin-hieu", "name": "Signals", "emoji": "📟", "descr": "Đầy đủ 6 âm thanh tín hiệu điện tử: Mã Morse, chuông cửa, tích tắc đồng hồ, chuông thang máy...", "category": "signals", "color": "#3B82F6", "cover": "https://api.micmicparty.com/api/catalog/cover/tin-hieu/6461cb2e02ec3f17084985c7a0f809a5453a2e2e920a9a7a1aefa6044116464a.webp", "clipCount": 6, "patternIds": ["morse-5", "doorbell", "clock-tick", "elevator-ding", "radar-ping", "pager-beep"]}, {"id": "giong-nguoi", "name": "Human Voice", "emoji": "🗣", "descr": "Hums, shouts and human noises!", "category": "voice", "color": "#06B6D4", "cover": "https://api.micmicparty.com/api/catalog/cover/giong-nguoi/2fcb9605f10f1feb425e9e8fe9104422f95ca4e70ccf669746a659fdffc599ef.webp", "clipCount": 12, "patternIds": ["giong-nguoi_voice-lalala", "giong-nguoi_voice-uoa", "giong-nguoi_voice-hihi", "voice-opera", "voice-yawn", "voice-sneeze", "voice-cough", "voice-hiccup", "voice-whistle", "voice-gasp", "voice-cheer", "voice-kiss"]}, {"id": "doi-thuong", "name": "Everyday Drama", "emoji": "🏠", "descr": "Doors, zippers, hiccups and yawns!", "category": "everyday", "color": "#10B981", "cover": "https://api.micmicparty.com/api/catalog/cover/doi-thuong/c8519765d80777823f3a055d83b8b616dd1dc591295c498a7db2dfaeacd65fa5.webp", "clipCount": 6, "patternIds": ["door-slam", "zipper", "hiccups", "sleepy-yawn", "glass-shatter", "alarm-clock"]}, {"id": "khong-gian", "name": "Space & Sci-Fi", "emoji": "👽", "descr": "Đầy đủ 6 âm thanh súng laser, phi thuyền không gian, robot vũ trụ, khiên bảo vệ...", "category": "space", "color": "#A855F7", "cover": "https://api.micmicparty.com/api/catalog/cover/khong-gian/340170eea253266ef6d61a571bf684ecb97a50bbf50e9d0588a23f0641cd1be7.webp", "clipCount": 6, "patternIds": ["laser-blaster", "space-robot", "alien-chatter", "warp-speed", "force-field", "tractor-beam"]}], "audioMap": {"air-raid-horn": "audio/air-raid-horn.mp3", "airhorn-triple": "audio/common/airhorn-triple.mp3", "alien-chatter": "audio/alien-chatter.mp3", "ambulance": "audio/ambulance.wav", "baby-giggle": "audio/baby-giggle.mp3", "bg_sound": "audio/bg_sound.wav", "bird-trill": "audio/bird-trill.mp3", "boing-spring": "audio/boing-spring.mp3", "boxing-bell": "audio/boxing-bell.mp3", "burp-slide": "audio/burp-slide.mp3", "car-horn-honk": "audio/car-horn-honk.mp3", "cat-two": "audio/cat-two.mp3", "clock-tick": "audio/clock-tick.mp3", "coi-bao-clip-10": "audio/coi-bao-clip-10.wav", "coi-bao-clip-11": "audio/coi-bao-clip-11.wav", "coi-bao-clip-4": "audio/coi-bao-clip-4.wav", "coi-bao-clip-5": "audio/coi-bao-clip-5.wav", "coi-bao-clip-6": "audio/coi-bao-clip-6.wav", "coi-bao-clip-7": "audio/coi-bao-clip-7.wav", "coi-bao-clip-8": "audio/coi-bao-clip-8.wav", "coi-bao-clip-9": "audio/coi-bao-clip-9.wav", "cow-moo": "audio/cow-moo.mp3", "cricket-chirp": "audio/cricket-chirp.mp3", "dog-bark": "audio/dog-bark.mp3", "dog_laugh_demo": "audio/dog_laugh_demo.mp3", "doi-thuong-clip-1": "audio/doi-thuong-clip-1.wav", "doi-thuong-clip-2": "audio/doi-thuong-clip-2.wav", "doi-thuong-clip-3": "audio/doi-thuong-clip-3.wav", "doi-thuong-clip-4": "audio/doi-thuong-clip-4.wav", "doi-thuong-clip-5": "audio/doi-thuong-clip-5.wav", "doi-thuong-clip-6": "audio/doi-thuong-clip-6.wav", "dong-vat-clip-10": "audio/dong-vat-clip-10.wav", "dong-vat-clip-11": "audio/dong-vat-clip-11.wav", "dong-vat-clip-12": "audio/dong-vat-clip-12.wav", "dong-vat-clip-13": "audio/dong-vat-clip-13.wav", "dong-vat-clip-14": "audio/dong-vat-clip-14.wav", "dong-vat-clip-15": "audio/dong-vat-clip-15.wav", "dong-vat-clip-16": "audio/dong-vat-clip-16.wav", "dong-vat-clip-17": "audio/dong-vat-clip-17.wav", "dong-vat-clip-18": "audio/dong-vat-clip-18.wav", "dong-vat-clip-19": "audio/dong-vat-clip-19.wav", "dong-vat-clip-20": "audio/dong-vat-clip-20.wav", "dong-vat-clip-21": "audio/dong-vat-clip-21.wav", "dong-vat-clip-22": "audio/dong-vat-clip-22.wav", "dong-vat-clip-5": "audio/dong-vat-clip-5.wav", "dong-vat-clip-6": "audio/dong-vat-clip-6.wav", "dong-vat-clip-7": "audio/dong-vat-clip-7.wav", "dong-vat-clip-8": "audio/dong-vat-clip-8.wav", "dong-vat-clip-9": "audio/dong-vat-clip-9.wav", "doorbell": "audio/doorbell.mp3", "duck-quack": "audio/duck-quack.mp3", "dun-dun-dun": "audio/dun-dun-dun.mp3", "elephant-trumpet": "audio/elephant-trumpet.mp3", "elevator-ding": "audio/elevator-ding.mp3", "evil-laugh": "audio/evil-laugh.mp3", "fanfare-4": "audio/fanfare-4.wav", "fire-alarm": "audio/fire-alarm.mp3", "force-field": "audio/force-field.mp3", "frog-croak": "audio/frog-croak.mp3", "giai-dieu-clip-10": "audio/giai-dieu-clip-10.wav", "giai-dieu-clip-11": "audio/giai-dieu-clip-11.wav", "giai-dieu-clip-12": "audio/giai-dieu-clip-12.wav", "giai-dieu-clip-13": "audio/giai-dieu-clip-13.wav", "giai-dieu-clip-14": "audio/giai-dieu-clip-14.wav", "giai-dieu-clip-4": "audio/giai-dieu-clip-4.wav", "giai-dieu-clip-5": "audio/giai-dieu-clip-5.wav", "giai-dieu-clip-6": "audio/giai-dieu-clip-6.wav", "giai-dieu-clip-7": "audio/giai-dieu-clip-7.wav", "giai-dieu-clip-8": "audio/giai-dieu-clip-8.wav", "giai-dieu-clip-9": "audio/giai-dieu-clip-9.wav", "gigachad-theme": "audio/gigachad-theme.mp3", "giong-nguoi-clip-10": "audio/giong-nguoi-clip-10.wav", "giong-nguoi-clip-11": "audio/giong-nguoi-clip-11.wav", "giong-nguoi-clip-12": "audio/giong-nguoi-clip-12.wav", "giong-nguoi-clip-5": "audio/giong-nguoi-clip-5.wav", "giong-nguoi-clip-6": "audio/giong-nguoi-clip-6.wav", "giong-nguoi-clip-7": "audio/giong-nguoi-clip-7.wav", "giong-nguoi-clip-8": "audio/giong-nguoi-clip-8.wav", "giong-nguoi-clip-9": "audio/giong-nguoi-clip-9.wav", "glide-down": "audio/glide-down.wav", "glide-up": "audio/glide-up.wav", "hai-huoc-clip-10": "audio/hai-huoc-clip-10.wav", "hai-huoc-clip-11": "audio/hai-huoc-clip-11.wav", "hai-huoc-clip-12": "audio/hai-huoc-clip-12.wav", "hai-huoc-clip-13": "audio/hai-huoc-clip-13.wav", "hai-huoc-clip-14": "audio/hai-huoc-clip-14.wav", "hai-huoc-clip-15": "audio/hai-huoc-clip-15.wav", "hai-huoc-clip-16": "audio/hai-huoc-clip-16.wav", "hai-huoc-clip-4": "audio/hai-huoc-clip-4.wav", "hai-huoc-clip-5": "audio/hai-huoc-clip-5.wav", "hai-huoc-clip-6": "audio/hai-huoc-clip-6.wav", "hai-huoc-clip-7": "audio/hai-huoc-clip-7.wav", "hai-huoc-clip-8": "audio/hai-huoc-clip-8.wav", "hai-huoc-clip-9": "audio/hai-huoc-clip-9.wav", "horse-neigh": "audio/horse-neigh.mp3", "kame-charge": "audio/kame-charge.mp3", "khong-gian-clip-1": "audio/khong-gian-clip-1.wav", "khong-gian-clip-2": "audio/khong-gian-clip-2.wav", "khong-gian-clip-3": "audio/khong-gian-clip-3.wav", "khong-gian-clip-4": "audio/khong-gian-clip-4.wav", "khong-gian-clip-5": "audio/khong-gian-clip-5.wav", "khong-gian-clip-6": "audio/khong-gian-clip-6.wav", "laugh-ha": "audio/laugh-ha.mp3", "lion-roar": "audio/lion-roar.mp3", "morse-5": "audio/common/morse-5.mp3", "nani-sound": "audio/common/nani-sound.mp3", "oof-roblox": "audio/oof-roblox.mp3", "phone-ring": "audio/phone-ring.mp3", "pig-oink": "audio/pig-oink.mp3", "p_2cdoatemd7-clip-1": "audio/p_2cdoatemd7-clip-1.wav", "p_2cdoatemd7-clip-10": "audio/p_2cdoatemd7-clip-10.wav", "p_2cdoatemd7-clip-11": "audio/p_2cdoatemd7-clip-11.wav", "p_2cdoatemd7-clip-12": "audio/p_2cdoatemd7-clip-12.wav", "p_2cdoatemd7-clip-13": "audio/p_2cdoatemd7-clip-13.wav", "p_2cdoatemd7-clip-14": "audio/p_2cdoatemd7-clip-14.wav", "p_2cdoatemd7-clip-15": "audio/p_2cdoatemd7-clip-15.wav", "p_2cdoatemd7-clip-16": "audio/p_2cdoatemd7-clip-16.wav", "p_2cdoatemd7-clip-17": "audio/p_2cdoatemd7-clip-17.wav", "p_2cdoatemd7-clip-18": "audio/p_2cdoatemd7-clip-18.wav", "p_2cdoatemd7-clip-19": "audio/p_2cdoatemd7-clip-19.wav", "p_2cdoatemd7-clip-2": "audio/p_2cdoatemd7-clip-2.wav", "p_2cdoatemd7-clip-20": "audio/p_2cdoatemd7-clip-20.wav", "p_2cdoatemd7-clip-21": "audio/p_2cdoatemd7-clip-21.wav", "p_2cdoatemd7-clip-22": "audio/p_2cdoatemd7-clip-22.wav", "p_2cdoatemd7-clip-23": "audio/p_2cdoatemd7-clip-23.wav", "p_2cdoatemd7-clip-24": "audio/p_2cdoatemd7-clip-24.wav", "p_2cdoatemd7-clip-25": "audio/p_2cdoatemd7-clip-25.wav", "p_2cdoatemd7-clip-26": "audio/p_2cdoatemd7-clip-26.wav", "p_2cdoatemd7-clip-27": "audio/p_2cdoatemd7-clip-27.wav", "p_2cdoatemd7-clip-28": "audio/p_2cdoatemd7-clip-28.wav", "p_2cdoatemd7-clip-29": "audio/p_2cdoatemd7-clip-29.wav", "p_2cdoatemd7-clip-3": "audio/p_2cdoatemd7-clip-3.wav", "p_2cdoatemd7-clip-30": "audio/p_2cdoatemd7-clip-30.wav", "p_2cdoatemd7-clip-31": "audio/p_2cdoatemd7-clip-31.wav", "p_2cdoatemd7-clip-32": "audio/p_2cdoatemd7-clip-32.wav", "p_2cdoatemd7-clip-33": "audio/p_2cdoatemd7-clip-33.wav", "p_2cdoatemd7-clip-34": "audio/p_2cdoatemd7-clip-34.wav", "p_2cdoatemd7-clip-35": "audio/p_2cdoatemd7-clip-35.wav", "p_2cdoatemd7-clip-36": "audio/p_2cdoatemd7-clip-36.wav", "p_2cdoatemd7-clip-37": "audio/p_2cdoatemd7-clip-37.wav", "p_2cdoatemd7-clip-38": "audio/p_2cdoatemd7-clip-38.wav", "p_2cdoatemd7-clip-39": "audio/p_2cdoatemd7-clip-39.wav", "p_2cdoatemd7-clip-4": "audio/p_2cdoatemd7-clip-4.wav", "p_2cdoatemd7-clip-40": "audio/p_2cdoatemd7-clip-40.wav", "p_2cdoatemd7-clip-41": "audio/p_2cdoatemd7-clip-41.wav", "p_2cdoatemd7-clip-42": "audio/p_2cdoatemd7-clip-42.wav", "p_2cdoatemd7-clip-5": "audio/p_2cdoatemd7-clip-5.wav", "p_2cdoatemd7-clip-6": "audio/p_2cdoatemd7-clip-6.wav", "p_2cdoatemd7-clip-7": "audio/p_2cdoatemd7-clip-7.wav", "p_2cdoatemd7-clip-8": "audio/p_2cdoatemd7-clip-8.wav", "p_2cdoatemd7-clip-9": "audio/p_2cdoatemd7-clip-9.wav", "p_2q2wx4xovx-clip-1": "audio/p_2q2wx4xovx-clip-1.wav", "p_2q2wx4xovx-clip-10": "audio/p_2q2wx4xovx-clip-10.wav", "p_2q2wx4xovx-clip-11": "audio/p_2q2wx4xovx-clip-11.wav", "p_2q2wx4xovx-clip-12": "audio/p_2q2wx4xovx-clip-12.wav", "p_2q2wx4xovx-clip-13": "audio/p_2q2wx4xovx-clip-13.wav", "p_2q2wx4xovx-clip-14": "audio/p_2q2wx4xovx-clip-14.wav", "p_2q2wx4xovx-clip-15": "audio/p_2q2wx4xovx-clip-15.wav", "p_2q2wx4xovx-clip-16": "audio/p_2q2wx4xovx-clip-16.wav", "p_2q2wx4xovx-clip-17": "audio/p_2q2wx4xovx-clip-17.wav", "p_2q2wx4xovx-clip-18": "audio/p_2q2wx4xovx-clip-18.wav", "p_2q2wx4xovx-clip-19": "audio/p_2q2wx4xovx-clip-19.wav", "p_2q2wx4xovx-clip-2": "audio/p_2q2wx4xovx-clip-2.wav", "p_2q2wx4xovx-clip-20": "audio/p_2q2wx4xovx-clip-20.wav", "p_2q2wx4xovx-clip-21": "audio/p_2q2wx4xovx-clip-21.wav", "p_2q2wx4xovx-clip-22": "audio/p_2q2wx4xovx-clip-22.wav", "p_2q2wx4xovx-clip-23": "audio/p_2q2wx4xovx-clip-23.wav", "p_2q2wx4xovx-clip-24": "audio/p_2q2wx4xovx-clip-24.wav", "p_2q2wx4xovx-clip-25": "audio/p_2q2wx4xovx-clip-25.wav", "p_2q2wx4xovx-clip-26": "audio/p_2q2wx4xovx-clip-26.wav", "p_2q2wx4xovx-clip-27": "audio/p_2q2wx4xovx-clip-27.wav", "p_2q2wx4xovx-clip-28": "audio/p_2q2wx4xovx-clip-28.wav", "p_2q2wx4xovx-clip-29": "audio/p_2q2wx4xovx-clip-29.wav", "p_2q2wx4xovx-clip-3": "audio/p_2q2wx4xovx-clip-3.wav", "p_2q2wx4xovx-clip-30": "audio/p_2q2wx4xovx-clip-30.wav", "p_2q2wx4xovx-clip-31": "audio/p_2q2wx4xovx-clip-31.wav", "p_2q2wx4xovx-clip-32": "audio/p_2q2wx4xovx-clip-32.wav", "p_2q2wx4xovx-clip-33": "audio/p_2q2wx4xovx-clip-33.wav", "p_2q2wx4xovx-clip-34": "audio/p_2q2wx4xovx-clip-34.wav", "p_2q2wx4xovx-clip-35": "audio/p_2q2wx4xovx-clip-35.wav", "p_2q2wx4xovx-clip-36": "audio/p_2q2wx4xovx-clip-36.wav", "p_2q2wx4xovx-clip-37": "audio/p_2q2wx4xovx-clip-37.wav", "p_2q2wx4xovx-clip-38": "audio/p_2q2wx4xovx-clip-38.wav", "p_2q2wx4xovx-clip-39": "audio/p_2q2wx4xovx-clip-39.wav", "p_2q2wx4xovx-clip-4": "audio/p_2q2wx4xovx-clip-4.wav", "p_2q2wx4xovx-clip-40": "audio/p_2q2wx4xovx-clip-40.wav", "p_2q2wx4xovx-clip-41": "audio/p_2q2wx4xovx-clip-41.wav", "p_2q2wx4xovx-clip-42": "audio/p_2q2wx4xovx-clip-42.wav", "p_2q2wx4xovx-clip-43": "audio/p_2q2wx4xovx-clip-43.wav", "p_2q2wx4xovx-clip-44": "audio/p_2q2wx4xovx-clip-44.wav", "p_2q2wx4xovx-clip-45": "audio/p_2q2wx4xovx-clip-45.wav", "p_2q2wx4xovx-clip-5": "audio/p_2q2wx4xovx-clip-5.wav", "p_2q2wx4xovx-clip-6": "audio/p_2q2wx4xovx-clip-6.wav", "p_2q2wx4xovx-clip-7": "audio/p_2q2wx4xovx-clip-7.wav", "p_2q2wx4xovx-clip-8": "audio/p_2q2wx4xovx-clip-8.wav", "p_2q2wx4xovx-clip-9": "audio/p_2q2wx4xovx-clip-9.wav", "p_7mixu3ezyr-clip-1": "audio/p_7mixu3ezyr-clip-1.wav", "p_7mixu3ezyr-clip-10": "audio/p_7mixu3ezyr-clip-10.wav", "p_7mixu3ezyr-clip-11": "audio/p_7mixu3ezyr-clip-11.wav", "p_7mixu3ezyr-clip-12": "audio/p_7mixu3ezyr-clip-12.wav", "p_7mixu3ezyr-clip-13": "audio/p_7mixu3ezyr-clip-13.wav", "p_7mixu3ezyr-clip-14": "audio/p_7mixu3ezyr-clip-14.wav", "p_7mixu3ezyr-clip-15": "audio/p_7mixu3ezyr-clip-15.wav", "p_7mixu3ezyr-clip-16": "audio/p_7mixu3ezyr-clip-16.wav", "p_7mixu3ezyr-clip-17": "audio/p_7mixu3ezyr-clip-17.wav", "p_7mixu3ezyr-clip-2": "audio/p_7mixu3ezyr-clip-2.wav", "p_7mixu3ezyr-clip-3": "audio/p_7mixu3ezyr-clip-3.wav", "p_7mixu3ezyr-clip-4": "audio/p_7mixu3ezyr-clip-4.wav", "p_7mixu3ezyr-clip-5": "audio/p_7mixu3ezyr-clip-5.wav", "p_7mixu3ezyr-clip-6": "audio/p_7mixu3ezyr-clip-6.wav", "p_7mixu3ezyr-clip-7": "audio/p_7mixu3ezyr-clip-7.wav", "p_7mixu3ezyr-clip-8": "audio/p_7mixu3ezyr-clip-8.wav", "p_7mixu3ezyr-clip-9": "audio/p_7mixu3ezyr-clip-9.wav", "p_7t37k4s46v-clip-1": "audio/p_7t37k4s46v-clip-1.wav", "p_7t37k4s46v-clip-10": "audio/p_7t37k4s46v-clip-10.wav", "p_7t37k4s46v-clip-11": "audio/p_7t37k4s46v-clip-11.wav", "p_7t37k4s46v-clip-12": "audio/p_7t37k4s46v-clip-12.wav", "p_7t37k4s46v-clip-13": "audio/p_7t37k4s46v-clip-13.wav", "p_7t37k4s46v-clip-14": "audio/p_7t37k4s46v-clip-14.wav", "p_7t37k4s46v-clip-15": "audio/p_7t37k4s46v-clip-15.wav", "p_7t37k4s46v-clip-16": "audio/p_7t37k4s46v-clip-16.wav", "p_7t37k4s46v-clip-17": "audio/p_7t37k4s46v-clip-17.wav", "p_7t37k4s46v-clip-18": "audio/p_7t37k4s46v-clip-18.wav", "p_7t37k4s46v-clip-19": "audio/p_7t37k4s46v-clip-19.wav", "p_7t37k4s46v-clip-2": "audio/p_7t37k4s46v-clip-2.wav", "p_7t37k4s46v-clip-20": "audio/p_7t37k4s46v-clip-20.wav", "p_7t37k4s46v-clip-21": "audio/p_7t37k4s46v-clip-21.wav", "p_7t37k4s46v-clip-22": "audio/p_7t37k4s46v-clip-22.wav", "p_7t37k4s46v-clip-23": "audio/p_7t37k4s46v-clip-23.wav", "p_7t37k4s46v-clip-24": "audio/p_7t37k4s46v-clip-24.wav", "p_7t37k4s46v-clip-25": "audio/p_7t37k4s46v-clip-25.wav", "p_7t37k4s46v-clip-26": "audio/p_7t37k4s46v-clip-26.wav", "p_7t37k4s46v-clip-27": "audio/p_7t37k4s46v-clip-27.wav", "p_7t37k4s46v-clip-28": "audio/p_7t37k4s46v-clip-28.wav", "p_7t37k4s46v-clip-29": "audio/p_7t37k4s46v-clip-29.wav", "p_7t37k4s46v-clip-3": "audio/p_7t37k4s46v-clip-3.wav", "p_7t37k4s46v-clip-30": "audio/p_7t37k4s46v-clip-30.wav", "p_7t37k4s46v-clip-31": "audio/p_7t37k4s46v-clip-31.wav", "p_7t37k4s46v-clip-32": "audio/p_7t37k4s46v-clip-32.wav", "p_7t37k4s46v-clip-33": "audio/p_7t37k4s46v-clip-33.wav", "p_7t37k4s46v-clip-34": "audio/p_7t37k4s46v-clip-34.wav", "p_7t37k4s46v-clip-35": "audio/p_7t37k4s46v-clip-35.wav", "p_7t37k4s46v-clip-36": "audio/p_7t37k4s46v-clip-36.wav", "p_7t37k4s46v-clip-37": "audio/p_7t37k4s46v-clip-37.wav", "p_7t37k4s46v-clip-38": "audio/p_7t37k4s46v-clip-38.wav", "p_7t37k4s46v-clip-39": "audio/p_7t37k4s46v-clip-39.wav", "p_7t37k4s46v-clip-4": "audio/p_7t37k4s46v-clip-4.wav", "p_7t37k4s46v-clip-40": "audio/p_7t37k4s46v-clip-40.wav", "p_7t37k4s46v-clip-41": "audio/p_7t37k4s46v-clip-41.wav", "p_7t37k4s46v-clip-42": "audio/p_7t37k4s46v-clip-42.wav", "p_7t37k4s46v-clip-43": "audio/p_7t37k4s46v-clip-43.wav", "p_7t37k4s46v-clip-44": "audio/p_7t37k4s46v-clip-44.wav", "p_7t37k4s46v-clip-45": "audio/p_7t37k4s46v-clip-45.wav", "p_7t37k4s46v-clip-46": "audio/p_7t37k4s46v-clip-46.wav", "p_7t37k4s46v-clip-47": "audio/p_7t37k4s46v-clip-47.wav", "p_7t37k4s46v-clip-48": "audio/p_7t37k4s46v-clip-48.wav", "p_7t37k4s46v-clip-49": "audio/p_7t37k4s46v-clip-49.wav", "p_7t37k4s46v-clip-5": "audio/p_7t37k4s46v-clip-5.wav", "p_7t37k4s46v-clip-50": "audio/p_7t37k4s46v-clip-50.wav", "p_7t37k4s46v-clip-51": "audio/p_7t37k4s46v-clip-51.wav", "p_7t37k4s46v-clip-52": "audio/p_7t37k4s46v-clip-52.wav", "p_7t37k4s46v-clip-53": "audio/p_7t37k4s46v-clip-53.wav", "p_7t37k4s46v-clip-6": "audio/p_7t37k4s46v-clip-6.wav", "p_7t37k4s46v-clip-7": "audio/p_7t37k4s46v-clip-7.wav", "p_7t37k4s46v-clip-8": "audio/p_7t37k4s46v-clip-8.wav", "p_7t37k4s46v-clip-9": "audio/p_7t37k4s46v-clip-9.wav", "p_bi2oyatrbn-clip-1": "audio/p_bi2oyatrbn-clip-1.wav", "p_bi2oyatrbn-clip-10": "audio/p_bi2oyatrbn-clip-10.wav", "p_bi2oyatrbn-clip-11": "audio/p_bi2oyatrbn-clip-11.wav", "p_bi2oyatrbn-clip-12": "audio/p_bi2oyatrbn-clip-12.wav", "p_bi2oyatrbn-clip-13": "audio/p_bi2oyatrbn-clip-13.wav", "p_bi2oyatrbn-clip-14": "audio/p_bi2oyatrbn-clip-14.wav", "p_bi2oyatrbn-clip-15": "audio/p_bi2oyatrbn-clip-15.wav", "p_bi2oyatrbn-clip-16": "audio/p_bi2oyatrbn-clip-16.wav", "p_bi2oyatrbn-clip-17": "audio/p_bi2oyatrbn-clip-17.wav", "p_bi2oyatrbn-clip-18": "audio/p_bi2oyatrbn-clip-18.wav", "p_bi2oyatrbn-clip-19": "audio/p_bi2oyatrbn-clip-19.wav", "p_bi2oyatrbn-clip-2": "audio/p_bi2oyatrbn-clip-2.wav", "p_bi2oyatrbn-clip-3": "audio/p_bi2oyatrbn-clip-3.wav", "p_bi2oyatrbn-clip-4": "audio/p_bi2oyatrbn-clip-4.wav", "p_bi2oyatrbn-clip-5": "audio/p_bi2oyatrbn-clip-5.wav", "p_bi2oyatrbn-clip-6": "audio/p_bi2oyatrbn-clip-6.wav", "p_bi2oyatrbn-clip-7": "audio/p_bi2oyatrbn-clip-7.wav", "p_bi2oyatrbn-clip-8": "audio/p_bi2oyatrbn-clip-8.wav", "p_bi2oyatrbn-clip-9": "audio/p_bi2oyatrbn-clip-9.wav", "p_g435z2ivl5-clip-1": "audio/p_g435z2ivl5-clip-1.wav", "p_g435z2ivl5-clip-10": "audio/p_g435z2ivl5-clip-10.wav", "p_g435z2ivl5-clip-11": "audio/p_g435z2ivl5-clip-11.wav", "p_g435z2ivl5-clip-12": "audio/p_g435z2ivl5-clip-12.wav", "p_g435z2ivl5-clip-13": "audio/p_g435z2ivl5-clip-13.wav", "p_g435z2ivl5-clip-14": "audio/p_g435z2ivl5-clip-14.wav", "p_g435z2ivl5-clip-15": "audio/p_g435z2ivl5-clip-15.wav", "p_g435z2ivl5-clip-16": "audio/p_g435z2ivl5-clip-16.wav", "p_g435z2ivl5-clip-17": "audio/p_g435z2ivl5-clip-17.wav", "p_g435z2ivl5-clip-18": "audio/p_g435z2ivl5-clip-18.wav", "p_g435z2ivl5-clip-19": "audio/p_g435z2ivl5-clip-19.wav", "p_g435z2ivl5-clip-2": "audio/p_g435z2ivl5-clip-2.wav", "p_g435z2ivl5-clip-20": "audio/p_g435z2ivl5-clip-20.wav", "p_g435z2ivl5-clip-21": "audio/p_g435z2ivl5-clip-21.wav", "p_g435z2ivl5-clip-22": "audio/p_g435z2ivl5-clip-22.wav", "p_g435z2ivl5-clip-23": "audio/p_g435z2ivl5-clip-23.wav", "p_g435z2ivl5-clip-24": "audio/p_g435z2ivl5-clip-24.wav", "p_g435z2ivl5-clip-25": "audio/p_g435z2ivl5-clip-25.wav", "p_g435z2ivl5-clip-26": "audio/p_g435z2ivl5-clip-26.wav", "p_g435z2ivl5-clip-3": "audio/p_g435z2ivl5-clip-3.wav", "p_g435z2ivl5-clip-4": "audio/p_g435z2ivl5-clip-4.wav", "p_g435z2ivl5-clip-5": "audio/p_g435z2ivl5-clip-5.wav", "p_g435z2ivl5-clip-6": "audio/p_g435z2ivl5-clip-6.wav", "p_g435z2ivl5-clip-7": "audio/p_g435z2ivl5-clip-7.wav", "p_g435z2ivl5-clip-8": "audio/p_g435z2ivl5-clip-8.wav", "p_g435z2ivl5-clip-9": "audio/p_g435z2ivl5-clip-9.wav", "p_ordy2tfokj-clip-1": "audio/p_ordy2tfokj-clip-1.wav", "p_ordy2tfokj-clip-10": "audio/p_ordy2tfokj-clip-10.wav", "p_ordy2tfokj-clip-11": "audio/p_ordy2tfokj-clip-11.wav", "p_ordy2tfokj-clip-2": "audio/p_ordy2tfokj-clip-2.wav", "p_ordy2tfokj-clip-3": "audio/p_ordy2tfokj-clip-3.wav", "p_ordy2tfokj-clip-4": "audio/p_ordy2tfokj-clip-4.wav", "p_ordy2tfokj-clip-5": "audio/p_ordy2tfokj-clip-5.wav", "p_ordy2tfokj-clip-6": "audio/p_ordy2tfokj-clip-6.wav", "p_ordy2tfokj-clip-7": "audio/p_ordy2tfokj-clip-7.wav", "p_ordy2tfokj-clip-8": "audio/p_ordy2tfokj-clip-8.wav", "p_ordy2tfokj-clip-9": "audio/p_ordy2tfokj-clip-9.wav", "p_srnqjzjnb4-clip-1": "audio/p_srnqjzjnb4-clip-1.wav", "p_srnqjzjnb4-clip-10": "audio/p_srnqjzjnb4-clip-10.wav", "p_srnqjzjnb4-clip-11": "audio/p_srnqjzjnb4-clip-11.wav", "p_srnqjzjnb4-clip-12": "audio/p_srnqjzjnb4-clip-12.wav", "p_srnqjzjnb4-clip-13": "audio/p_srnqjzjnb4-clip-13.wav", "p_srnqjzjnb4-clip-14": "audio/p_srnqjzjnb4-clip-14.wav", "p_srnqjzjnb4-clip-15": "audio/p_srnqjzjnb4-clip-15.wav", "p_srnqjzjnb4-clip-16": "audio/p_srnqjzjnb4-clip-16.wav", "p_srnqjzjnb4-clip-17": "audio/p_srnqjzjnb4-clip-17.wav", "p_srnqjzjnb4-clip-18": "audio/p_srnqjzjnb4-clip-18.wav", "p_srnqjzjnb4-clip-19": "audio/p_srnqjzjnb4-clip-19.wav", "p_srnqjzjnb4-clip-2": "audio/p_srnqjzjnb4-clip-2.wav", "p_srnqjzjnb4-clip-20": "audio/p_srnqjzjnb4-clip-20.wav", "p_srnqjzjnb4-clip-21": "audio/p_srnqjzjnb4-clip-21.wav", "p_srnqjzjnb4-clip-22": "audio/p_srnqjzjnb4-clip-22.wav", "p_srnqjzjnb4-clip-23": "audio/p_srnqjzjnb4-clip-23.wav", "p_srnqjzjnb4-clip-24": "audio/p_srnqjzjnb4-clip-24.wav", "p_srnqjzjnb4-clip-25": "audio/p_srnqjzjnb4-clip-25.wav", "p_srnqjzjnb4-clip-26": "audio/p_srnqjzjnb4-clip-26.wav", "p_srnqjzjnb4-clip-27": "audio/p_srnqjzjnb4-clip-27.wav", "p_srnqjzjnb4-clip-28": "audio/p_srnqjzjnb4-clip-28.wav", "p_srnqjzjnb4-clip-29": "audio/p_srnqjzjnb4-clip-29.wav", "p_srnqjzjnb4-clip-3": "audio/p_srnqjzjnb4-clip-3.wav", "p_srnqjzjnb4-clip-30": "audio/p_srnqjzjnb4-clip-30.wav", "p_srnqjzjnb4-clip-31": "audio/p_srnqjzjnb4-clip-31.wav", "p_srnqjzjnb4-clip-32": "audio/p_srnqjzjnb4-clip-32.wav", "p_srnqjzjnb4-clip-33": "audio/p_srnqjzjnb4-clip-33.wav", "p_srnqjzjnb4-clip-34": "audio/p_srnqjzjnb4-clip-34.wav", "p_srnqjzjnb4-clip-35": "audio/p_srnqjzjnb4-clip-35.wav", "p_srnqjzjnb4-clip-36": "audio/p_srnqjzjnb4-clip-36.wav", "p_srnqjzjnb4-clip-37": "audio/p_srnqjzjnb4-clip-37.wav", "p_srnqjzjnb4-clip-4": "audio/p_srnqjzjnb4-clip-4.wav", "p_srnqjzjnb4-clip-5": "audio/p_srnqjzjnb4-clip-5.wav", "p_srnqjzjnb4-clip-6": "audio/p_srnqjzjnb4-clip-6.wav", "p_srnqjzjnb4-clip-7": "audio/p_srnqjzjnb4-clip-7.wav", "p_srnqjzjnb4-clip-8": "audio/p_srnqjzjnb4-clip-8.wav", "p_srnqjzjnb4-clip-9": "audio/p_srnqjzjnb4-clip-9.wav", "rasengan-spin": "audio/rasengan-spin.mp3", "record-scratch": "audio/record-scratch.mp3", "rick-roll-riff": "audio/rick-roll-riff.mp3", "rooster": "audio/rooster.mp3", "sad-violin": "audio/sad-violin.mp3", "school-bell": "audio/school-bell.mp3", "sheep-baa": "audio/sheep-baa.mp3", "ship-foghorn": "audio/ship-foghorn.mp3", "siren-up-down": "audio/common/siren-up-down.mp3", "snore-saw": "audio/snore-saw.mp3", "space-robot": "audio/space-robot.mp3", "sword-slash": "audio/sword-slash.mp3", "teleport-dash": "audio/teleport-dash.mp3", "tin-hieu-clip-4": "audio/tin-hieu-clip-4.wav", "tin-hieu-clip-5": "audio/tin-hieu-clip-5.wav", "tin-hieu-clip-6": "audio/tin-hieu-clip-6.wav", "train-horn": "audio/train-horn.mp3", "ufo": "audio/ufo.wav", "voice-hihi": "audio/voice-hihi.wav", "voice-lalala": "audio/voice-lalala.wav", "voice-ngan": "audio/voice-ngan.wav", "voice-uoa": "audio/voice-uoa.wav", "warp-speed": "audio/warp-speed.mp3", "whip-crack": "audio/whip-crack.mp3", "windows-xp-error": "audio/windows-xp-error.mp3", "wolf-howl": "audio/common/wolf-howl.mp3", "bonk-metal": "audio/meme/bonk-metal.mp3", "bruh-sound": "audio/meme/bruh-sound.mp3", "bye-bye-mewing": "audio/meme/bye-bye-mewing.mp3", "coffin-dance": "audio/meme/coffin-dance.mp3", "emotional-damage": "audio/meme/emotional-damage.mp3", "fail-horn": "audio/meme/fail-horn.mp3", "fart-reverb": "audio/meme/fart-reverb.mp3", "oh-no-laugh": "audio/meme/oh-no-laugh.mp3", "quack-duck": "audio/meme/quack-duck.mp3", "run-meme": "audio/meme/run-meme.mp3", "screaming-goat": "audio/meme/screaming-goat.mp3", "sheesh-whistle": "audio/meme/sheesh-whistle.mp3", "slap-sound": "audio/meme/slap-sound.mp3", "sponge-fail": "audio/meme/sponge-fail.mp3", "vine-boom": "audio/meme/vine-boom.mp3", "wow-anime": "audio/meme/wow-anime.mp3", "yeah-boi": "audio/meme/yeah-boi.mp3", "p_2cdoatemd7_dog-bark": "audio/animals/dog-bark.mp3", "cat-meow": "audio/animals/cat-meow.mp3", "p_2cdoatemd7_lion-roar": "audio/animals/lion-roar.mp3", "p_2cdoatemd7_wolf-howl": "audio/animals/wolf-howl.mp3", "p_2cdoatemd7_rooster": "audio/animals/rooster.mp3", "p_2cdoatemd7_cow-moo": "audio/animals/cow-moo.mp3", "p_2cdoatemd7_horse-neigh": "audio/animals/horse-neigh.mp3", "elephant": "audio/animals/elephant.mp3", "p_2cdoatemd7_sheep-baa": "audio/animals/sheep-baa.mp3", "p_2cdoatemd7_pig-oink": "audio/animals/pig-oink.mp3", "p_2cdoatemd7_duck-quack": "audio/animals/duck-quack.mp3", "p_2cdoatemd7_frog-croak": "audio/animals/frog-croak.mp3", "monkey-screech": "audio/animals/monkey-screech.wav", "chimpanzee": "audio/animals/chimpanzee.mp3", "bear-growl": "audio/animals/bear-growl.mp3", "p_2cdoatemd7_screaming-goat": "audio/animals/screaming-goat.mp3", "owl-hoot": "audio/animals/owl-hoot.mp3", "crow-caw": "audio/animals/crow-caw.mp3", "pigeon": "audio/animals/pigeon.mp3", "seagull": "audio/animals/seagull.mp3", "eagle": "audio/animals/eagle.mp3", "bee-buzz": "audio/animals/bee-buzz.mp3", "mosquito": "audio/animals/mosquito.mp3", "cricket": "audio/animals/cricket.mp3", "snake": "audio/animals/snake.mp3", "tiger": "audio/animals/tiger.mp3", "donkey": "audio/animals/donkey.mp3", "turkey": "audio/animals/turkey.mp3", "chicken": "audio/animals/chicken.mp3", "chick": "audio/animals/chick.mp3", "puppy": "audio/animals/puppy.mp3", "cat-purr": "audio/animals/cat-purr.mp3", "angry-cat": "audio/animals/angry-cat.mp3", "whale": "audio/animals/whale.mp3", "dolphin": "audio/animals/dolphin.mp3", "gorilla": "audio/animals/gorilla.mp3", "bat": "audio/animals/bat.mp3", "hyena": "audio/animals/hyena.mp3", "woodpecker": "audio/animals/woodpecker.mp3", "goose": "audio/animals/goose.mp3", "seal": "audio/animals/seal.mp3", "alligator": "audio/animals/alligator.mp3", "nani": "audio/anime/nani.mp3", "kamehameha": "audio/anime/kamehameha.mp3", "rasengan": "audio/anime/rasengan.mp3", "teleport": "audio/anime/teleport.mp3", "power-up": "audio/anime/power-up.mp3", "ssj-scream": "audio/anime/ssj-scream.wav", "za-warudo": "audio/anime/za-warudo.mp3", "ora-ora": "audio/anime/ora-ora.mp3", "muda-muda": "audio/anime/muda-muda.mp3", "omae-wa": "audio/anime/omae-wa.mp3", "katana": "audio/anime/katana.mp3", "shinra-tensei": "audio/anime/shinra-tensei.mp3", "chidori": "audio/anime/chidori.mp3", "sharingan": "audio/anime/sharingan.mp3", "tuturu": "audio/anime/tuturu.mp3", "titan-roar": "audio/anime/titan-roar.mp3", "smash": "audio/anime/smash.mp3", "one-punch": "audio/anime/one-punch.mp3", "senpai": "audio/anime/senpai.mp3", "pikachu": "audio/anime/pikachu.mp3", "naruto-flute": "audio/anime/naruto-flute.mp3", "death-note": "audio/anime/death-note.mp3", "unravel": "audio/anime/unravel.mp3", "giorno-piano": "audio/anime/giorno-piano.mp3", "domain-expansion": "audio/anime/domain-expansion.mp3", "sukuna-laugh": "audio/anime/sukuna-laugh.mp3", "bankai": "audio/anime/bankai.mp3", "kono-dio-da": "audio/anime/kono-dio-da.mp3", "yamcha": "audio/anime/yamcha.mp3", "anime-wow": "audio/anime/anime-wow.mp3", "baka": "audio/anime/baka.mp3", "ara-ara": "audio/anime/ara-ara.mp3", "chika-dance": "audio/anime/chika-dance.mp3", "ultra-instinct": "audio/anime/ultra-instinct.mp3", "goku-hi": "audio/anime/goku-hi.mp3", "geass": "audio/anime/geass.mp3", "anime-gasp": "audio/anime/anime-gasp.mp3", "ora": "audio/yankee/ora.mp3", "kisama": "audio/yankee/kisama.mp3", "temee": "audio/yankee/temee.mp3", "boke": "audio/yankee/boke.mp3", "metal-bat": "audio/yankee/metal-bat.mp3", "motorcycle-rev": "audio/yankee/motorcycle-rev.mp3", "heavy-punch": "audio/yankee/heavy-punch.mp3", "spit": "audio/yankee/spit.mp3", "knuckle-crack": "audio/yankee/knuckle-crack.mp3", "gang-whistle": "audio/yankee/gang-whistle.mp3", "delinquent-laugh": "audio/yankee/delinquent-laugh.mp3", "cheer": "audio/voices/cheer.mp3", "boo": "audio/voices/boo.mp3", "scream": "audio/voices/scream.mp3", "baby-laugh": "audio/voices/baby-laugh.mp3", "p_7t37k4s46v_evil-laugh": "audio/voices/evil-laugh.mp3", "crying": "audio/voices/crying.mp3", "cough": "audio/voices/cough.mp3", "sneeze": "audio/voices/sneeze.mp3", "snoring": "audio/voices/snoring.mp3", "chewing": "audio/voices/chewing.mp3", "burp": "audio/voices/burp.mp3", "whistle": "audio/voices/whistle.mp3", "yawn": "audio/voices/yawn.mp3", "sigh": "audio/voices/sigh.mp3", "gasp": "audio/voices/gasp.mp3", "yes": "audio/voices/yes.mp3", "no": "audio/voices/no.mp3", "wow": "audio/voices/wow.mp3", "what": "audio/voices/what.mp3", "omg": "audio/voices/omg.mp3", "hello": "audio/voices/hello.mp3", "bye": "audio/voices/bye.mp3", "lets-go": "audio/voices/lets-go.mp3", "good-job": "audio/voices/good-job.mp3", "winner": "audio/voices/winner.mp3", "game-over": "audio/voices/game-over.mp3", "yay": "audio/voices/yay.mp3", "oof": "audio/voices/oof.mp3", "wheeze": "audio/voices/wheeze.mp3", "goofy-laugh": "audio/voices/goofy-laugh.mp3", "giggle": "audio/voices/giggle.mp3", "throat-clear": "audio/voices/throat-clear.mp3", "slurp": "audio/voices/slurp.mp3", "hiccup": "audio/voices/hiccup.mp3", "kiss": "audio/voices/kiss.mp3", "whisper": "audio/voices/whisper.mp3", "lalala": "audio/voices/lalala.mp3", "opera": "audio/voices/opera.mp3", "applause": "audio/voices/applause.mp3", "woohoo": "audio/voices/woohoo.mp3", "ouch": "audio/voices/ouch.mp3", "eww": "audio/voices/eww.mp3", "mmm": "audio/voices/mmm.mp3", "shh": "audio/voices/shh.mp3", "tada": "audio/voices/tada.mp3", "blah-blah": "audio/voices/blah-blah.mp3", "karate": "audio/voices/karate.mp3", "ninja": "audio/voices/ninja.mp3", "pirate": "audio/voices/pirate.mp3", "santa": "audio/voices/santa.mp3", "zombie": "audio/voices/zombie.mp3", "ghost": "audio/voices/ghost.mp3", "monster": "audio/voices/monster.mp3", "r2d2": "audio/robots/r2d2.mp3", "walle": "audio/robots/walle.mp3", "transformer": "audio/robots/transformer.mp3", "startup": "audio/robots/startup.wav", "laser-blast": "audio/robots/laser-blast.mp3", "scanning": "audio/robots/scanning.mp3", "red-alert": "audio/robots/red-alert.mp3", "dialup": "audio/robots/dialup.mp3", "danger": "audio/robots/danger.mp3", "error": "audio/robots/error.mp3", "servo": "audio/robots/servo.wav", "mecha-stomp": "audio/robots/mecha-stomp.mp3", "glitch": "audio/robots/glitch.mp3", "p_bi2oyatrbn_force-field": "audio/robots/force-field.wav", "warp": "audio/robots/warp.mp3", "terminator": "audio/robots/terminator.mp3", "access-granted": "audio/robots/access-granted.mp3", "cyber-reload": "audio/robots/cyber-reload.mp3", "power-down": "audio/robots/power-down.mp3", "fbi-open-up": "audio/voice1/fbi-open-up.mp3", "why-are-you-running": "audio/voice1/why-are-you-running.mp3", "no-god-please-no": "audio/voice1/no-god-please-no.mp3", "p_2q2wx4xovx_emotional-damage": "audio/voice1/emotional-damage.mp3", "he-need-some-milk": "audio/voice1/he-need-some-milk.mp3", "oh-hell-no": "audio/voice1/oh-hell-no.mp3", "siuuu": "audio/voice1/siuuu.mp3", "bing-chilling": "audio/voice1/bing-chilling.mp3", "what-the-dog-doin": "audio/voice1/what-the-dog-doin.mp3", "run": "audio/voice1/run.mp3", "p_2q2wx4xovx_yeah-boi": "audio/voice1/yeah-boi.mp3", "okay": "audio/voice1/okay.mp3", "shut-up": "audio/voice1/shut-up.mp3", "bruh": "audio/voice1/bruh.mp3", "p_2q2wx4xovx_wow": "audio/voice1/wow.mp3", "gigachad": "audio/voice1/gigachad.mp3", "sheesh": "audio/voice1/sheesh.mp3", "p_2q2wx4xovx_coffin-dance": "audio/voice1/coffin-dance.mp3", "curb-theme": "audio/voice1/curb-theme.mp3", "to-be-continued": "audio/voice1/to-be-continued.mp3", "p_2q2wx4xovx_oh-no-laugh": "audio/voice1/oh-no-laugh.mp3", "who-are-you": "audio/voice1/who-are-you.mp3", "rick-roll": "audio/voice1/rick-roll.mp3", "p_2q2wx4xovx_sad-violin": "audio/voice1/sad-violin.mp3", "p_2q2wx4xovx_fail-horn": "audio/voice1/fail-horn.mp3", "airhorn": "audio/voice1/airhorn.mp3", "spongebob-fail": "audio/voice1/spongebob-fail.mp3", "p_2q2wx4xovx_vine-boom": "audio/voice1/vine-boom.mp3", "bonk": "audio/voice1/bonk.mp3", "fart": "audio/voice1/fart.mp3", "metal-pipe": "audio/voice1/metal-pipe.mp3", "gta-mission-passed": "audio/voice1/gta-mission-passed.mp3", "gta-wasted": "audio/voice1/gta-wasted.mp3", "among-us": "audio/voice1/among-us.mp3", "skibidi": "audio/voice1/skibidi.mp3", "sigma": "audio/voice1/sigma.mp3", "smurf-cat": "audio/voice1/smurf-cat.mp3", "mewing": "audio/voice1/mewing.mp3", "p_2q2wx4xovx_whistle": "audio/voice1/whistle.mp3", "john-cena": "audio/voice1/john-cena.mp3", "xp-startup": "audio/voice1/xp-startup.mp3", "xp-error": "audio/voice1/xp-error.mp3", "dramatic": "audio/voice1/dramatic.mp3", "p_2q2wx4xovx_record-scratch": "audio/voice1/record-scratch.mp3", "discord": "audio/voice1/discord.mp3", "dong-vat_rooster": "audio/animals/rooster.mp3", "dong-vat_dog-bark": "audio/animals/dog-bark.mp3", "dong-vat_cow-moo": "audio/animals/cow-moo.mp3", "dong-vat_sheep-baa": "audio/animals/sheep-baa.mp3", "dong-vat_pig-oink": "audio/animals/pig-oink.mp3", "dong-vat_duck-quack": "audio/animals/duck-quack.mp3", "dong-vat_frog-croak": "audio/animals/frog-croak.mp3", "dong-vat_lion-roar": "audio/animals/lion-roar.mp3", "dong-vat_wolf-howl": "audio/animals/wolf-howl.mp3", "dong-vat_horse-neigh": "audio/animals/horse-neigh.mp3", "dong-vat_monkey-screech": "audio/animals/monkey-screech.wav", "giong-nguoi_voice-lalala": "audio/human_voice/voice-lalala.mp3", "giong-nguoi_voice-uoa": "audio/human_voice/voice-uoa.mp3", "giong-nguoi_voice-hihi": "audio/human_voice/voice-hihi.mp3", "voice-opera": "audio/human_voice/voice-opera.mp3", "voice-yawn": "audio/human_voice/voice-yawn.mp3", "voice-sneeze": "audio/human_voice/voice-sneeze.mp3", "voice-cough": "audio/human_voice/voice-cough.mp3", "voice-hiccup": "audio/human_voice/voice-hiccup.mp3", "voice-whistle": "audio/human_voice/voice-whistle.mp3", "voice-gasp": "audio/human_voice/voice-gasp.mp3", "voice-cheer": "audio/human_voice/voice-cheer.mp3", "voice-kiss": "audio/human_voice/voice-kiss.mp3", "door-slam": "audio/everyday/door-slam.mp3", "zipper": "audio/everyday/zipper.mp3", "hiccups": "audio/everyday/hiccups.mp3", "sleepy-yawn": "audio/everyday/sleepy-yawn.mp3", "glass-shatter": "audio/everyday/glass-shatter.mp3", "alarm-clock": "audio/everyday/alarm-clock.mp3", "victory-chime": "audio/melody/victory-chime.mp3", "level-up-arpeggio": "audio/melody/level-up.mp3", "harp-glissando": "audio/melody/harp.mp3", "piano-riff": "audio/melody/piano-riff.mp3", "flute-run": "audio/melody/flute.mp3", "trumpet-call": "audio/melody/trumpet.mp3", "xylophone-scale": "audio/melody/xylophone.mp3", "game-over-tune": "audio/melody/game-over.mp3", "quest-complete": "audio/melody/quest-complete.mp3", "happy-whistle": "audio/melody/happy-whistle.mp3", "accordion-waltz": "audio/melody/accordion.mp3", "cartoon-slip": "audio/funny/cartoon-slip.mp3", "pop-cork": "audio/funny/pop-cork.mp3", "slurp-drink": "audio/funny/slurp-drink.mp3", "kiss-smack": "audio/funny/kiss-smack.mp3", "gasp-surprise": "audio/funny/gasp-surprise.mp3", "chewing-crunch": "audio/funny/chewing-crunch.mp3", "crazy-whistle": "audio/funny/crazy-whistle.mp3", "radar-ping": "audio/signals/radar-ping.mp3", "laser-blaster": "audio/space/laser-blaster.mp3", "rubber-duck": "audio/funny/rubber-duck.mp3", "pager-beep": "audio/morse-5.mp3", "tractor-beam": "audio/warp-speed.mp3"}};
+
+    const categories = MASTER_DATA.categories;
+    const packs = MASTER_DATA.packs;
+    const audioMap = MASTER_DATA.audioMap;
+
+    let selectedCat = 'all';
+    let localAudios = [];
+    let currentPackViewing = null;
+    let activePlayingPackId = null;
+    let isAutoPlaying = false;
+    let autoPlayIndex = 0;
+
+    let currentAudioElement = null;
+
+    function changeMasterVolume(val) {
+      if (currentAudioElement) currentAudioElement.volume = parseFloat(val);
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 2500);
+    }
+
+    // Tìm file âm thanh thực tế cho bất kỳ clip nào
+    function resolveAudioPath(clipId) {
+      if (audioMap[clipId]) return audioMap[clipId];
+      if (audioMap[clipId.toLowerCase()]) return audioMap[clipId.toLowerCase()];
+      // check fallback
+      return `audio/${clipId}.wav`;
+    }
+
+    function stopAllAudio(hideBottom = true) {
+      if (currentAudioElement) {
+        currentAudioElement.pause();
+        currentAudioElement.currentTime = 0;
+        currentAudioElement = null;
+      }
+      
+      const fill = document.getElementById('bottomProgress');
+      if (fill) fill.style.width = '0%';
+
+      document.querySelectorAll('.btn-pack-play').forEach(btn => {
+        btn.classList.remove('playing');
+        btn.innerHTML = '<span>▶</span> Phát mẫu';
+      });
+
+      document.querySelectorAll('.soundboard-item').forEach(el => {
+        el.classList.remove('playing-item');
+      });
+
+      activePlayingPackId = null;
+      isAutoPlaying = false;
+
+      if (hideBottom) {
+        document.getElementById('bottomPlayer').classList.remove('active');
+      }
+    }
+
+    // Phát âm thanh clip
+    function playAudioForClip(clipId, onEnded) {
+      stopAllAudio(false);
+
+      const filePath = resolveAudioPath(clipId);
+      currentAudioElement = new Audio(filePath);
+      currentAudioElement.volume = parseFloat(document.getElementById('volumeControl').value);
+      
+      currentAudioElement.play().then(() => {
+        currentAudioElement.ontimeupdate = () => {
+          if (currentAudioElement && currentAudioElement.duration) {
+            const pct = (currentAudioElement.currentTime / currentAudioElement.duration) * 100;
+            const fill = document.getElementById('bottomProgress');
+            if (fill) fill.style.width = pct + '%';
+          }
+        };
+
+        currentAudioElement.onended = () => {
+          if (onEnded) onEnded();
+        };
+      }).catch(err => {
+        console.warn("Không phát được file audio:", filePath, err);
+        if (onEnded) onEnded();
+      });
+    }
+
+    function playPackSample(packId, event) {
+      if (event) event.stopPropagation();
+
+      const pack = packs.find(p => p.id === packId);
+      if (!pack) return;
+
+      const btn = document.getElementById(`pack-btn-${packId}`);
+
+      if (activePlayingPackId === packId) {
+        stopAllAudio(true);
+        return;
+      }
+
+      stopAllAudio(false);
+      activePlayingPackId = packId;
+
+      if (btn) {
+        btn.classList.add('playing');
+        btn.innerHTML = `
+          <div class="wave-bars">
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+          </div>
+          <span>Đang phát</span>
+        `;
+      }
+
+      const bottom = document.getElementById('bottomPlayer');
+      bottom.classList.add('active');
+      document.getElementById('bottomPlayerEmoji').innerText = pack.emoji || '🔊';
+      document.getElementById('bottomPlayerTitle').innerText = pack.name;
+      document.getElementById('bottomPlayerSubtitle').innerText = `Chủ đề: ${pack.category.toUpperCase()} • ${pack.clipCount} CLIPS`;
+
+      const firstClip = pack.patternIds && pack.patternIds.length > 0 ? pack.patternIds[0] : 'bonk-metal';
+      playAudioForClip(firstClip, () => {
+        stopAllAudio(true);
+      });
+    }
+
+    function playPatternFromModal(patternId, index) {
+      stopAllAudio(false);
+
+      document.querySelectorAll('.soundboard-item').forEach(el => el.classList.remove('playing-item'));
+      const activeEl = document.getElementById(`modal-item-${index}`);
+      if (activeEl) activeEl.classList.add('playing-item');
+
+      const bottom = document.getElementById('bottomPlayer');
+      bottom.classList.add('active');
+      document.getElementById('bottomPlayerEmoji').innerText = '🔥';
+      document.getElementById('bottomPlayerTitle').innerText = `Clip #${index + 1}: ${patternId.replace(/-/g, ' ').toUpperCase()}`;
+      document.getElementById('bottomPlayerSubtitle').innerText = `Tệp âm thanh: ${resolveAudioPath(patternId)}`;
+
+      playAudioForClip(patternId, () => {
+        if (activeEl) activeEl.classList.remove('playing-item');
+        if (isAutoPlaying) {
+          playNextAutoClip();
+        } else {
+          document.getElementById('bottomPlayer').classList.remove('active');
+        }
+      });
+
+      showToast(`Đang phát: Clip ${index + 1} (${patternId})`);
+    }
+
+    function startAutoPlayPack() {
+      if (!currentPackViewing || !currentPackViewing.patternIds || currentPackViewing.patternIds.length === 0) return;
+      isAutoPlaying = true;
+      autoPlayIndex = 0;
+      showToast(`Tự động phát tuần tự ${currentPackViewing.patternIds.length} clips!`);
+      playPatternFromModal(currentPackViewing.patternIds[autoPlayIndex], autoPlayIndex);
+    }
+
+    function playNextAutoClip() {
+      if (!isAutoPlaying || !currentPackViewing) return;
+      autoPlayIndex++;
+      if (autoPlayIndex < currentPackViewing.patternIds.length) {
+        playPatternFromModal(currentPackViewing.patternIds[autoPlayIndex], autoPlayIndex);
+      } else {
+        isAutoPlaying = false;
+        showToast('Đã phát xong toàn bộ các clip trong pack!');
+        document.getElementById('bottomPlayer').classList.remove('active');
+      }
+    }
+
+    function playCurrentPackDemo() {
+      if (currentPackViewing) {
+        playPackSample(currentPackViewing.id);
+      }
+    }
+
+    function toggleBottomPlayer() {
+      if (currentAudioElement) {
+        if (currentAudioElement.paused) {
+          currentAudioElement.play();
+          document.getElementById('bottomPlayBtn').innerText = '⏸';
+        } else {
+          currentAudioElement.pause();
+          document.getElementById('bottomPlayBtn').innerText = '▶';
+        }
+      } else {
+        stopAllAudio(true);
+      }
+    }
+
+    // Init Page
+    window.addEventListener('DOMContentLoaded', () => {
+      renderCategories();
+      renderPacks();
+      setupDropZone();
+    });
+
+    function renderCategories() {
+      const bar = document.getElementById('categoryBar');
+      document.getElementById('totalPacksCount').innerText = packs.length;
+
+      categories.forEach(cat => {
+        const count = packs.filter(p => p.category === cat.id).length;
+        const pill = document.createElement('div');
+        pill.className = 'cat-pill';
+        pill.innerHTML = `<span>${cat.emoji}</span> ${cat.name} (${count})`;
+        pill.onclick = () => selectCategory(cat.id, pill);
+        bar.appendChild(pill);
+      });
+    }
+
+    function selectCategory(catId, element) {
+      selectedCat = catId;
+      document.querySelectorAll('.cat-pill').forEach(el => el.classList.remove('active'));
+      element.classList.add('active');
+      filterPacks();
+    }
+
+    function filterPacks() {
+      const q = document.getElementById('searchInput').value.toLowerCase().trim();
+      const filtered = packs.filter(p => {
+        const matchCat = (selectedCat === 'all') || (p.category === selectedCat);
+        const matchQuery = !q || 
+          p.name.toLowerCase().includes(q) || 
+          p.id.toLowerCase().includes(q) || 
+          (p.descr && p.descr.toLowerCase().includes(q)) ||
+          (p.patternIds && p.patternIds.some(pid => pid.toLowerCase().includes(q)));
+        return matchCat && matchQuery;
+      });
+
+      renderPacks(filtered);
+    }
+
+    function renderPacks(list = packs) {
+      const grid = document.getElementById('packsGrid');
+      grid.innerHTML = '';
+      document.getElementById('filteredCountText').innerText = `Tìm thấy ${list.length} gói`;
+
+      if (list.length === 0) {
+        grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 48px; color: var(--text-muted);">
+          Không tìm thấy sound pack nào phù hợp với bộ lọc.
+        </div>`;
+        return;
+      }
+
+      list.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'pack-card';
+
+        const coverHtml = p.cover ? 
+          `<img src="${p.cover}" alt="${p.name}" loading="lazy" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'cover-fallback\'>${p.emoji || '🎵'}</div>';">` :
+          `<div class="cover-fallback">${p.emoji || '🎵'}</div>`;
+
+        const totalClips = p.clipCount || (p.patternIds ? p.patternIds.length : 0);
+        const visiblePatterns = (p.patternIds || []).slice(0, 3);
+        const remainingCount = totalClips - visiblePatterns.length;
+
+        const patternsHtml = visiblePatterns.map((pid, idx) => 
+          `<span class="pattern-tag" onclick="event.stopPropagation(); playPatternDirectly('${p.id}', '${pid}', ${idx})">🔊 ${pid}</span>`
+        ).join('') + (remainingCount > 0 ? `<span class="tag-more" onclick="openPackModal('${p.id}')">+${remainingCount} clips</span>` : '');
+
+        card.innerHTML = `
+          <div class="card-cover" onclick="openPackModal('${p.id}')">
+            ${coverHtml}
+            <div class="badge-clips">${totalClips} CLIPS</div>
+            <div class="badge-source">🔥 Audio Thật</div>
+          </div>
+          <div class="card-content">
+            <span class="card-category-tag">${p.category || 'Mở rộng'}</span>
+            <h3 class="card-title" onclick="openPackModal('${p.id}')">${p.emoji || '🔊'} ${p.name}</h3>
+            <p class="card-descr">${p.descr || 'Bộ hiệu ứng và giọng mẫu dùng trong Voice Party.'}</p>
+            <div class="card-tags">
+              ${patternsHtml}
+            </div>
+            <div class="card-audio-controls">
+              <button class="btn-pack-play" id="pack-btn-${p.id}" onclick="playPackSample('${p.id}', event)">
+                <span>▶</span> Phát mẫu
+              </button>
+              <button class="btn-pack-detail" onclick="openPackModal('${p.id}')">
+                Chi tiết (${totalClips})
+              </button>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function playPatternDirectly(packId, patternId, idx) {
+      const pack = packs.find(p => p.id === packId);
+      currentPackViewing = pack;
+      playPatternFromModal(patternId, idx);
+    }
+
+    // Modal Details with 100% REAL AUDIO CLIPS
+    function openPackModal(packId) {
+      const pack = packs.find(p => p.id === packId);
+      if (!pack) return;
+      currentPackViewing = pack;
+
+      document.getElementById('modalEmoji').innerText = pack.emoji || '📦';
+      document.getElementById('modalTitle').innerText = pack.name;
+      document.getElementById('modalCategory').innerText = `Chủ đề: ${pack.category.toUpperCase()} • ID: ${pack.id}`;
+      document.getElementById('modalDescr').innerText = pack.descr || 'Không có mô tả chi tiết.';
+      
+      const img = document.getElementById('modalCoverImg');
+      if (pack.cover) {
+        img.src = pack.cover;
+        img.style.display = 'block';
+      } else {
+        img.style.display = 'none';
+      }
+
+      const patternList = document.getElementById('modalPatternList');
+      patternList.innerHTML = '';
+      const patterns = pack.patternIds || [];
+      const totalClips = pack.clipCount || patterns.length;
+      document.getElementById('modalPatternCount').innerText = totalClips;
+
+      patterns.forEach((pid, index) => {
+        const item = document.createElement('div');
+        item.className = 'soundboard-item';
+        item.id = `modal-item-${index}`;
+
+        const title = pid.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+        item.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div class="clip-number-badge">${index + 1}</div>
+            <div>
+              <strong style="font-size: 0.9rem; color: white;">
+                ${title}
+                <span class="clip-tag-badge">Audio Thật</span>
+              </strong>
+              <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+                Tệp: <code style="color: var(--cyan);">${resolveAudioPath(pid)}</code>
+              </div>
+            </div>
+          </div>
+          <button class="btn-synth-play" onclick="playPatternFromModal('${pid}', ${index})">
+            <span>▶</span> Nghe
+          </button>
+        `;
+        patternList.appendChild(item);
+      });
+
+      document.getElementById('packModal').classList.add('open');
+    }
+
+    function closePackModal() {
+      document.getElementById('packModal').classList.remove('open');
+      isAutoPlaying = false;
+    }
+
+    // Local file handling
+    function setupDropZone() {
+      const zone = document.getElementById('dropZone');
+      ['dragenter', 'dragover'].forEach(eName => {
+        zone.addEventListener(eName, (e) => {
+          e.preventDefault();
+          zone.classList.add('dragover');
+        });
+      });
+      ['dragleave', 'drop'].forEach(eName => {
+        zone.addEventListener(eName, (e) => {
+          e.preventDefault();
+          zone.classList.remove('dragover');
+        });
+      });
+
+      zone.addEventListener('drop', (e) => {
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+          processAudioFiles(files);
+        }
+      });
+    }
+
+    function handleFileSelect(event) {
+      const files = event.target.files;
+      if (files && files.length > 0) {
+        processAudioFiles(files);
+      }
+    }
+
+    function processAudioFiles(fileList) {
+      let added = 0;
+      Array.from(fileList).forEach(file => {
+        if (!file.type.startsWith('audio/') && !file.name.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i)) {
+          return;
+        }
+
+        const audioUrl = URL.createObjectURL(file);
+        const item = {
+          name: file.name.replace(/\.[^/.]+$/, ""),
+          fullName: file.name,
+          size: (file.size / 1024).toFixed(1) + ' KB',
+          url: audioUrl,
+          audioEl: new Audio(audioUrl),
+          duration: 'Đang tải...'
+        };
+
+        item.audioEl.onloadedmetadata = () => {
+          const m = Math.floor(item.audioEl.duration / 60);
+          const s = Math.floor(item.audioEl.duration % 60);
+          item.duration = `${m}:${s < 10 ? '0' : ''}${s}`;
+          renderLocalAudios();
+        };
+
+        localAudios.unshift(item);
+        added++;
+      });
+
+      if (added > 0) {
+        renderLocalAudios();
+        showToast(`Đã tải lên ${added} file âm thanh từ máy!`);
+      }
+    }
+
+    function renderLocalAudios() {
+      const container = document.getElementById('localAudioContainer');
+      const list = document.getElementById('localAudioList');
+      const countEl = document.getElementById('localAudioCount');
+
+      if (localAudios.length === 0) {
+        container.style.display = 'none';
+        return;
+      }
+
+      container.style.display = 'block';
+      countEl.innerText = localAudios.length;
+      list.innerHTML = '';
+
+      localAudios.forEach((item, index) => {
+        const card = document.createElement('div');
+        card.className = 'audio-item-card';
+
+        card.innerHTML = `
+          <div class="audio-item-top">
+            <button class="play-btn" id="play-btn-${index}" onclick="togglePlayLocal(${index})">▶</button>
+            <div class="audio-info">
+              <div class="name" title="${item.fullName}">${item.name}</div>
+              <div class="meta">${item.size} • ${item.duration}</div>
+            </div>
+            <button class="btn btn-secondary" style="padding: 6px 8px; font-size: 0.75rem;" onclick="removeLocalAudio(${index})">✕</button>
+          </div>
+        `;
+
+        list.appendChild(card);
+      });
+    }
+
+    function togglePlayLocal(index) {
+      const item = localAudios[index];
+      const btn = document.getElementById(`play-btn-${index}`);
+
+      if (currentAudioElement && currentAudioElement !== item.audioEl) {
+        currentAudioElement.pause();
+      }
+
+      if (item.audioEl.paused) {
+        stopAllAudio(false);
+        item.audioEl.volume = parseFloat(document.getElementById('volumeControl').value);
+        item.audioEl.play();
+        btn.innerHTML = '⏸';
+        currentAudioElement = item.audioEl;
+
+        const bottom = document.getElementById('bottomPlayer');
+        bottom.classList.add('active');
+        document.getElementById('bottomPlayerEmoji').innerText = '🎵';
+        document.getElementById('bottomPlayerTitle').innerText = item.name;
+        document.getElementById('bottomPlayerSubtitle').innerText = `Local Audio • ${item.size}`;
+
+        item.audioEl.onended = () => {
+          btn.innerHTML = '▶';
+          stopAllAudio(true);
+        };
+      } else {
+        item.audioEl.pause();
+        btn.innerHTML = '▶';
+        document.getElementById('bottomPlayer').classList.remove('active');
+      }
+    }
+
+    function removeLocalAudio(index) {
+      if (localAudios[index]) {
+        if (currentAudioElement === localAudios[index].audioEl) {
+          stopAllAudio(true);
+        }
+        URL.revokeObjectURL(localAudios[index].url);
+        localAudios.splice(index, 1);
+        renderLocalAudios();
+      }
+    }
+
+    function clearLocalAudios() {
+      localAudios.forEach(item => URL.revokeObjectURL(item.url));
+      localAudios = [];
+      renderLocalAudios();
+      showToast('Đã dọn dẹp các file âm thanh tạm thời.');
+    }
+
+    // Direct Mic Recording
+    let mediaRecorder = null;
+    let micAudioChunks = [];
+    let isRecording = false;
+
+    async function triggerMicRecord() {
+      const micBtn = document.getElementById('micBtn');
+
+      if (!isRecording) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorder = new MediaRecorder(stream);
+          micAudioChunks = [];
+
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) micAudioChunks.push(e.data);
+          };
+
+          mediaRecorder.onstop = () => {
+            const blob = new Blob(micAudioChunks, { type: 'audio/webm' });
+            const file = new File([blob], `mic_recording_${Date.now()}.webm`, { type: 'audio/webm' });
+            processAudioFiles([file]);
+            stream.getTracks().forEach(t => t.stop());
+          };
+
+          mediaRecorder.start();
+          isRecording = true;
+          micBtn.style.background = '#ef4444';
+          micBtn.innerHTML = '<span>⏹</span> Dừng Thu Âm (Đang Ghi)';
+          showToast('Đang thu âm giọng nói của bạn...');
+        } catch (err) {
+          alert('Không thể mở micro: ' + err.message);
+        }
+      } else {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+        }
+        isRecording = false;
+        micBtn.style.background = '';
+        micBtn.innerHTML = '<span>🎤</span> Thu Âm Trực Tiếp';
+      }
+    }
+  </script>
+</body>
+</html>

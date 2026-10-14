@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MicMixFun - Room & Audio Share Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0b0f19;
+      --bg-card: #151b2b;
+      --bg-card-hover: #1e263d;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --accent: #ec4899;
+      --green: #10b981;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --cyan: #06b6d4;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --radius-lg: 16px;
+      --radius-md: 12px;
+      --radius-sm: 8px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    header {
+      background: rgba(21, 27, 43, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      font-size: 26px;
+      background: linear-gradient(135deg, #6366f1, #ec4899);
+      border-radius: 10px;
+      padding: 6px 10px;
+      display: inline-block;
+    }
+
+    .brand-title {
+      font-weight: 800;
+      font-size: 1.15rem;
+      letter-spacing: -0.5px;
+      background: linear-gradient(to right, #ffffff, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header-status {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--red);
+    }
+    .status-dot.online {
+      background: var(--green);
+      box-shadow: 0 0 10px var(--green);
+    }
+
+    /* Main Container */
+    .container {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 24px 20px;
+      width: 100%;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Lobby Screen (Modal or Initial view) */
+    #lobbyScreen {
+      max-width: 520px;
+      margin: 40px auto;
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .lobby-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    .lobby-subtitle {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .form-group {
+      margin-bottom: 18px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-input {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border-color);
+      color: #fff;
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      font-size: 1rem;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .form-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }
+
+    .avatar-picker {
+      display: flex;
+      gap: 10px;
+      margin-top: 6px;
+    }
+
+    .avatar-opt {
+      font-size: 1.4rem;
+      cursor: pointer;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      background: rgba(255, 255, 255, 0.05);
+      transition: all 0.2s;
+    }
+
+    .avatar-opt.selected {
+      border-color: var(--primary);
+      background: rgba(99, 102, 241, 0.25);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 20px;
+      border-radius: var(--radius-md);
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+      width: 100%;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+      color: #fff;
+      box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+    }
+    .btn-primary:hover {
+      opacity: 0.95;
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.25);
+    }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      text-align: center;
+      margin: 20px 0;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .divider span {
+      padding: 0 12px;
+    }
+
+    /* Room Screen Layout */
+    #roomScreen {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+      height: 100%;
+    }
+
+    .room-header-bar {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 14px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .room-info-pill {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .room-code-tag {
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: #a5b4fc;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .room-code-tag:hover {
+      background: rgba(99, 102, 241, 0.3);
+    }
+
+    .room-layout-grid {
+      display: grid;
+      grid-template-columns: 280px 1fr 340px;
+      gap: 16px;
+      flex: 1;
+      min-height: 600px;
+    }
+
+    @media (max-width: 1024px) {
+      .room-layout-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Left Panel: Members & Quick Info */
+    .panel-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-color);
+      font-weight: 700;
+      font-size: 0.95rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .member-list {
+      padding: 12px;
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow-y: auto;
+      max-height: 380px;
+    }
+
+    .member-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      font-size: 0.9rem;
+    }
+
+    .member-item.me {
+      border-color: rgba(99, 102, 241, 0.4);
+      background: rgba(99, 102, 241, 0.08);
+    }
+
+    .member-avatar {
+      font-size: 1.2rem;
+    }
+
+    /* Middle Panel: Soundboard Sync & Mic Record */
+    .soundboard-toolbar {
+      padding: 12px 18px;
+      background: rgba(0, 0, 0, 0.2);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .soundboard-search {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 0.85rem;
+      outline: none;
+    }
+
+    .soundboard-grid {
+      padding: 16px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px;
+      overflow-y: auto;
+      max-height: 480px;
+    }
+
+    .sound-card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 12px 10px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
+    }
+
+    .sound-card:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--primary);
+      transform: translateY(-2px);
+    }
+
+    .sound-card:active, .sound-card.playing {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(236, 72, 153, 0.3));
+      border-color: var(--accent);
+      transform: scale(0.96);
+    }
+
+    .sound-card-icon {
+      font-size: 1.5rem;
+    }
+
+    .sound-card-name {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-main);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      width: 100%;
+    }
+
+    /* Record / Share Voice Section */
+    .voice-share-box {
+      padding: 14px 18px;
+      border-top: 1px solid var(--border-color);
+      background: rgba(0, 0, 0, 0.15);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .voice-btn-group {
+      display: flex;
+      gap: 10px;
+    }
+
+    /* Right Panel: Chat Room */
+    .chat-container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .chat-messages {
+      flex: 1;
+      padding: 14px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 480px;
+    }
+
+    .chat-msg {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-width: 90%;
+    }
+
+    .chat-msg.mine {
+      align-self: flex-end;
+    }
+
+    .chat-msg.others {
+      align-self: flex-start;
+    }
+
+    .chat-msg-header {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .chat-bubble {
+      padding: 9px 14px;
+      border-radius: var(--radius-md);
+      font-size: 0.9rem;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    .chat-msg.mine .chat-bubble {
+      background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .chat-msg.others .chat-bubble {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--border-color);
+      border-bottom-left-radius: 4px;
+    }
+
+    .chat-msg.system {
+      align-self: center;
+      text-align: center;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.04);
+      padding: 4px 12px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .chat-msg.sound-event {
+      align-self: center;
+      background: rgba(236, 72, 153, 0.1);
+      border: 1px solid rgba(236, 72, 153, 0.3);
+      color: #f472b6;
+      font-size: 0.8rem;
+      padding: 6px 14px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .chat-input-bar {
+      padding: 12px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .chat-input {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      color: #fff;
+      padding: 10px 14px;
+      font-size: 0.9rem;
+      outline: none;
+    }
+
+    .chat-input:focus {
+      border-color: var(--primary);
+    }
+
+    .chat-send-btn {
+      width: auto;
+      padding: 10px 18px;
+    }
+
+    /* Sound playing wave notification */
+    #soundWaveToast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: rgba(21, 27, 43, 0.95);
+      border: 1px solid var(--accent);
+      padding: 12px 20px;
+      border-radius: var(--radius-md);
+      display: none;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 10px 25px rgba(236, 72, 153, 0.3);
+      z-index: 100;
+      animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(30px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .wave-bars {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      height: 18px;
+    }
+
+    .wave-bar {
+      width: 3px;
+      height: 100%;
+      background: var(--accent);
+      border-radius: 2px;
+      animation: soundAnim 0.8s infinite ease-in-out alternate;
+    }
+    .wave-bar:nth-child(2) { animation-delay: 0.2s; }
+    .wave-bar:nth-child(3) { animation-delay: 0.4s; }
+    .wave-bar:nth-child(4) { animation-delay: 0.1s; }
+
+    @keyframes soundAnim {
+      0% { height: 4px; }
+      100% { height: 18px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <span class="brand-logo">🎙️</span>
+      <div>
+        <h1 class="brand-title">MicMixFun Socket Studio</h1>
+        <small style="color: var(--text-muted); font-size: 0.75rem;">Real-time Room, Soundboard Sync & Voice Chat</small>
+      </div>
+    </div>
+    <div class="header-status">
+      <a href="/mimic" style="text-decoration: none; background: linear-gradient(135deg, #ec4899, #8b5cf6); color: #fff; padding: 7px 15px; border-radius: 20px; font-weight: 700; font-size: 0.85rem; box-shadow: 0 4px 12px rgba(236,72,153,0.3); display: flex; align-items: center; gap: 6px;">
+        <span>🎮</span>
+        <span>Mimic Party Game</span>
+      </a>
+      <div class="status-badge">
+        <span id="statusDot" class="status-dot"></span>
+        <span id="statusText">Connecting...</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- SCREEN 1: LOBBY (TẠO HOẶC VÀO PHÒNG) -->
+    <div id="lobbyScreen">
+      <h2 class="lobby-title">🚀 Tham Gia Phòng Âm Thanh</h2>
+      <p class="lobby-subtitle">Kết nối nhiều thiết bị (Web & Android) vào cùng một phòng để chat và phát âm thanh đồng bộ!</p>
+
+      <div class="form-group">
+        <label class="form-label">Tên hiển thị của bạn</label>
+        <input type="text" id="inputUsername" class="form-input" placeholder="Ví dụ: Hoàng Long, Alex..." maxlength="20">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Chọn Avatar</label>
+        <div class="avatar-picker" id="avatarPicker">
+          <div class="avatar-opt selected" onclick="selectAvatar(this, '🎧')">🎧</div>
+          <div class="avatar-opt" onclick="selectAvatar(this, '🎤')">🎤</div>
+          <div class="avatar-opt" onclick="selectAvatar(this, '🐱')">🐱</div>
+          <div class="avatar-opt" onclick="selectAvatar(this, '🐶')">🐶</div>
+          <div class="avatar-opt" onclick="selectAvatar(this, '🚀')">🚀</div>
+          <div class="avatar-opt" onclick="selectAvatar(this, '🔥')">🔥</div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Mã Phòng (Room ID)</label>
+        <input type="text" id="inputRoomId" class="form-input" placeholder="Nhập mã phòng hoặc tạo phòng mới" style="text-transform: uppercase;">
+      </div>
+
+      <div style="display: flex; gap: 10px; margin-top: 24px;">
+        <button class="btn btn-primary" onclick="joinRoomAction()">
+          <span>🚪 Vào Phòng</span>
+        </button>
+        <button class="btn btn-secondary" onclick="createRoomQuickAction()">
+          <span>✨ Tạo Phòng Mới</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: PHÒNG ĐANG HOẠT ĐỘNG (ROOM SCREEN) -->
+    <div id="roomScreen">
+      <!-- Top info bar -->
+      <div class="room-header-bar">
+        <div class="room-info-pill">
+          <span style="font-size: 1.4rem;" id="myAvatarDisplay">🎧</span>
+          <div>
+            <div style="font-weight: 700; font-size: 1.05rem;" id="roomTitleDisplay">Phòng VIP</div>
+            <small style="color: var(--text-muted);" id="myUsernameDisplay">Đang kết nối...</small>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="room-code-tag" onclick="copyRoomCode()" title="Click để copy mã phòng">
+            <span>Mã:</span>
+            <span id="roomCodeDisplay">ROOM</span>
+            <span>📋</span>
+          </div>
+          <button class="btn btn-danger" style="width: auto; padding: 8px 16px;" onclick="leaveRoomAction()">
+            <span>Rời Phòng</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Layout Grid -->
+      <div class="room-layout-grid">
+        <!-- 1. LEFT PANEL: MEMBERS & ROOM STATS -->
+        <div class="panel-box">
+          <div class="panel-header">
+            <span>👥 Thành Viên Online (<span id="memberCount">0</span>)</span>
+          </div>
+          <ul class="member-list" id="memberList">
+            <!-- Render danh sách thành viên -->
+          </ul>
+
+          <div style="padding: 14px; margin-top: auto; border-top: 1px solid var(--border-color); background: rgba(0,0,0,0.1);">
+            <div style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;">
+              💡 <b>Mẹo thử nghiệm:</b> Mở trang này trên 1 tab trình duyệt ẩn danh hoặc trình duyệt khác, nhập chung <b>Mã Phòng</b> để trải nghiệm phát âm thanh & chat tức thời!
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. MIDDLE PANEL: SOUNDBOARD SYNC & SHARE AUDIO -->
+        <div class="panel-box">
+          <div class="panel-header">
+            <span>🔊 Soundboard Sync (Phát Đồng Bộ Cả Phòng)</span>
+            <button class="btn btn-danger" style="width: auto; padding: 6px 12px; font-size: 0.8rem;" onclick="stopAllSounds()">
+              ⏹ Dừng Tất Cả
+            </button>
+          </div>
+
+          <div class="soundboard-toolbar">
+            <input type="text" id="soundSearchInput" class="soundboard-search" placeholder="🔍 Tìm âm thanh (meme, laugh, horn...)" oninput="filterSounds()">
+            <span id="soundTotalCount" style="font-size: 0.8rem; color: var(--text-muted);">0 âm thanh</span>
+          </div>
+
+          <!-- Grid âm thanh có sẵn -->
+          <div class="soundboard-grid" id="soundboardGrid">
+            <!-- Javascript render danh sách âm thanh -->
+          </div>
+
+          <!-- Thu âm Mic & Share Voice Clip -->
+          <div class="voice-share-box">
+            <div style="font-size: 0.85rem; font-weight: 600; display: flex; justify-content: space-between;">
+              <span>🎙️ Ghi Âm & Share Giọng Nói Lên Phòng</span>
+              <span id="recTimer" style="color: var(--accent); font-weight: 700; display: none;">00:00</span>
+            </div>
+            <div class="voice-btn-group">
+              <button class="btn btn-secondary" id="recBtn" onclick="toggleMicRecording()">
+                <span>⏺ Bắt Đầu Thu Âm</span>
+              </button>
+              <button class="btn btn-primary" id="shareRecordedBtn" style="display: none;" onclick="sendRecordedVoice()">
+                <span>📤 Share Clip Này Vào Phòng</span>
+              </button>
+            </div>
+            <audio id="recAudioPreview" controls style="display: none; width: 100%; height: 36px; border-radius: 8px;"></audio>
+          </div>
+        </div>
+
+        <!-- 3. RIGHT PANEL: REAL-TIME CHAT -->
+        <div class="panel-box">
+          <div class="panel-header">
+            <span>💬 Chat Phòng Thời Gian Thực</span>
+          </div>
+
+          <div class="chat-container">
+            <div class="chat-messages" id="chatMessages">
+              <!-- Render tin nhắn chat -->
+            </div>
+
+            <form class="chat-input-bar" onsubmit="sendChat(event)">
+              <input type="text" id="chatInput" class="chat-input" placeholder="Nhập tin nhắn..." autocomplete="off">
+              <button type="submit" class="btn btn-primary chat-send-btn">
+                <span>Gửi</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast thông báo âm thanh đang phát đồng bộ -->
+  <div id="soundWaveToast">
+    <div class="wave-bars">
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+      <div class="wave-bar"></div>
+    </div>
+    <span id="soundWaveText" style="font-size: 0.9rem; font-weight: 600;">Đang phát âm thanh...</span>
+  </div>
+
+  <!-- Socket.IO Client -->
+  <script src="/socket.io/socket.io.js"></script>
+
+  <script>
+    // State quản lý
+    let socket = null;
+    let currentRoomId = null;
+    let myUser = {
+      userName: 'User_' + Math.floor(Math.random() * 9000 + 1000),
+      avatar: '🎧'
+    };
+    let soundList = [];
+    let audioPlayer = new Audio();
+
+    // DOM Elements
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const lobbyScreen = document.getElementById('lobbyScreen');
+    const roomScreen = document.getElementById('roomScreen');
+    const inputUsername = document.getElementById('inputUsername');
+    const inputRoomId = document.getElementById('inputRoomId');
+    const memberList = document.getElementById('memberList');
+    const memberCount = document.getElementById('memberCount');
+    const soundboardGrid = document.getElementById('soundboardGrid');
+    const chatMessages = document.getElementById('chatMessages');
+    const chatInput = document.getElementById('chatInput');
+    const roomCodeDisplay = document.getElementById('roomCodeDisplay');
+    const roomTitleDisplay = document.getElementById('roomTitleDisplay');
+    const myUsernameDisplay = document.getElementById('myUsernameDisplay');
+    const myAvatarDisplay = document.getElementById('myAvatarDisplay');
+
+    // Khởi tạo
+    window.addEventListener('DOMContentLoaded', () => {
+      inputUsername.value = myUser.userName;
+      inputRoomId.value = 'PARTY88'; // Giá trị mẫu
+      initSocket();
+      loadSoundsList();
+    });
+
+    function selectAvatar(el, avatar) {
+      document.querySelectorAll('.avatar-opt').forEach(a => a.classList.remove('selected'));
+      el.classList.add('selected');
+      myUser.avatar = avatar;
+    }
+
+    // ----------------------------------------------------
+    // Khởi tạo Socket.IO
+    // ----------------------------------------------------
+    function initSocket() {
+      socket = io({
+        reconnectionAttempts: 10,
+        reconnectionDelay: 1000
+      });
+
+      socket.on('connect', () => {
+        statusDot.className = 'status-dot online';
+        statusText.textContent = '🟢 Server Online';
+      });
+
+      socket.on('disconnect', () => {
+        statusDot.className = 'status-dot';
+        statusText.textContent = '🔴 Disconnected';
+      });
+
+      socket.on('connect_error', (err) => {
+        statusDot.className = 'status-dot';
+        statusText.textContent = '⚠️ Mất kết nối';
+      });
+
+      // Nhận sự kiện có thành viên mới vào phòng
+      socket.on('user_joined', ({ user, members, systemMessage }) => {
+        updateMemberList(members);
+        appendSystemMessage(systemMessage);
+      });
+
+      // Nhận sự kiện có thành viên rời phòng
+      socket.on('user_left', ({ user, members, systemMessage }) => {
+        updateMemberList(members);
+        appendSystemMessage(systemMessage);
+      });
+
+      // Nhận tin nhắn chat mới
+      socket.on('new_message', (msg) => {
+        appendChatMessage(msg);
+      });
+
+      // Nhận sự kiện SOUNDBOARD SYNC: Thành viên khác phát âm thanh!
+      socket.on('sync_play_sound', (data) => {
+        console.log('[Socket] Nhận sync_play_sound:', data);
+        playAudioClip(data.soundUrl, data.soundName, data.senderName);
+      });
+
+      // Nhận lệnh dừng tất cả âm thanh
+      socket.on('sync_stop_sounds', (data) => {
+        audioPlayer.pause();
+        audioPlayer.currentTime = 0;
+        hideSoundToast();
+        appendSystemMessage(`${data.senderName} đã tắt toàn bộ âm thanh.`);
+      });
+
+      // Nhận audio clip chia sẻ từ thành viên khác
+      socket.on('new_audio_shared', (audioData) => {
+        console.log('[Socket] Nhận new_audio_shared:', audioData);
+        // Tự động phát clip được share
+        playAudioClip(audioData.audioData, audioData.audioName, audioData.senderName);
+      });
+    }
+
+    // ----------------------------------------------------
+    // Lấy danh sách âm thanh từ Server REST API
+    // ----------------------------------------------------
+    async function loadSoundsList() {
+      try {
+        const res = await fetch('/api/sounds');
+        const data = await res.json();
+        soundList = data.sounds || [];
+        document.getElementById('soundTotalCount').textContent = `${soundList.length} âm thanh`;
+        renderSounds(soundList);
+      } catch (err) {
+        console.error('Không tải được danh sách âm thanh:', err);
+      }
+    }
+
+    function renderSounds(sounds) {
+      soundboardGrid.innerHTML = '';
+      if (sounds.length === 0) {
+        soundboardGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 20px;">Không tìm thấy âm thanh</div>';
+        return;
+      }
+
+      const sampleIcons = ['🎺', '🐱', '🐕', '🎉', '🔔', '🤖', '💣', '⚡', '🥁', '🚀', '⭐'];
+
+      sounds.forEach((item, index) => {
+        const icon = sampleIcons[index % sampleIcons.length];
+        const card = document.createElement('div');
+        card.className = 'sound-card';
+        card.innerHTML = `
+          <div class="sound-card-icon">${icon}</div>
+          <div class="sound-card-name" title="${item.name}">${item.name}</div>
+        `;
+        card.onclick = () => triggerSoundSync(item, card);
+        soundboardGrid.appendChild(card);
+      });
+    }
+
+    function filterSounds() {
+      const q = document.getElementById('soundSearchInput').value.toLowerCase().trim();
+      const filtered = soundList.filter(s => s.name.toLowerCase().includes(q) || s.fileName.toLowerCase().includes(q));
+      renderSounds(filtered);
+    }
+
+    // ----------------------------------------------------
+    // Actions: Tạo phòng / Vào phòng
+    // ----------------------------------------------------
+    function createRoomQuickAction() {
+      const randomCode = 'ROOM' + Math.floor(1000 + Math.random() * 9000);
+      inputRoomId.value = randomCode;
+      joinRoomAction();
+    }
+
+    function joinRoomAction() {
+      const uname = inputUsername.value.trim() || myUser.userName;
+      const rId = inputRoomId.value.trim().toUpperCase();
+
+      if (!rId) {
+        alert('Vui lòng nhập Mã phòng!');
+        return;
+      }
+
+      myUser.userName = uname;
+
+      socket.emit('join_room', {
+        roomId: rId,
+        userName: myUser.userName,
+        avatar: myUser.avatar
+      }, (res) => {
+        if (res.success) {
+          currentRoomId = res.room.id;
+          roomCodeDisplay.textContent = currentRoomId;
+          roomTitleDisplay.textContent = res.room.name || `Phòng ${currentRoomId}`;
+          myUsernameDisplay.textContent = `${myUser.userName} (Bạn)`;
+          myAvatarDisplay.textContent = myUser.avatar;
+
+          updateMemberList(res.room.members);
+
+          // Clear & render messages
+          chatMessages.innerHTML = '';
+          (res.room.messages || []).forEach(msg => appendChatMessage(msg));
+
+          // Switch screen
+          lobbyScreen.style.display = 'none';
+          roomScreen.style.display = 'flex';
+        } else {
+          alert('Không thể vào phòng: ' + res.message);
+        }
+      });
+    }
+
+    function leaveRoomAction() {
+      if (!confirm('Bạn có chắc muốn rời phòng này?')) return;
+      socket.emit('leave_room', {}, () => {
+        currentRoomId = null;
+        roomScreen.style.display = 'none';
+        lobbyScreen.style.display = 'block';
+      });
+    }
+
+    function copyRoomCode() {
+      if (currentRoomId) {
+        navigator.clipboard.writeText(currentRoomId);
+        alert(`Đã copy mã phòng "${currentRoomId}" vào bộ nhớ tạm!`);
+      }
+    }
+
+    // ----------------------------------------------------
+    // Soundboard Sync Trigger
+    // ----------------------------------------------------
+    function triggerSoundSync(item, cardEl) {
+      if (!currentRoomId) return;
+
+      if (cardEl) {
+        cardEl.classList.add('playing');
+        setTimeout(() => cardEl.classList.remove('playing'), 800);
+      }
+
+      // Phát tại client của mình
+      playAudioClip(item.url, item.name, 'Bạn');
+
+      // Gửi event qua Socket cho cả phòng cùng phát
+      socket.emit('trigger_sound', {
+        soundId: item.id,
+        soundName: item.name,
+        soundUrl: item.url,
+        volume: 1.0
+      });
+    }
+
+    function stopAllSounds() {
+      audioPlayer.pause();
+      audioPlayer.currentTime = 0;
+      hideSoundToast();
+      if (currentRoomId) {
+        socket.emit('stop_all_sounds');
+      }
+    }
+
+    function playAudioClip(url, name, sender) {
+      audioPlayer.src = url;
+      audioPlayer.play().catch(e => console.warn('Trình duyệt chặn autoplay:', e));
+      showSoundToast(name, sender);
+    }
+
+    function showSoundToast(soundName, sender) {
+      const toast = document.getElementById('soundWaveToast');
+      const text = document.getElementById('soundWaveText');
+      text.textContent = `🔊 ${sender}: "${soundName}"`;
+      toast.style.display = 'flex';
+      clearTimeout(window._toastTimeout);
+      window._toastTimeout = setTimeout(hideSoundToast, 3500);
+    }
+
+    function hideSoundToast() {
+      document.getElementById('soundWaveToast').style.display = 'none';
+    }
+
+    // ----------------------------------------------------
+    // Thu âm Micro & Share Voice Clip
+    // ----------------------------------------------------
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
+    let recordedBase64 = null;
+    let recStartTime = 0;
+    let recTimerInterval = null;
+
+    async function toggleMicRecording() {
+      const btn = document.getElementById('recBtn');
+      const timerEl = document.getElementById('recTimer');
+      const preview = document.getElementById('recAudioPreview');
+      const shareBtn = document.getElementById('shareRecordedBtn');
+
+      if (!isRecording) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorder = new MediaRecorder(stream);
+          audioChunks = [];
+
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunks.push(e.data);
+          };
+
+          mediaRecorder.onstop = () => {
+            const blob = new Blob(audioChunks, { type: 'audio/webm' });
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onloadend = () => {
+              recordedBase64 = reader.result;
+              preview.src = recordedBase64;
+              preview.style.display = 'block';
+              shareBtn.style.display = 'inline-flex';
+            };
+            stream.getTracks().forEach(t => t.stop());
+          };
+
+          mediaRecorder.start();
+          isRecording = true;
+          recStartTime = Date.now();
+          timerEl.style.display = 'inline';
+          btn.innerHTML = '<span>⏹ Dừng Thu Âm</span>';
+          btn.style.background = 'var(--red)';
+
+          recTimerInterval = setInterval(() => {
+            const sec = Math.floor((Date.now() - recStartTime) / 1000);
+            timerEl.textContent = `00:${sec < 10 ? '0' + sec : sec}`;
+          }, 500);
+
+        } catch (err) {
+          alert('Không thể mở micro: ' + err.message);
+        }
+      } else {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+        }
+        isRecording = false;
+        clearInterval(recTimerInterval);
+        timerEl.style.display = 'none';
+        btn.innerHTML = '<span>⏺ Bắt Đầu Thu Âm</span>';
+        btn.style.background = '';
+      }
+    }
+
+    function sendRecordedVoice() {
+      if (!recordedBase64 || !currentRoomId) return;
+
+      socket.emit('share_audio_clip', {
+        audioData: recordedBase64,
+        audioName: `Voice Clip (${myUser.userName})`,
+        duration: Math.round((Date.now() - recStartTime) / 1000)
+      }, (res) => {
+        if (res.success) {
+          document.getElementById('shareRecordedBtn').style.display = 'none';
+          document.getElementById('recAudioPreview').style.display = 'none';
+          recordedBase64 = null;
+        }
+      });
+    }
+
+    // ----------------------------------------------------
+    // Chat Functions
+    // ----------------------------------------------------
+    function sendChat(e) {
+      e.preventDefault();
+      const text = chatInput.value.trim();
+      if (!text || !currentRoomId) return;
+
+      socket.emit('send_message', { message: text });
+      chatInput.value = '';
+    }
+
+    function appendChatMessage(msg) {
+      const isMine = msg.senderId === socket.id;
+      const div = document.createElement('div');
+
+      if (msg.type === 'sound_trigger') {
+        div.className = 'chat-msg sound-event';
+        div.innerHTML = `<span>🔊 <b>${escapeHtml(msg.senderName)}</b> ${escapeHtml(msg.message)}</span>`;
+      } else if (msg.type === 'audio_share') {
+        div.className = `chat-msg ${isMine ? 'mine' : 'others'}`;
+        div.innerHTML = `
+          <div class="chat-msg-header">${escapeHtml(msg.senderName)} • ${formatTime(msg.timestamp)}</div>
+          <div class="chat-bubble">
+            <div>🎙️ <b>${escapeHtml(msg.audioMeta?.audioName || 'Bản ghi âm')}</b></div>
+            <audio controls src="${msg.audioMeta?.audioData}" style="margin-top: 6px; max-width: 220px; height: 32px;"></audio>
+          </div>
+        `;
+      } else {
+        div.className = `chat-msg ${isMine ? 'mine' : 'others'}`;
+        div.innerHTML = `
+          <div class="chat-msg-header">${escapeHtml(msg.senderName)} • ${formatTime(msg.timestamp)}</div>
+          <div class="chat-bubble">${escapeHtml(msg.message)}</div>
+        `;
+      }
+
+      chatMessages.appendChild(div);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function appendSystemMessage(text) {
+      const div = document.createElement('div');
+      div.className = 'chat-msg system';
+      div.textContent = text;
+      chatMessages.appendChild(div);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function updateMemberList(members) {
+      memberList.innerHTML = '';
+      memberCount.textContent = (members || []).length;
+
+      (members || []).forEach(m => {
+        const li = document.createElement('li');
+        const isMe = m.socketId === socket.id;
+        li.className = `member-item ${isMe ? 'me' : ''}`;
+        li.innerHTML = `
+          <span class="member-avatar">${m.avatar || '🎧'}</span>
+          <span style="font-weight: ${isMe ? '700' : '500'};">${escapeHtml(m.userName)} ${isMe ? '(Bạn)' : ''}</span>
+        `;
+        memberList.appendChild(li);
+      });
+    }
+
+    function formatTime(ts) {
+      const d = new Date(ts || Date.now());
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+  </script>
+</body>
+</html>
