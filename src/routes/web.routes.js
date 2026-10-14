@@ -30,9 +30,17 @@ function registerWebRoutes(app) {
   app.use('/sounds', express.static(DOWNLOADED_SOUNDS_DIR));
   app.use('/downloaded_sounds', express.static(DOWNLOADED_SOUNDS_DIR));
 
-  // Fallback tương thích ngược cho cả /sounds/*, /downloaded_sounds/* và /audio/*
+  // Fallback tương thích ngược cho cả /sounds/*, /downloaded_sounds/* và /audio/* (Hỗ trợ Express 5 & Redirect R2 CDN)
   const fallbackSoundHandler = (req, res, next) => {
-    const subPath = req.params[0] || req.params.fileName || '';
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+    let subPath = '';
+    try {
+      subPath = decodeURIComponent(String(req.path || '').replace(/^\/+/, ''));
+    } catch (e) {
+      subPath = String(req.path || '').replace(/^\/+/, '');
+    }
+    if (!subPath) return next();
+
     const resolved = resolveSoundFile(subPath);
     if (resolved) {
       if (resolved.fullPath) return res.sendFile(resolved.fullPath);
@@ -41,9 +49,9 @@ function registerWebRoutes(app) {
     next();
   };
 
-  app.get('/sounds/:fileName', fallbackSoundHandler);
-  app.get('/downloaded_sounds/:fileName', fallbackSoundHandler);
-  app.get('/audio/*', fallbackSoundHandler);
+  app.use('/sounds', fallbackSoundHandler);
+  app.use('/downloaded_sounds', fallbackSoundHandler);
+  app.use('/audio', fallbackSoundHandler);
 }
 
 module.exports = {
