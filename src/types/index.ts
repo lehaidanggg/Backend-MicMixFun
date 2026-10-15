@@ -8,9 +8,12 @@ export type GameStateType =
   | 'PLAYING_SAMPLE'
   | 'PREPARE_RECORDING'
   | 'USER_RECORDING'
-  | 'AI_SCORING'
+  | 'UPLOADING_SOUND'
+  | 'LISTENING_NOW_PLAYING'
   | 'SHOWDOWN_REVEAL'
+  | 'AI_SCORING'
   | 'ROUND_RESULT'
+  | 'BREAK_TIME'
   | 'GAME_OVER';
 
 export interface AuthTokenPayload {
@@ -92,15 +95,24 @@ export type BotNoiseType = 'clean_mic' | 'room_ambience' | 'mic_static_and_breat
 export interface BotAudioEffects {
   difficulty: BotDifficulty;
   baseSoundUrl: string;
+  botSeed?: number;
+  assignedGeneratorSocketId?: string | null;
   pitch: number;
+  pitchSemitones: number;
   speed: number;
+  pitchScoopCents: number;
+  vibratoRateHz: number;
   noiseLevel: number;
   noiseType: BotNoiseType;
+  inhaleBreathMs: number;
+  inhaleBreathGain: number;
   distortion: number;
   tremoloDepth: number;
   dropoutCount: number;
   startDelayMs: number;
   bandpassHz: [number, number];
+  vocalPresenceHz: number;
+  vocalPresenceGainDb: number;
 }
 
 export interface PlayerAttempt {
@@ -112,6 +124,7 @@ export interface PlayerAttempt {
   botPitch?: number | null;
   botSpeed?: number | null;
   botAudioEffects?: BotAudioEffects | null;
+  assignedGeneratorSocketId?: string | null;
   evaluation: EvaluationResult;
   submittedAt?: number;
 }
@@ -167,15 +180,24 @@ export interface ChatMessage {
   timestamp: number;
 }
 
+export type GameModeType = 'QUICK_MATCH' | 'RACE_1V1' | 'CUSTOM_ROOM';
+
 export interface RoomData {
   id: string;
   name: string;
   createdAt: number;
   hostId: string;
   hostUserId: string | null;
+  mode?: GameModeType;
+  targetPlayers?: number;
   members: Map<string, RoomMember>;
   messages: ChatMessage[];
   cleanupTimer: ReturnType<typeof setTimeout> | null;
+  matchmakingTimer?: ReturnType<typeof setTimeout> | null;
+  matchmakingTickTimer?: ReturnType<typeof setInterval> | null;
+  matchmakingStartedAt?: number | null;
+  matchmakingEndsAt?: number | null;
+  matchmakingWaitMs?: number | null;
 }
 
 export interface MatchmakingQueueEntry {
@@ -184,11 +206,15 @@ export interface MatchmakingQueueEntry {
   userId: string;
   userName: string;
   avatar: string;
+  mode?: GameModeType;
+  targetPlayers?: number;
   botCount: number;
   botDifficulty?: BotDifficulty;
   autoStart: boolean;
   waitMs: number;
   joinedQueueAt: number;
+  endsAt?: number;
+  maxCapEndsAt?: number;
   timer: ReturnType<typeof setTimeout> | null;
   tickTimer: ReturnType<typeof setInterval> | null;
   onResolved?: (res: Record<string, unknown>) => void;

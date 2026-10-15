@@ -1,6 +1,45 @@
-# 📘 Tài Liệu Kỹ Thuật & Đặc Tả Socket Server (MicMixFun & Mimic Party)
+# 📘 Tài Liệu Tính Năng, REST API & Giao Thức Socket.IO (MicMixFun & Mimic Party)
 
-Tài liệu đặc tả toàn bộ kiến trúc vận hành, danh mục hằng số (constants), quy định kích thước/thời lượng âm thanh, REST API và giao thức Socket.IO hai chiều phục vụ ứng dụng Android và Web.
+Tài liệu chính thức dành cho đội phát triển **Client (Android / iOS / Web)** tích hợp vào hệ thống **MicMixFun & Mimic Party Backend** (TypeScript + Express 5 + Socket.IO + Cloudflare R2 CDN).
+
+---
+
+## 0. ✨ Tổng Quan Các Tính Năng Hiện Có
+
+1. **Xác Thực & Bảo Mật Đa Lớp (`Auth & Anti-Relay Security`)**:
+   - **Firebase Anonymous / ID Token (`RS256`)**: Xác thực chữ ký RSA-SHA256 trực tiếp với chứng chỉ X.509 của Google (`securetoken@system.gserviceaccount.com`).
+   - **Guest Session Token (`HMAC-SHA256`)**: Tự động cấp và gia hạn token định danh có thời hạn 7 ngày mà không cần đăng ký mật khẩu.
+   - **Client Fingerprint Binding**: Gắn chặt token với dấu vân tay thiết bị (`IP + DeviceId/User-Agent`), chặn việc đánh cắp token đem qua môi trường/server trung gian khác.
+   - **One-Time Challenge Nonce (`GET /api/auth/challenge`)**: Cơ chế Challenge-Response hiệu lực 30 giây, dùng 1 lần duy nhất để chống Replay Attack.
+   - **Rate Limiting & Giới hạn IP**: Giới hạn tối đa 15 kết nối đồng thời trên mỗi IP, chống spam Chat (6 tin / 3s), Soundboard (5 lần / 2s), Emoji (5 lần / 1s).
+
+2. **Quản Lý Phòng & Khôi Phục Phiên (`Room & Session Reconnect`)**:
+   - Tạo phòng (`create_room`), tham gia phòng (`join_room`), rời phòng (`leave_room`), đóng phòng xóa sạch RAM (`close_room`), đổi trạng thái sẵn sàng (`player_ready_toggle`), mời ra khỏi phòng (`kick_player`).
+   - **Tự động chuyển quyền Chủ phòng (`Host Migration`)**: Khi Host rời phòng hoặc mất kết nối, quyền Host tự động chuyển sang người chơi thật kế tiếp.
+   - **Khôi phục điểm số khi rớt mạng (`120s Reconnect Window`)**: Người chơi bị mất mạng vào lại phòng trong vòng 120 giây được khôi phục nguyên vẹn `totalScore`, `roundScore` và trạng thái bài nộp.
+
+3. **Tìm Trận Nhanh & Ghép Phòng Tự Động (`Smart Matchmaking Queue`)**:
+   - Sự kiện `find_match` / `quick_match`:
+     1. Ưu tiên ghép ngay với người chơi thật đang chờ trong hàng đợi (`matchmakingQueue`) hoặc ghép vào phòng `IDLE` đang mở còn chỗ trống.
+     2. Nếu chưa có người chơi rảnh, đưa vào hàng đợi chờ (mặc định `waitMs = 10000ms`), phát sự kiện `matchmaking_searching` và đếm ngược mỗi giây qua `matchmaking_tick`.
+     3. Hỗ trợ hủy tìm trận bất kỳ lúc nào qua `cancel_match` / `cancel_quick_match` (`matchmaking_cancelled`).
+     4. Khi hết thời gian chờ mà không có người chơi khác, tự động mở phòng mới, lấp đầy bằng **3 AI Bot** và khởi động ngay ván đấu (`timedOutToBots: true`).
+
+4. **Đấu Trường Nhại Giọng `Mimic Party` (`State Machine`)**:
+   - Hỗ trợ cấu hình số vòng (`3, 5, 7, 10` vòng) và thời lượng thu âm (`3 - 15s` hoặc tự động khớp theo độ dài file âm thanh mẫu).
+   - Chu trình 9 trạng thái: `IDLE` ➔ `THEME_SELECTION` (3.5s) ➔ `PLAYING_SAMPLE` (theo độ dài file mẫu, hỗ trợ đồng bộ phát xong sớm qua `sample_playback_done`) ➔ `PREPARE_RECORDING` (3s lấy hơi) ➔ `USER_RECORDING` (thu âm & nộp bài, tự chuyển sớm nếu tất cả đã nộp) ➔ `AI_SCORING` (5s chấm điểm hồi hộp) ➔ `SHOWDOWN_REVEAL` (25s nghe lại + thả emoji + bỏ phiếu skip sớm `confirm_showdown_skip`) ➔ `ROUND_RESULT` (chờ 100% bấm sẵn sàng `confirm_next_round_ready`) ➔ `GAME_OVER`.
+
+5. **Hệ Thống AI Bot Thông Minh 3 Cấp Độ (`EASY` / `NORMAL` / `HARD`)**:
+   - Quản lý Bot thủ công (`add_bot`, `remove_bot`) hoặc tự động điền đủ 4 người chơi khi bắt đầu (`game_start` với `autoFillBots: true`).
+   - Bot tự động lấy chính âm thanh mẫu (`targetSound`) của vòng đó, biến đổi cao độ (`pitch`), tốc độ (`speed`), trộn tạp âm nền (`clean_mic`, `room_ambience`, `mic_static_and_breath`), rè mic (`distortion`), rung giọng (`tremolo`) và ngắt quãng (`dropoutCount`) để tổng hợp ra file `audio/wav` thực tế, lưu vào `audioStore` và chấm điểm qua cùng thuật toán với người chơi thật.
+
+6. **Media, Soundboard Đồng Bộ, Chat & Live Mic Stream**:
+   - Chat văn bản trong phòng (`send_message`), kích hoạt Soundboard phát đồng loạt trên mọi thiết bị (`trigger_sound`, `stop_all_sounds`), chia sẻ đoạn thu âm (`share_audio_clip`) và truyền giọng nói trực tiếp thời gian thực (`mic_stream_start`, `mic_stream_chunk`, `mic_stream_stop`).
+
+7. **Kho 251 Âm Thanh Cloudflare R2 CDN & Đa Ngôn Ngữ (`VI / EN`)**:
+   - 9 chủ đề âm thanh (`animals`, `meme`, `voice1`, `anime`, `voices`, `robots`, `yankee`, `vehicles`, `funny`) lưu trữ trên Cloudflare R2 CDN.
+   - Stream trực tiếp bản thu của người chơi/Bot qua HTTP (`GET /api/attempts/:roomId/:socketId`) giúp giảm tải băng thông Socket.IO.
+   - Toàn bộ mã lỗi, thông báo hệ thống, lời nhắc game và nhận xét AI được chuẩn hóa dưới dạng Enum đa ngôn ngữ (`GET /api/enums`).
 
 ---
 
@@ -11,197 +50,670 @@ Tài liệu đặc tả toàn bộ kiến trúc vận hành, danh mục hằng s
 | Hằng số (Constant) | Giá trị | Đơn vị | Mô tả |
 | :--- | :--- | :--- | :--- |
 | `THEME_SELECTION_DURATION` | **3.5** | Giây | Thời gian chạy hiệu ứng quay Roulette chọn chủ đề âm thanh |
-| `PLAYING_SAMPLE_DURATION` | **5.0** | Giây | Thời gian phát âm thanh mẫu ra loa (client khóa mic để nghe) |
-| `USER_RECORDING_DURATION` | **5.0** | Giây | Thời gian mở micro để người chơi nhại lại âm thanh |
-| `AI_SCORING_DURATION` | **1.5** | Giây | Thời gian server AI phân tích phổ âm thanh và tính điểm |
-| `SHOWDOWN_REVEAL_DURATION`| **12.0**| Giây | Thời gian nghe lại bản thu của nhau & thả reaction emoji |
-| `ROUND_RESULT_DURATION` | **5.0** | Giây | Thời gian hiển thị bảng tổng sắp vòng trước khi sang vòng mới |
-| `DEFAULT_TOTAL_ROUNDS` | **3** | Vòng | Số vòng đấu mặc định trong 1 trận (có thể chọn 3, 5, 7) |
-| `TICK_INTERVAL` | **1.0** | Giây | Tần suất server phát sự kiện `game_state_tick` đồng bộ đồng hồ |
-| `ROOM_CLEANUP_DELAY` | **60.0**| Giây | Thời gian chờ dọn dẹp bộ nhớ phòng sau khi thành viên cuối rời phòng |
+| `PLAYING_SAMPLE_DURATION` | **2.0 - 12.0** | Giây | Tự động lấy theo thời lượng thực tế của file mẫu (hoặc kết thúc sớm khi nhận `sample_playback_done`) |
+| `PREPARE_RECORDING_DURATION` | **3.0** | Giây | Thời gian đệm đếm ngược 3..2..1 để người chơi lấy hơi và bật micro |
+| `USER_RECORDING_DURATION` | **Theo file mẫu (hoặc 3-15s)** | Giây | Thời gian mở micro nhại lại âm thanh (chuyển sớm sang chấm điểm nếu 100% người chơi đã nộp bài) |
+| `AI_SCORING_DURATION` | **5.0** | Giây | Thời gian AI phân tích phổ âm thanh và tạo hiệu ứng chấm điểm hồi hộp |
+| `SHOWDOWN_REVEAL_DURATION`| **25.0**| Giây | Thời gian nghe lại bản thu của nhau, thả emoji & bỏ phiếu skip sớm |
+| `ROUND_RESULT_DURATION` | **0 (Chờ Ready)** | Giây | Dừng chờ tất cả người chơi bấm `confirm_next_round_ready` rồi đếm ngược 3s sang vòng mới |
+| `DEFAULT_TOTAL_ROUNDS` | **3** | Vòng | Số vòng đấu mặc định trong 1 trận (Host có thể cấu hình `3, 5, 7, 10`) |
+| `DEFAULT_MATCHMAKING_WAIT_MS` | **10000** | Ms (10s) | Thời gian chờ tìm người chơi thật trước khi tự tạo phòng với AI Bot |
+| `ROOM_CLEANUP_DELAY_MS` | **30000**| Ms (30s) | Thời gian giữ siêu dữ liệu phòng trống chờ người chơi có điểm kết nối lại |
+| `RECONNECT_RESTORE_WINDOW` | **120000** | Ms (120s) | Thời gian tối đa bảo lưu điểm số của người chơi bị rớt mạng |
 
 ### 1.2. Giới Hạn Tệp Âm Thanh & Buffer (Audio Limits & Specs)
 
 | Hằng số (Constant) | Giá trị | Đơn vị | Mô tả |
 | :--- | :--- | :--- | :--- |
-| `MAX_HTTP_BUFFER_SIZE` | **10** (`1e7`) | MB | Giới hạn dung lượng tối đa cho 1 payload binary/Base64 qua Socket |
-| `MIN_AUDIO_PAYLOAD_SIZE`| **500** | Bytes | Ngưỡng dữ liệu tối thiểu để loại bỏ bản thu rỗng/mất tiếng |
-| `SAMPLE_RATE` | **44100 / 48000**| Hz | Tần số lấy mẫu âm thanh khuyến nghị cho Android và Web |
-| `AUDIO_CHANNELS` | **1 (Mono)** | Kênh | Định dạng 1 kênh để tối ưu băng thông đường truyền socket |
-| `PREFERRED_MIME_TYPE` | `audio/webm` / `audio/aac` | MIME | Định dạng nén tối ưu độ trễ thấp |
-| `TARGET_CLIP_DURATION` | **1.5 - 4.5** | Giây | Độ dài lý tưởng của các file âm thanh soundboard mẫu |
+| `MAX_HTTP_BUFFER_SIZE` | **1** (`1e6`) | MB | Giới hạn dung lượng tối đa cho 1 gói tin qua Socket.IO để bảo vệ RAM |
+| `MIN_AUDIO_PAYLOAD_SIZE`| **500** | Chars | Ngưỡng chuỗi Base64 tối thiểu để loại bỏ bản thu rỗng/mất tiếng |
+| `SAMPLE_RATE` | **24000 - 48000**| Hz | Tần số lấy mẫu âm thanh khuyến nghị cho Android, iOS và Web |
+| `AUDIO_CHANNELS` | **1 (Mono)** | Kênh | Định dạng 1 kênh để tối ưu băng thông đường truyền |
+| `PREFERRED_MIME_TYPE` | `audio/webm` / `audio/mp4` / `audio/wav` | MIME | Định dạng nén ưu tiên độ trễ thấp |
+| `STREAM_URL_THRESHOLD` | **65536** | Bytes | Nếu chuỗi Base64 > 64KB, server tự thay `audioUrl` bằng đường dẫn HTTP stream `/api/attempts/:roomId/:socketId` |
 
-### 1.3. Cấu Hình Phòng & Phiên (Room & Session Limits)
+### 1.3. Cấu Hình Phòng, Bot & Bảo Mật (Room, Bot & Security Limits)
 
 | Hằng số (Constant) | Giá trị | Mô tả |
 | :--- | :--- | :--- |
-| `MAX_MEMBERS_PER_ROOM` | **12** người | Số người chơi tối đa trong 1 phòng đấu để đảm bảo hiệu năng |
+| `MAX_MEMBERS_PER_ROOM` | **12** người | Số thành viên tối đa (cả người thật và AI Bot) trong 1 phòng |
+| `DEFAULT_MIN_PLAYERS_WITH_BOTS` | **4** người | Số người chơi tối thiểu mặc định khi bật `autoFillBots` (ví dụ: 1 người + 3 Bot) |
+| `DEFAULT_MATCHMAKING_BOT_COUNT` | **3** Bot | Số lượng AI Bot mặc định thêm vào khi tìm trận nhanh không gặp người thật |
 | `MAX_CHAT_HISTORY_SIZE` | **50** tin nhắn | Số tin nhắn tối đa lưu trữ tạm thời trong RAM mỗi phòng |
 | `MAX_USERNAME_LENGTH` | **20** ký tự | Độ dài tối đa của tên hiển thị |
-| `ROOM_ID_LENGTH` | **6 - 8** ký tự | Độ dài mã phòng ngẫu nhiên (chữ hoa và số) |
+| `MAX_CONNECTIONS_PER_IP` | **15** kết nối | Số kết nối Socket.IO tối đa đồng thời trên cùng 1 địa chỉ IP |
+| `CHALLENGE_TTL_MS` | **30000** ms (30s) | Thời hạn hiệu lực của mã One-Time Challenge Nonce |
+| `AUTH_TOKEN_TTL_MS` | **7 ngày** | Thời hạn hiệu lực của Session Token (`HMAC-SHA256`) |
 
 ---
 
-## 2. 🔄 Hệ Thống Máy Trạng Thái Gameplay (State Machine)
+## 2. 🔄 Hệ Thống Máy Trạng Thái Gameplay (State Machine — 100% Server-Driven)
 
-Server vận hành theo mô hình State Machine tập trung (Single Source of Truth). Client chỉ cần map theo enum `GAME_STATES`:
+Server vận hành theo mô hình **State Machine tập trung (100% Server-Authoritative — Không có chủ động Next Round hay nhảy cóc Step từ Client)**. Mọi thứ tự chuyển pha và bộ đếm thời gian đều do Server quyết định tuyệt đối; Client chỉ cần lắng nghe `game_state_changed` và `game_state_tick`:
 
 ```mermaid
 stateDiagram-v2
-    [*] --> IDLE : Vào phòng
-    IDLE --> THEME_SELECTION : Host bấm Bắt đầu
-    THEME_SELECTION --> PLAYING_SAMPLE : 3.5s (Random sound)
-    PLAYING_SAMPLE --> PREPARE_RECORDING : Phát xong audio mẫu (bằng duration file)
-    PREPARE_RECORDING --> USER_RECORDING : Lấy hơi & chuẩn bị mic (3s đệm)
-    USER_RECORDING --> AI_SCORING : Đúng bằng duration mẫu hoặc nộp đủ bài
-    AI_SCORING --> SHOWDOWN_REVEAL : 1.5s
-    SHOWDOWN_REVEAL --> ROUND_RESULT : 25s hoặc Skip
-    ROUND_RESULT --> THEME_SELECTION : Tất cả user bấm Ready (Vòng kế tiếp)
-    ROUND_RESULT --> GAME_OVER : Hoàn thành vòng cuối
-    GAME_OVER --> THEME_SELECTION : Tất cả user bấm Ready (Trận mới)
-    GAME_OVER --> IDLE : Rời phòng
+    [*] --> IDLE : Tạo phòng / Ghép trận chờ đủ người
+    IDLE --> THEME_SELECTION : Đủ người thật hoặc Hết giờ chờ (tự bù AI Bot) / Host bấm game_start
+    THEME_SELECTION --> PLAYING_SAMPLE : Step 5.0 (3.5s - Random Pack & Sound)
+    PLAYING_SAMPLE --> PREPARE_RECORDING : Step 5.1 (Theo độ dài file mẫu 2s-12s)
+    PREPARE_RECORDING --> USER_RECORDING : Step 5.1b (3s đếm ngược chuẩn bị mic)
+    USER_RECORDING --> UPLOADING_SOUND : Step 5.2 (Hết giờ thu âm - Không cắt ngang sớm)
+    UPLOADING_SOUND --> LISTENING_NOW_PLAYING : Step 5.3 (3s đồng bộ bản thu)
+    LISTENING_NOW_PLAYING --> SHOWDOWN_REVEAL : Step 5.4 (5s phát lượt nổi bật)
+    SHOWDOWN_REVEAL --> AI_SCORING : Step 5.5 (10s nghe lại toàn bộ bài thi)
+    AI_SCORING --> ROUND_RESULT : Step 5.6 (4s AI Voice Detector chấm điểm)
+    ROUND_RESULT --> BREAK_TIME : Step 5.7 (8s xem bảng điểm vòng, nếu round < totalRounds)
+    BREAK_TIME --> THEME_SELECTION : Step 5.8 (11s nghỉ giữa hiệp -> Sang Round kế tiếp)
+    ROUND_RESULT --> GAME_OVER : Step 5.7 -> 5.9 (Hoàn thành vòng cuối round == totalRounds)
+    USER_RECORDING --> GAME_OVER : (Riêng RACE_1V1) Đối thủ thoát giữa trận -> Báo thắng cuộc ngay
+    GAME_OVER --> IDLE : Step 5.9 (8s vinh danh -> Tự mở lại phòng tìm người mới & đếm giờ bù Bot)
 ```
 
-### Chi tiết các State Enum:
-1. **`IDLE`**: Đang ở sảnh chờ, người chơi tự do chat, test mic, đợi Host bấm bắt đầu.
-2. **`THEME_SELECTION`**: Server random chọn Sound Pack (Động vật, Meme, Xe cộ, Hài hước...) và chọn 1 sound trong pack đó. Client chạy hiệu ứng quay Roulette (3.5s).
-3. **`PLAYING_SAMPLE`**: Server broadcast URL file audio mẫu. Client tự động phát ra loa theo đúng thời lượng thực tế của file âm thanh.
-4. **`PREPARE_RECORDING`**: Trạng thái đệm 3 giây giữa lúc nghe mẫu và lúc bật mic. Giúp người dùng có thời gian lấy hơi, định thần và hướng micro vào miệng (3s đếm ngược 3..2..1).
-5. **`USER_RECORDING`**: Tới lượt người dùng nhại lại. Thời lượng thu âm **ĐÚNG BẰNG THỜI GIAN FILE MẪU**, tự động gửi audio nộp lên server khi hết giờ.
-6. **`AI_SCORING`**: Server xử lý phân tích cao độ, nhịp điệu và năng lượng âm thanh. Client hiển thị hiệu ứng AI scanning (1.5s).
-7. **`SHOWDOWN_REVEAL`**: Công bố bảng điểm chi tiết (25s), cho phép mọi người bấm nghe lại bản thu của nhau và thả emoji reaction thời gian thực.
-8. **`ROUND_RESULT`**: Bảng xếp hạng điểm tích lũy sau vòng đấu. Dừng chờ TẤT CẢ người chơi xác nhận Sẵn sàng thì mới qua vòng tiếp theo.
-9. **`GAME_OVER`**: Tổng kết trao Cúp Vua Nhại Giọng cho người có tổng điểm cao nhất qua tất cả các vòng. Dừng chờ TẤT CẢ xác nhận để khởi động trận mới.
+---
+
+## 3. 🌐 Đặc Tả Chi Tiết REST APIs
+
+Base URL:
+* **Local Development**: `http://localhost:3000`
+* **Production (Railway)**: `https://micmixfun.up.railway.app`
+* **Audio CDN (Cloudflare R2)**: `https://pub-2ec3726948d14e47babdc7ea12268a78.r2.dev`
+
+### 3.1. Bảng Tổng Hợp Các Endpoint
+
+| Method | Endpoint | Mô tả |
+| :--- | :--- | :--- |
+| `GET` | `/` | Kiểm tra nhanh trạng thái hoạt động của dịch vụ |
+| `GET` | `/api/health` | Health Check kèm thống kê số phòng và số kết nối Socket đang hoạt động |
+| `GET` | `/api/auth/challenge` | Phát hành mã `nonce` dùng 1 lần (hiệu lực 30s) chống Replay Attack |
+| `POST` | `/api/auth/firebase` | Xác thực Firebase ID Token (`RS256`) và đổi lấy `authToken` gắn Fingerprint |
+| `POST` | `/api/auth/guest` | Cấp mới hoặc gia hạn Guest Session Token (`HMAC-SHA256`) |
+| `GET` | `/api/auth/verify` | Kiểm tra tính hợp lệ và Fingerprint của `authToken` hoặc `firebaseIdToken` |
+| `GET` | `/api/rooms` | Lấy danh sách các phòng đang mở trên Server |
+| `GET` | `/api/mimic-packs` | Lấy danh sách 9 chủ đề âm thanh (`SOUND_PACKS`) dùng trong Mimic Party |
+| `GET` | `/api/sounds` | Lấy danh sách toàn bộ 251 file âm thanh từ `sounds/catalog.json` (hỗ trợ lọc `?pack=`) |
+| `GET` | `/api/game-states` | Lấy danh mục `GAME_STATES`, `STATE_LABELS` và toàn bộ từ điển `ENUM_DICTIONARY` |
+| `GET` | `/api/enums` | Lấy toàn bộ bảng mã Localization Enum (`VI` / `EN`) cho Client |
+| `GET` | `/api/attempts/:roomId/:socketId` | Stream trực tiếp binary audio bản thu của người chơi hoặc AI Bot trong vòng hiện tại |
+| `GET` | `/sounds/*`, `/downloaded_sounds/*`, `/audio/*` | Tự động Redirect (`302`) các đường dẫn âm thanh cũ sang Cloudflare R2 CDN |
 
 ---
 
-## 3. 🌐 Danh Sách REST APIs
+### 3.2. Chi Tiết Request & Response Từng REST API
 
-Server cung cấp các HTTP endpoint tại `http://localhost:3000`:
-
-| Method | Endpoint | Mô tả | Định dạng phản hồi (Sample Response) |
-| :--- | :--- | :--- | :--- |
-| `GET` | `/api/health` | Kiểm tra tình trạng server | `{"status":"online","timestamp":1712345678,"totalActiveRooms":2,"totalConnectedSockets":5}` |
-| `GET` | `/api/game-states` | Lấy danh mục Enum State và nhãn | `{"states":{"IDLE":"IDLE",...},"labels":{"IDLE":"Đang chờ tại sảnh",...}}` |
-| `GET` | `/api/mimic-packs` | Danh sách 4 Sound Packs và sound clips | `{"packs":[{"id":"animals","name":"🐾 Thế Giới Động Vật",...}]}` |
-| `GET` | `/api/sounds` | Danh mục 270+ file âm thanh soundboard | `{"count":274,"sounds":[{"id":"cat-meow","url":"/downloaded_sounds/cat-meow.mp3"}]}` |
-| `GET` | `/api/rooms` | Danh sách các phòng đang mở | `{"rooms":[{"roomId":"MIMIC99","roomName":"Phòng VIP","memberCount":4}]}` |
-
----
-
-## 4. ⚡ Đặc Tả Giao Thức Socket.IO (Socket Specifications)
-
-### 4.1. Sự Kiện Client Gửi Lên Server (Client -> Server)
-
-#### a. `join_room` (Tham gia phòng)
-```json
-// Payload
-{
-  "roomId": "MIMIC99",
-  "userName": "Alex",
-  "avatar": "🦊"
-}
-
-// Callback Response
-{
-  "success": true,
-  "room": { "id": "MIMIC99", "members": [...], "messages": [...] },
-  "user": { "socketId": "...", "userName": "Alex", "avatar": "🦊" },
-  "gameState": {
-    "state": "IDLE",
-    "round": 0,
-    "totalRounds": 3,
-    "timeRemaining": 0
+#### 1) `GET /api/health` — Kiểm tra tình trạng máy chủ
+* **Response (`200 OK`)**:
+  ```json
+  {
+    "status": "online",
+    "timestamp": 1760494800000,
+    "totalActiveRooms": 3,
+    "totalConnectedSockets": 11
   }
-}
-```
+  ```
 
-#### b. `game_start` (Host bắt đầu trận đấu)
-```json
-{
-  "roomId": "MIMIC99"
-}
-```
+#### 2) `GET /api/auth/challenge` — Lấy One-Time Challenge Nonce
+* **Response (`200 OK`)**:
+  ```json
+  {
+    "success": true,
+    "nonce": "a4f891c2e7b03d561290ef84a1c3b5d7",
+    "timestamp": 1760494800000,
+    "expiresInMs": 30000
+  }
+  ```
 
-#### c. `game_submit_audio` (Nộp bản thu âm nhại lại)
-```json
-{
-  "roomId": "MIMIC99",
-  "audioData": "data:audio/webm;base64,GkXfo59ChoEBQveBA...",
-  "mimeType": "audio/webm"
-}
-```
-
-#### d. `game_emoji_reaction` (Thả reaction emoji bay trên màn hình)
-```json
-{
-  "roomId": "MIMIC99",
-  "emoji": "😂"
-}
-```
-
-#### e. `get_game_state` (Đồng bộ tức thời State khi reconnect)
-```json
-// Gửi: { "roomId": "MIMIC99" }
-// Nhận snapshot đầy đủ của phòng:
-{
-  "state": "USER_RECORDING",
-  "round": 2,
-  "totalRounds": 3,
-  "timeRemaining": 3,
-  "targetSound": { "id": "cat-meow", "name": "Mèo kêu nũng nịu" }
-}
-```
-
----
-
-### 4.2. Sự Kiện Server Bắn Xuống Client (Server -> Client)
-
-#### a. `game_state_changed` (Bắn mỗi khi chuyển đổi State)
-Đây là sự kiện quan trọng nhất để Client cập nhật UI:
-```json
-{
-  "state": "PLAYING_SAMPLE",
-  "stateLabel": "Đang phát âm thanh mẫu",
-  "round": 1,
-  "totalRounds": 3,
-  "duration": 5.0,
-  "timeRemaining": 5.0,
-  "timestamp": 1712345678900,
-  "payload": {
-    "pack": {
-      "id": "animals",
-      "name": "🐾 Thế Giới Động Vật",
-      "emoji": "🐾"
-    },
-    "targetSound": {
-      "id": "animals_lion-roar",
-      "name": "Sư tử gầm vang",
-      "emoji": "🦁",
-      "hint": "Gầm gừ từ đáy lồng ngực với âm lượng cực lớn!",
-      "audioUrl": "/downloaded_sounds/animals_lion-roar.mp3",
-      "duration": 4
+#### 3) `POST /api/auth/firebase` — Xác thực Firebase ID Token
+* **Headers**: `Content-Type: application/json` (hoặc truyền `Authorization: Bearer <firebaseIdToken>`)
+* **Request Body**:
+  ```json
+  {
+    "firebaseIdToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6...",
+    "userName": "Alex",
+    "avatar": "🦊",
+    "deviceId": "android-pixel-8-pro",
+    "nonce": "a4f891c2e7b03d561290ef84a1c3b5d7",
+    "timestamp": 1760494800000,
+    "appSignature": "<HMAC_SHA256(nonce:timestamp:firebaseUid, APP_SIGNING_SECRET)>"
+  }
+  ```
+  *(Lưu ý: `nonce`, `timestamp`, `appSignature` là tuỳ chọn nâng cao khi bật xác thực Challenge-Response).*
+* **Response (`200 OK`)**:
+  ```json
+  {
+    "success": true,
+    "userId": "fb_9xYzAbCdEfGh123",
+    "firebaseUid": "9xYzAbCdEfGh123",
+    "provider": "firebase_anonymous",
+    "authToken": "eyJ1aWQiOiJmYl85eFl6QWJDZEVmR2gxMjMi...<signature>",
+    "expiresAt": 1761099600000,
+    "user": {
+      "userId": "fb_9xYzAbCdEfGh123",
+      "firebaseUid": "9xYzAbCdEfGh123",
+      "userName": "Alex",
+      "avatar": "🦊"
     }
   }
-}
-```
+  ```
+* **Error Responses**:
+  - `401 Unauthorized`: `{ "success": false, "code": "AUTH_FIREBASE_TOKEN_INVALID", "message": "AUTH_FIREBASE_TOKEN_INVALID" }`
+  - `403 Forbidden`: `{ "success": false, "code": "AUTH_CHALLENGE_SIGNATURE_INVALID", "message": "AUTH_CHALLENGE_SIGNATURE_INVALID" }`
 
-#### b. `game_state_tick` (Bắn định kỳ mỗi 1 giây để đồng bộ đồng hồ)
-```json
-{
-  "state": "PLAYING_SAMPLE",
-  "timeRemaining": 3,
-  "totalDuration": 5,
-  "progressPercent": 40
-}
-```
+#### 4) `POST /api/auth/guest` — Cấp mới hoặc làm mới Guest Session Token
+* **Request Body**:
+  ```json
+  {
+    "userName": "Alex",
+    "avatar": "🎧",
+    "deviceId": "android-pixel-8-pro",
+    "authToken": "<token_cũ_nếu_muốn_gia_hạn>",
+    "firebaseIdToken": "<tuỳ_chọn_nếu_muốn_gắn_kèm_firebase>"
+  }
+  ```
+* **Response (`200 OK`)**:
+  ```json
+  {
+    "success": true,
+    "userId": "u_8f9d2a1b4c3e5f60",
+    "firebaseUid": null,
+    "provider": "guest",
+    "authToken": "eyJ1aWQiOiJ1XzhmOWQyYTFiNGMzZTVmNjAi...<signature>",
+    "expiresAt": 1761099600000,
+    "user": {
+      "userId": "u_8f9d2a1b4c3e5f60",
+      "firebaseUid": null,
+      "userName": "Alex",
+      "avatar": "🎧"
+    }
+  }
+  ```
 
-#### c. `game_reaction_broadcast` (Truyền emoji bay)
-```json
-"😂"
+#### 5) `GET /api/auth/verify` — Kiểm tra Token hiện tại
+* **Headers**:
+  - `Authorization: Bearer <authToken_hoặc_firebaseIdToken>` (hoặc query `?token=...`)
+  - `X-Device-Id: <deviceId>` (nếu lúc cấp token có truyền `deviceId`)
+* **Response (`200 OK`)**:
+  ```json
+  {
+    "success": true,
+    "valid": true,
+    "user": {
+      "userId": "u_8f9d2a1b4c3e5f60",
+      "firebaseUid": null,
+      "provider": "guest",
+      "userName": "Alex",
+      "avatar": "🎧",
+      "expiresAt": 1761099600000
+    }
+  }
+  ```
+* **Error Response (`401 Unauthorized`)**:
+  ```json
+  {
+    "success": false,
+    "valid": false,
+    "code": "AUTH_TOKEN_INVALID_OR_EXPIRED",
+    "message": "AUTH_TOKEN_INVALID_OR_EXPIRED"
+  }
+  ```
+
+#### 6) `GET /api/rooms` — Danh sách phòng đang mở
+* **Response (`200 OK`)**:
+  ```json
+  {
+    "rooms": [
+      {
+        "roomId": "MIMIC99",
+        "roomName": "Phòng Đại Chiến",
+        "memberCount": 4,
+        "maxMembers": 12,
+        "gameState": "IDLE",
+        "createdAt": 1760494700000
+      }
+    ]
+  }
+  ```
+
+#### 7) `GET /api/mimic-packs` — Danh sách các gói chủ đề âm thanh
+* **Response (`200 OK`)**:
+  ```json
+  {
+    "packs": [
+      {
+        "id": "animals",
+        "name": "PACK_NAME_ANIMALS",
+        "emoji": "🐾",
+        "description": "PACK_DESC_ANIMALS",
+        "sounds": [
+          {
+            "id": "animals_cat-two",
+            "name": "Cat Two",
+            "emoji": "🐱",
+            "fileName": "cat-two.mp3",
+            "relativePath": "animals/cat-two.mp3",
+            "hint": "Mimic the sound of Cat Two!"
+          }
+        ]
+      }
+    ]
+  }
+  ```
+
+#### 8) `GET /api/sounds` — Danh mục 251 file âm thanh trên CDN
+* **Query Params**: `?pack=animals` *(tuỳ chọn: lọc theo tên pack như `animals`, `meme`, `anime`, `voices`, `voice1`, `robots`, `yankee`, `vehicles`, `funny`, `everyday`, `melody`, `signals`, `space`, `common`)*
+* **Response (`200 OK`)**:
+  ```json
+  {
+    "count": 251,
+    "packCounts": {
+      "animals": 32,
+      "meme": 28,
+      "anime": 24
+    },
+    "sounds": [
+      {
+        "id": "cat-two",
+        "pack": "animals",
+        "fileName": "cat-two.mp3",
+        "relativePath": "animals/cat-two.mp3",
+        "name": "Cat Two",
+        "url": "https://pub-2ec3726948d14e47babdc7ea12268a78.r2.dev/animals/cat-two.mp3"
+      }
+    ]
+  }
+  ```
+
+#### 9) `GET /api/enums` & `GET /api/game-states` — Từ điển mã Enum Đa Ngôn Ngữ (`VI / EN`)
+* **Response (`200 OK`)**:
+  ```json
+  {
+    "states": {
+      "IDLE": "IDLE",
+      "THEME_SELECTION": "THEME_SELECTION",
+      "PLAYING_SAMPLE": "PLAYING_SAMPLE",
+      "PREPARE_RECORDING": "PREPARE_RECORDING",
+      "USER_RECORDING": "USER_RECORDING",
+      "AI_SCORING": "AI_SCORING",
+      "SHOWDOWN_REVEAL": "SHOWDOWN_REVEAL",
+      "ROUND_RESULT": "ROUND_RESULT",
+      "GAME_OVER": "GAME_OVER"
+    },
+    "labels": {
+      "IDLE": "STATE_LABEL_IDLE",
+      "THEME_SELECTION": "STATE_LABEL_THEME_SELECTION"
+    },
+    "enums": {
+      "errorCodes": { "ROOM_NOT_FOUND": "ROOM_NOT_FOUND" },
+      "systemMessageCodes": { "SYS_HOST_JOINED_ROOM": "SYS_HOST_JOINED_ROOM" },
+      "gameMessageCodes": { "GAME_MSG_USER_RECORDING": "GAME_MSG_USER_RECORDING" },
+      "roomCloseReasonCodes": { "HOST_CLOSED": "HOST_CLOSED" },
+      "stateLabelCodes": { "STATE_LABEL_IDLE": "STATE_LABEL_IDLE" },
+      "aiRemarkCodes": { "AI_REMARK_LEGENDARY_1": "AI_REMARK_LEGENDARY_1" },
+      "soundPackNameCodes": { "PACK_NAME_ANIMALS": "PACK_NAME_ANIMALS" },
+      "soundPackDescCodes": { "PACK_DESC_ANIMALS": "PACK_DESC_ANIMALS" }
+    },
+    "descriptions": {
+      "ROOM_NOT_FOUND": {
+        "code": "ROOM_NOT_FOUND",
+        "vi": "Phòng chơi không tồn tại hoặc đã giải tán!",
+        "en": "Room does not exist or has been closed.",
+        "context": "Khi vào phòng hoặc lấy dữ liệu phòng không còn tồn tại"
+      }
+    }
+  }
+  ```
+
+#### 10) `GET /api/attempts/:roomId/:socketId` — Stream Audio bản thu của Người chơi / AI Bot
+* **Mô tả**: Trả về trực tiếp binary buffer (`audio/webm`, `audio/mp4` hoặc `audio/wav` đối với AI Bot) của bài dự thi trong vòng hiện tại. Tự động xoá khỏi RAM sau khi qua giai đoạn `SHOWDOWN_REVEAL`.
+* **Error Responses**:
+  - `404 Not Found` (`ROOM_NOT_FOUND` hoặc `ATTEMPT_AUDIO_NOT_FOUND`).
+
+---
+
+## 4. ⚡ Đặc Tả Đầy Đủ Giao Thức Socket.IO (Socket Specifications)
+
+### 4.0. Kết Nối Handshake (`io.connect`)
+Khi khởi tạo kết nối Socket.IO, Client có thể truyền thông tin xác thực trong `auth`:
+```javascript
+const socket = io("https://micmixfun.up.railway.app", {
+  transports: ["websocket"],
+  auth: {
+    token: "<authToken_HMAC>",           // Hoặc dùng trường authToken
+    firebaseIdToken: "<firebase_jwt>",   // Tuỳ chọn nếu dùng Firebase Auth
+    deviceId: "android-device-id-001",   // Dùng để đối chiếu Client Fingerprint
+    nonce: "<challenge_nonce>",          // Tuỳ chọn Challenge-Response
+    timestamp: 1760494800000,
+    appSignature: "<hmac_signature>"
+  }
+});
 ```
 
 ---
+
+### 4.1. Sự Kiện Client Gửi Lên Server (`Client ➔ Server`)
+
+#### Nhóm A — Xác Thực & Quản Lý Phòng (`room.handler.ts`)
+
+| Event Name | Payload Gửi Lên | Callback Response (`ack`) | Mô tả |
+| :--- | :--- | :--- | :--- |
+| `auth_guest` / `auth_firebase` | `{ userName, avatar, authToken?, firebaseIdToken? }` | `{ success: true, userId, firebaseUid, provider, authToken, expiresAt, user }` | Xác thực hoặc đổi tên/avatar trực tiếp trên kết nối Socket |
+| `create_room` | `{ roomId?, roomName?, userName? }` | `{ success: true, roomId, roomName, hostId, mode: "CUSTOM_ROOM", room }` | Tạo phòng riêng (`CUSTOM_ROOM` — cách ly hoàn toàn, không bị người tìm trận ngẫu nhiên ghép vào) |
+| `join_room` | `{ roomId, userName, avatar, userId?, authToken?, firebaseIdToken? }` | `{ success: true, authToken, expiresAt, restoredSession, room, user, gameState }` | Vào phòng theo mã Code (tự tạo phòng `CUSTOM_ROOM` nếu chưa có; tự khôi phục điểm nếu rớt mạng vào lại trong 120s) |
+| `leave_room` | `{}` | `{ success: true }` | Rời khỏi phòng hiện tại |
+| `close_room` | `{ roomId? }` | `{ success: true, roomId, cleared: true }` | **(Chỉ Host)** Đóng phòng ngay lập tức và giải phóng toàn bộ RAM |
+| `player_ready_toggle` | `{ roomId?, isReady?: boolean }` | `{ success: true, isReady }` | Bật / tắt trạng thái sẵn sàng tại sảnh chờ |
+| `kick_player` | `{ roomId?, targetSocketId }` | `{ success: true }` | **(Chỉ Host)** Mời người chơi hoặc xóa AI Bot khỏi phòng |
+| `add_bot` | `{ roomId?, difficulty?: "EASY"\|"NORMAL"\|"HARD", botName?, avatar? }` | `{ success: true, bot, members }` | **(Chỉ Host)** Thêm 1 AI Bot vào phòng khi ở trạng thái `IDLE` / `GAME_OVER` |
+| `remove_bot` | `{ roomId?, botSocketId? }` | `{ success: true, removedBot, members }` | **(Chỉ Host)** Xóa 1 AI Bot khỏi phòng (nếu không truyền `botSocketId` sẽ xóa Bot cuối) |
+
+#### Nhóm B — Tìm Trận Nhanh / Smart Matchmaking (`room.handler.ts`) — Hỗ Trợ `QUICK_MATCH` (4P) & `RACE_1V1` (2P)
+
+| Event Name | Payload Gửi Lên | Callback Response (`ack`) | Mô tả |
+| :--- | :--- | :--- | :--- |
+| `find_match` (hoặc `quick_match`) | `{ userName?, avatar?, mode?: "QUICK_MATCH"\|"RACE_1V1", botCount?: 3, botDifficulty?, autoStart?: true, waitMs?: 10000, waitForPlayers?: true }` | `{ success: true, searching, mode, targetPlayers, matchedWithHumans, timedOutToBots?, botsAdded, autoStarted, roomId, room, user, gameState }` | Tìm trận nhanh **4 Người (`QUICK_MATCH`)**: Ưu tiên Best-Fit (`3/4 ➔ 2/4 ➔ 1/4`) + FIFO. Chờ cơ bản `10s`; khi tìm được thêm người thật (`2/4` hoặc `3/4`) lúc đồng hồ `< 5s` thì tự **cộng giờ mềm `+5s`** (trần tối đa `16s`). Hết giờ tự bù `(4 - N)` AI Bot và bắt đầu ngay |
+| `race_1v1` (hoặc `find_1v1_match`) | `{ userName?, avatar?, botDifficulty?, autoStart?: true, waitMs?: 8000, waitForPlayers?: true }` | `{ success: true, searching, mode: "RACE_1V1", targetPlayers: 2, matchedWithHumans, timedOutToBots?, botsAdded, autoStarted, roomId, room, user, gameState }` | Tìm trận **Đấu Tay Đôi `1vs1 Race` (`2 Người`)**: Khóa cứng `targetPlayers = 2`. Ghép được 1 đối thủ thật (`2/2`) là vào trận ngay lập tức; hết `8s` chờ tự bù đúng `1 AI Bot` |
+| `cancel_match` (hoặc `cancel_quick_match`) | `{}` (hoặc không truyền data) | `{ success: true, cancelled: boolean, cancelledFromPreStartRoom: boolean, searching: false, state: "IDLE", systemMessage: "SYS_MATCHMAKING_CANCELLED" }` | **Unified Cancel Match**: Hủy tìm trận được ở cả 2 trạng thái: khi đang đứng lẻ `1/4` trong Queue **và** khi đã được gom tạm vào phòng `2/4`, `3/4` đang đếm ngược chờ đủ người (`IDLE`) |
+| `get_matchmaking_state` | `{}` | `{ searching: boolean, state: "FINDING_MATCH"\|"IDLE", roomId?, mode, currentPlayers, targetPlayers, members, waitMs, remainingMs, timeRemaining, elapsedSeconds, totalDuration, progressPercent, startedAt, endsAt }` | Lấy trạng thái đồng hồ tìm trận và danh sách ghế Avatar (`members`) hiện tại từ Server |
+
+#### Nhóm C — Gameplay Đấu Trường Nhại Giọng (`game.handler.ts`) — 100% Server-Driven (Không Có Chủ Động Next Round)
+
+| Event Name | Payload Gửi Lên | Callback Response (`ack`) | Mô tả |
+| :--- | :--- | :--- | :--- |
+| `game_start` (hoặc `fill_bots_and_start`, `matchmaking_timeout`) | `{ roomId?, requireAllReady?: false, autoFillBots?: true, minPlayers?: 4, botCount?, botDifficulty? }` | `{ success: true, botsAdded, totalPlayers }` | **(Chỉ Host)** Bắt đầu trận đấu. Mặc định nếu phòng < `targetPlayers` sẽ tự động điền thêm AI Bot cho đủ số người |
+| `game_update_config` | `{ roomId?, totalRounds?: 3\|5\|7\|10, recordDuration?: 3..15, useCustomRecordDuration?: boolean }` | `{ success: true, totalRounds, recordDuration }` | **(Chỉ Host)** Cập nhật số vòng đấu và thời gian thu âm khi ở sảnh chờ |
+| `sample_playback_done` | `{ roomId? }` | — | Ghi nhận thiết bị đã phát xong file âm thanh mẫu (Server vẫn giữ đúng bộ đếm `PLAYING_SAMPLE` trước khi sang `PREPARE_RECORDING`) |
+| `game_submit_audio` | `{ roomId?, audioData: "data:audio/webm;base64,...", mimeType?: "audio/webm", metrics?: { matchPct, rhythmScore, energyScore, activeRatio } }` | `{ success: true, evaluation: { totalScore, pitchScore, rhythmScore, energyScore, grade, remark } }` | Nộp bản thu âm nhại giọng của vòng hiện tại. **Không cắt ngang đồng hồ thu âm** — chờ hết giờ `USER_RECORDING` Server mới chuyển bước |
+| `game_submit_bot_audio` | `{ roomId?, botSocketId, audioData: "data:audio/wav;base64,...", mimeType?: "audio/wav" }` | `{ success: true, botSocketId, uploadedBy, assignedGeneratorSocketId }` | *(Tuỳ chọn — Chế độ 1B)* Client được phân công (`assignedGeneratorSocketId`) nộp file audio đã render hộ cho AI Bot để đồng bộ qua `/api/attempts/:roomId/:botSocketId` |
+| `game_emoji_reaction` | `{ roomId?, emoji: "😂" }` | — | Thả biểu tượng cảm xúc bay trên màn hình (tối đa 5 lần / giây) |
+| `confirm_showdown_skip` (hoặc `skip_to_round_result`) | `{ roomId? }` | `{ success: true, isVoted, skipCount, totalCount, allSkipConfirmed }` | Ghi nhận trạng thái UI (không cắt ngang đồng hồ `SHOWDOWN_REVEAL` — Server điều phối 100% thời gian từng Step) |
+| `confirm_next_round_ready` | `{ roomId? }` | `{ success: true, readyCount, totalCount, allReady }` | Ghi nhận trạng thái sẵn sàng của người chơi (trong trận, Server tự động chuyển vòng khi hết thời gian `ROUND_RESULT` + `BREAK_TIME`, **không có chủ động Next Round sớm**) |
+| `get_game_state` | `{ roomId? }` | `GameStateSnapshot \| null` | Lấy toàn bộ trạng thái hiện tại của bàn chơi khi vừa kết nối lại |
+
+#### Nhóm D — Chat, Soundboard, Chia Sẻ Audio & Live Mic (`media.handler.ts`)
+
+| Event Name | Payload Gửi Lên | Callback Response (`ack`) | Mô tả |
+| :--- | :--- | :--- | :--- |
+| `send_message` | `{ message: "Hello!", type?: "text", audioMeta?: null }` | `{ success: true, messageId }` | Gửi tin nhắn chat vào phòng (lưu tối đa 50 tin gần nhất) |
+| `trigger_sound` | `{ soundId, soundName?, soundUrl, volume?: 1.0, pitch?: 1.0 }` | `{ success: true }` | Phát hiệu ứng âm thanh Soundboard đồng bộ cho toàn bộ thành viên trong phòng |
+| `stop_all_sounds` | `{}` | — | Dừng tất cả âm thanh Soundboard đang phát trong phòng |
+| `share_audio_clip` | `{ audioData, audioName?, duration?, mimeType?: "audio/webm" }` | `{ success: true, audioId }` | Chia sẻ một đoạn ghi âm ngắn vào phòng và lưu vào lịch sử chat |
+| `mic_stream_start` | `{ sampleRate?: 48000, channels?: 1 }` | — | Bắt đầu truyền giọng nói trực tiếp (Live Mic Stream) |
+| `mic_stream_chunk` | `<ArrayBuffer \| Base64Chunk>` | — | Gửi từng mảnh dữ liệu âm thanh micro thời gian thực |
+| `mic_stream_stop` | `{}` | — | Kết thúc truyền giọng nói trực tiếp |
+
+---
+
+### 4.2. Sự Kiện Server Bắn Xuống Client (`Server ➔ Client`)
+
+#### 1) Sự kiện Phòng & Smart Matchmaking
+* **`joined_room_success`**: Gửi riêng cho socket vừa vào phòng thành công (cấu trúc giống hệt callback của `join_room`).
+* **`user_joined`**: Broadcast khi có người chơi hoặc Bot mới vào phòng:
+  ```json
+  {
+    "user": { "socketId": "...", "userId": "...", "userName": "Alex", "avatar": "🦊", "role": "PLAYER", "isReady": false },
+    "members": [ ... ],
+    "systemMessage": "SYS_PLAYER_JOINED_ROOM",
+    "messageCode": "SYS_PLAYER_JOINED_ROOM",
+    "messageParams": { "userName": "Alex", "role": "PLAYER" }
+  }
+  ```
+* **`user_left`**: Broadcast khi có thành viên rời phòng (`{ socketId, userName, members, systemMessage: "SYS_USER_LEFT_ROOM", messageParams }`).
+* **`host_changed`**: Broadcast khi Chủ phòng cũ rời đi và quyền Host được chuyển giao (`{ newHostId, newHostName, members, systemMessage: "SYS_HOST_CHANGED" }`).
+* **`player_ready_changed`**: Broadcast khi người chơi bật/tắt sẵn sàng tại sảnh (`{ socketId, userName, isReady, members, systemMessage }`).
+* **`kicked_from_room`**: Gửi riêng cho người bị Host kick (`{ code: "ROOM_KICKED_BY_HOST", message: "ROOM_KICKED_BY_HOST" }`).
+* **`room_closed`**: Broadcast khi phòng bị đóng (`{ roomId, reason: "HOST_CLOSED", message: "SYS_HOST_CLOSED_ROOM", messageParams, timestamp }`).
+* **`bot_added` / `bot_removed` / `bots_auto_filled`**: Broadcast khi thêm/xóa Bot thủ công hoặc tự động điền Bot lúc bắt đầu game.
+* **`matchmaking_searching`**: Gửi ngay khi bắt đầu vào hàng đợi chờ tìm người chơi thật, khi gom vào phòng chờ `2/4`, `3/4`, hoặc khi mở lại phòng tìm người mới sau trận (Server quản lý 100% timer tìm trận và trả về danh sách `members` để UI vẽ 4 ô ghế Avatar sáng dần `1/4 ➔ 2/4 ➔ 3/4`):
+  ```json
+  {
+    "searching": true,
+    "state": "FINDING_MATCH",
+    "roomId": "A1B2C3",
+    "mode": "QUICK_MATCH",
+    "currentPlayers": 2,
+    "targetPlayers": 4,
+    "members": [
+      { "socketId": "...", "userName": "Player1", "avatar": "🎧", "role": "HOST", "isBot": false },
+      { "socketId": "...", "userName": "Player2", "avatar": "🦊", "role": "PLAYER", "isBot": false }
+    ],
+    "waitMs": 10000,
+    "remainingMs": 10000,
+    "timeRemaining": 10,
+    "elapsedSeconds": 0,
+    "totalWaitSeconds": 10,
+    "totalDuration": 10,
+    "progressPercent": 0,
+    "extended": false,
+    "extendedBonusSeconds": 0,
+    "startedAt": 1760494800000,
+    "endsAt": 1760494810000,
+    "timestamp": 1760494800000,
+    "systemMessage": "SYS_MATCHMAKING_SEARCHING",
+    "messageCode": "SYS_MATCHMAKING_SEARCHING",
+    "messageParams": { "waitSeconds": 10, "waitMs": 10000 }
+  }
+  ```
+* **`matchmaking_tick`**: Server bắn định kỳ mỗi `1 giây` (bắt đầu từ `t = 0s` đến khi hết giờ, kèm `currentPlayers`, `members`, `extended`, `extendedBonusSeconds`) để Client chỉ việc bind trực tiếp lên UI đồng hồ tìm trận và các ô Avatar mà **không cần tự chạy timer phía Client**:
+  ```json
+  {
+    "searching": true,
+    "state": "FINDING_MATCH",
+    "roomId": "A1B2C3",
+    "mode": "QUICK_MATCH",
+    "currentPlayers": 3,
+    "targetPlayers": 4,
+    "members": [ ... ],
+    "waitMs": 13000,
+    "remainingMs": 6000,
+    "timeRemaining": 6,
+    "elapsedSeconds": 7,
+    "totalWaitSeconds": 13,
+    "totalDuration": 13,
+    "progressPercent": 54,
+    "extended": true,
+    "extendedBonusSeconds": 5,
+    "startedAt": 1760494800000,
+    "endsAt": 1760494813000,
+    "timestamp": 1760494807000
+  }
+  ```
+* **`matchmaking_player_joined`**: Broadcast ngay khi có người chơi thật mới ghép vào phòng chờ (`2/4` hoặc `3/4`) làm kích hoạt cộng giờ mềm (`+5s` khi còn `< 5s`, trần `16s`) để Client hiển thị hiệu ứng sáng ô Avatar mới và cộng thêm giây chờ (`{ roomId, mode, currentPlayers, targetPlayers, members, extended: true, extendedBonusSeconds: 5, timeRemaining, remainingMs, totalWaitSeconds }`).
+* **`get_matchmaking_state` (`Client ➔ Server` ack)**: Cho phép Client lấy lại trạng thái timer tìm trận và `members` hiện tại từ Server bất cứ lúc nào nếu chuyển màn hình.
+* **`match_found`**: Gửi ngay khi ghép được người chơi thật hoặc khi hết thời gian chờ trên Server và tự động tạo phòng với AI Bot + bắt đầu Gameplay.
+* **`matchmaking_cancelled`**: Gửi khi người chơi hủy tìm trận (`{ success: true, cancelled: true, cancelledFromPreStartRoom: boolean, searching: false, state: "IDLE", timeRemaining: 0, remainingMs: 0, systemMessage: "SYS_MATCHMAKING_CANCELLED" }`).
+
+#### 2) Sự kiện Gameplay Mimic Party (Server-Authoritative 100%: State, Step, Round, Timer & Xử Lý Rời Trận Giữa Chừng)
+
+> **Nguyên tắc thiết kế bắt buộc cho Client:**
+> 1. **100% Server-Driven Timeline (Không có chủ động Next Round / Không nhảy cóc Step)**:
+>    - Khi bắt đầu Gameplay (`game_start` hoặc `match_found`), **Server quyết định tuyệt đối mọi thứ tự và thời gian của từng Step (`5.0` ➔ `5.9`), số Round (`round`/`totalRounds`) và thời gian nghỉ giữa các vòng (`BREAK_TIME`)**.
+>    - Chỉ khi chạy **hết thời gian thu âm (`USER_RECORDING`)** ➔ qua đầy đủ các bước đồng bộ, nghe lại & chấm điểm (`UPLOADING_SOUND` ➔ `LISTENING_NOW_PLAYING` ➔ `SHOWDOWN_REVEAL` ➔ `AI_SCORING` ➔ `ROUND_RESULT`) ➔ chạy **hết thời gian nghỉ (`BREAK_TIME`)** thì Server mới chuyển sang Round tiếp theo.
+> 2. **Quy tắc khi có người rời trận giữa chừng & Tự động tìm người mới sau trận**:
+>    - **`QUICK_MATCH` (`4 Người`)**: Nếu 1 người rời giữa chừng, trận đấu **vẫn tiếp tục chạy bình thường tới hết toàn bộ các Round (`3/3`)** (trừ khi không còn người thật nào). Sau khi kết thúc trận (`GAME_OVER` `8s`), Server **tự động mở lại phòng đó để tìm người chơi thật mới** với bộ đếm giờ tìm trận (`matchmaking_searching` + `matchmaking_tick`), nếu quá thời gian chờ thì tự động bù AI Bot cho đủ 4 người và bắt đầu ván mới.
+>    - **`RACE_1V1` (`2 Người`)**: Nếu đối thủ rời phòng giữa chừng, Server **kết thúc trận đấu ngay lập tức và báo kết quả `GAME_OVER` (`reason: "OPPONENT_LEFT_FORFEIT"`, `forfeitedBySocketId`, `forfeitedByUserName`)** vinh danh người ở lại thắng cuộc! Sau `GAME_OVER` (`8s`), phòng tự động mở lại bộ đếm giờ tìm đối thủ `1v1` mới (quá giờ thì bù `1 AI Bot`).
+
+##### Bảng Lịch Trình Các Step Trong 1 Round Do Server Điều Phối (`GAME_STEP_DURATIONS`)
+
+| Thứ tự (`stepIndex`) | Mã Step (`phaseStep`) | `state` (`GameStateType`) | Thời lượng Server (`duration`) | `nextState` tự động khi hết giờ | Mô tả hiển thị trên Client |
+| :---: | :---: | :--- | :---: | :--- | :--- |
+| `1` | `5.0` | `THEME_SELECTION` | **`3.5s`** (`4s` tick) | `PLAYING_SAMPLE` | Quay/chọn chủ đề Sound Pack của vòng đấu |
+| `2` | `5.1` | `PLAYING_SAMPLE` | **Theo độ dài file mẫu** (`2s – 12s`) | `PREPARE_RECORDING` | Phát âm thanh mẫu gốc (`targetSound.audioUrl`) |
+| `3` | `5.1b` | `PREPARE_RECORDING` | **`3s`** | `USER_RECORDING` | Đếm ngược `3..2..1` chuẩn bị lấy hơi & bật mic |
+| `4` | `5.2` | `USER_RECORDING` | **Theo độ dài file mẫu** (hoặc custom `3s – 15s`) | `UPLOADING_SOUND` | Người chơi thu âm nhại lại (**chờ hết giờ Server mới chuyển bước**) |
+| `5` | `5.3` | `UPLOADING_SOUND` | **`3s`** | `LISTENING_NOW_PLAYING` | Đồng bộ & tải bản thu âm của tất cả người chơi |
+| `6` | `5.4` | `LISTENING_NOW_PLAYING` | **`5s`** | `SHOWDOWN_REVEAL` | Nghe nhanh lượt phát nổi bật (`spotlightPlayer` tự động xoay theo tick) |
+| `7` | `5.5` | `SHOWDOWN_REVEAL` | **`10s`** | `AI_SCORING` | Nghe lại toàn bộ bài thi (**chờ hết giờ Server mới sang chấm điểm**) |
+| `8` | `5.6` | `AI_SCORING` | **`4s`** | `ROUND_RESULT` | AI Voice Detector phân tích & chấm điểm |
+| `9` | `5.7` | `ROUND_RESULT` | **`8s`** | `BREAK_TIME` (hoặc `GAME_OVER` nếu vòng cuối) | Hiển thị bảng xếp hạng vòng hiện tại |
+| `10` | `5.8` | `BREAK_TIME` | **`11s`** | `THEME_SELECTION` (vòng kế tiếp) | Nghỉ giải lao giữa 2 vòng đấu (**chờ hết giờ nghỉ Server mới qua vòng kế tiếp**) |
+| `—` | `5.9` | `GAME_OVER` | **`8s`** (tự mở lại tìm trận cho `QUICK_MATCH` / `RACE_1V1`) | `IDLE` / `FINDING_MATCH` | Vinh danh nhà vô địch chung cuộc |
+
+* **`game_state_changed`**: Sự kiện trung tâm điều khiển UI mỗi khi Server chuyển sang Step mới:
+  ```json
+  {
+    "roomId": "MIMIC99",
+    "state": "PLAYING_SAMPLE",
+    "stateLabel": "STATE_LABEL_PLAYING_SAMPLE",
+    "phaseStep": "5.1",
+    "stepIndex": 2,
+    "totalStepsInRound": 10,
+    "nextState": "PREPARE_RECORDING",
+    "round": 1,
+    "totalRounds": 3,
+    "isLastRound": false,
+    "nextRound": 2,
+    "duration": 4,
+    "totalDuration": 4,
+    "timeRemaining": 4,
+    "elapsedSeconds": 0,
+    "remainingMs": 4000,
+    "progressPercent": 0,
+    "stateStartedAt": 1760494800000,
+    "stateEndsAt": 1760494804000,
+    "stepDurations": {
+      "themeSelection": 3.5,
+      "playingSample": 4,
+      "prepareRecording": 3,
+      "userRecording": 4,
+      "uploadingSound": 3,
+      "listeningNowPlaying": 5,
+      "showdownReveal": 10,
+      "aiScoring": 4,
+      "roundResult": 8,
+      "breakTime": 11,
+      "readyCountdown": 3
+    },
+    "timestamp": 1760494800000,
+    "payload": {
+      "phaseStep": "5.1",
+      "pack": { "id": "animals", "name": "PACK_NAME_ANIMALS", "emoji": "🐾" },
+      "targetSound": {
+        "id": "animals_cat-two",
+        "name": "Cat Two",
+        "emoji": "🐱",
+        "hint": "Mimic the sound of Cat Two!",
+        "audioUrl": "https://pub-2ec3726948d14e47babdc7ea12268a78.r2.dev/animals/cat-two.mp3",
+        "rawDuration": 3.2,
+        "exactDuration": 3.2,
+        "duration": 4
+      }
+    }
+  }
+  ```
+  - **Cấu trúc `payload` trong pha `SHOWDOWN_REVEAL` (Step `5.5`)**:
+    ```json
+    {
+      "phaseStep": "5.5",
+      "duration": 10,
+      "pack": { ... },
+      "targetSound": { ... },
+      "roundWinner": { "socketId": "...", "userName": "Alex", "roundScore": 92, ... },
+      "skipCount": 2,
+      "totalCount": 4,
+      "votedSockets": ["bot_1", "bot_2"],
+      "attempts": [
+        {
+          "socketId": "sock_human_1",
+          "userName": "Alex",
+          "avatar": "🦊",
+          "isBot": false,
+          "botDifficulty": null,
+          "roundScore": 92,
+          "totalScore": 180,
+          "audioUrl": "/api/attempts/MIMIC99/sock_human_1?r=2&t=1760494850000",
+          "audioStreamUrl": "/api/attempts/MIMIC99/sock_human_1?r=2",
+          "evaluation": {
+            "totalScore": 92,
+            "pitchScore": 94,
+            "rhythmScore": 90,
+            "energyScore": 91,
+            "grade": "S",
+            "remark": "AI_REMARK_LEGENDARY_1"
+          }
+        },
+        {
+          "socketId": "bot_abc123",
+          "userName": "Bot Mecha",
+          "avatar": "🤖",
+          "isBot": true,
+          "botDifficulty": "NORMAL",
+          "roundScore": 78,
+          "totalScore": 154,
+          "audioUrl": "https://pub-2ec3726948d14e47babdc7ea12268a78.r2.dev/animals/cat-two.mp3?bot=1&d=NORMAL&p=1.06&s=1.05&delay=95&seed=284",
+          "audioStreamUrl": "https://pub-2ec3726948d14e47babdc7ea12268a78.r2.dev/animals/cat-two.mp3",
+          "botSoundId": "cat-two",
+          "botSoundFileName": "cat-two.mp3",
+          "botPitch": 1.06,
+          "botSpeed": 1.05,
+          "botAudioEffects": {
+            "difficulty": "NORMAL",
+            "baseSoundUrl": "https://pub-2ec3726948d14e47babdc7ea12268a78.r2.dev/animals/cat-two.mp3",
+            "pitch": 1.06,
+            "pitchSemitones": 1.01,
+            "speed": 1.05,
+            "pitchScoopCents": -24,
+            "vibratoRateHz": 1.82,
+            "noiseLevel": 0.041,
+            "noiseType": "room_ambience",
+            "inhaleBreathMs": 56,
+            "inhaleBreathGain": 0.018,
+            "distortion": 0.054,
+            "tremoloDepth": 0.046,
+            "dropoutCount": 0,
+            "startDelayMs": 95,
+            "bandpassHz": [220, 4200],
+            "vocalPresenceHz": 1400,
+            "vocalPresenceGainDb": 2.8
+          },
+          "evaluation": {
+            "totalScore": 78,
+            "pitchScore": 79,
+            "rhythmScore": 76,
+            "energyScore": 80,
+            "grade": "A",
+            "remark": "AI_REMARK_GOOD_2"
+          }
+        }
+      ]
+    }
+    ```
+* **`game_state_tick`**: Server bắn định kỳ mỗi `1 giây` trong suốt mọi Step (kể cả `BREAK_TIME`) để Client hiển thị đếm ngược, thanh tiến trình và người chơi đang phát (`spotlightPlayer` trong `LISTENING_NOW_PLAYING` / `SHOWDOWN_REVEAL`):
+  ```json
+  {
+    "roomId": "MIMIC99",
+    "state": "BREAK_TIME",
+    "stateLabel": "STATE_LABEL_BREAK_TIME",
+    "phaseStep": "5.8",
+    "stepIndex": 10,
+    "totalStepsInRound": 10,
+    "nextState": "THEME_SELECTION",
+    "round": 1,
+    "totalRounds": 3,
+    "isLastRound": false,
+    "nextRound": 2,
+    "timeRemaining": 9,
+    "elapsedSeconds": 2,
+    "totalDuration": 11,
+    "remainingMs": 9000,
+    "progressPercent": 18,
+    "stateStartedAt": 1760494900000,
+    "stateEndsAt": 1760494911000,
+    "timestamp": 1760494902000
+  }
+  ```
+* **`game_config_changed`**: Broadcast khi Host đổi cấu hình vòng/thời gian thu âm.
+* **`showdown_skip_updated`**: Broadcast khi có người bấm đồng ý/hủy bỏ qua sớm `SHOWDOWN_REVEAL` (`{ socketId, userName, isVoted, skipCount, totalCount, allSkipConfirmed, votedSockets }`).
+* **`round_ready_updated`**: Broadcast tiến độ bấm sẵn sàng qua vòng mới tại `ROUND_RESULT` / `BREAK_TIME` / `GAME_OVER` (`{ socketId, userName, readyCount, totalCount, allReady, players }`).
+* **`all_players_ready`**: Broadcast khi 100% người chơi đã đồng ý skip hoặc sẵn sàng qua vòng mới (`{ roomId, state, countdown: 3, timeRemaining: 3, totalDuration: 3, messageCode }`).
+* **`game_reaction_broadcast`**: Truyền chuỗi emoji bay trên màn hình (`"😂"`).
+* **`game_error`**: Báo lỗi thao tác game (`{ code: "GAME_HOST_ONLY_START", message: "GAME_HOST_ONLY_START" }`).
+
+#### 3) Sự kiện Media, Chat & Live Mic
+* **`new_message`**: Tin nhắn mới trong phòng (`{ id, senderId, senderName, avatar, message, type: "text"|"sound_trigger"|"audio_share", audioMeta, timestamp }`).
+* **`sync_play_sound`**: Yêu cầu các máy trong phòng phát đồng bộ 1 hiệu ứng Soundboard (`{ soundId, soundName, soundUrl, volume, pitch, senderId, senderName, avatar, timestamp }`).
+* **`sync_stop_sounds`**: Dừng toàn bộ âm thanh Soundboard đang phát (`{ senderId, senderName }`).
+* **`new_audio_shared`**: Khi có thành viên chia sẻ voice clip vào phòng (`{ id, audioData, audioName, mimeType, duration, senderId, senderName, avatar, timestamp }`).
+* **`user_mic_stream_started` / `user_mic_stream_chunk` / `user_mic_stream_stopped`**: Sự kiện nhận luồng giọng nói trực tiếp từ thành viên khác trong phòng.
 
 ## 5. 🤖 Thuật Toán Chấm Điểm AI Voice Scoring
 
@@ -395,53 +907,23 @@ Client tự động mở khóa giao diện Host (hiển thị nút Bắt đầu,
 
 ---
 
-### 7.3. ⏳ Cơ Chế Chờ Kết Quả & Bắt Buộc Tất Cả Người Chơi Xác Nhận Sẵn Sàng
+### 7.3. ⏳ Cơ Chế Chuyển Vòng 100% Server-Driven (Không Chủ Động Next Round) & Xử Lý Rời Trận Giữa Chừng
 
-Để người chơi có đủ thời gian nghe lại âm thanh nhại của nhau và xem bảng điểm mà không bị hệ thống vội vã chuyển vòng:
+Để đảm bảo mọi người chơi trong phòng luôn đồng bộ tuyệt đối và không bị treo phòng nếu có người thoát hoặc quên bấm nút:
 
-1. **Thời gian Showdown Reveal (`SHOWDOWN_REVEAL`)**:
-   - Tăng lên **25 giây** (thay vì 12 giây) để người chơi kịp nghe lại các bản thu, chấm điểm chi tiết và thả reaction emoji.
-   - Hỗ trợ sự kiện **`skip_to_round_result`** / **`confirm_showdown_skip`**: Cho phép xem ngay bảng điểm nếu **TẤT CẢ** người chơi trong phòng cùng xác nhận đồng ý (broadcast tiến độ qua event `showdown_skip_updated`).
+1. **100% Server-Driven Step & Round Transitions (Không có chủ động Next Round)**:
+   - Mọi bước trong vòng đấu đều chạy hết đúng thời lượng đếm ngược do Server điều phối:
+     - `USER_RECORDING` (hết giờ thu âm mới kết thúc, không cắt ngang sớm) ➔ `UPLOADING_SOUND` (**3s**) ➔ `LISTENING_NOW_PLAYING` (**5s**) ➔ `SHOWDOWN_REVEAL` (**10s**) ➔ `AI_SCORING` (**4s**) ➔ `ROUND_RESULT` (**8s**) ➔ `BREAK_TIME` (**11s**) ➔ Tự động sang vòng kế tiếp (`THEME_SELECTION`).
+   - Nếu là vòng cuối (`round === totalRounds`), sau `ROUND_RESULT` (**8s**) Server chuyển sang `GAME_OVER` (**8s**) để vinh danh nhà vô địch.
+   - Các sự kiện `confirm_showdown_skip` và `confirm_next_round_ready` vẫn được ghi nhận để hiển thị trạng thái tích xanh trên UI (`showdown_skip_updated` / `round_ready_updated`), nhưng **không cắt ngang đồng hồ của Server** trong trận.
 
-2. **Dừng chuyển vòng tự động trong Bảng Điểm (`ROUND_RESULT`)**:
-   - `duration = 0`: Server **KHÔNG** tự ý chuyển sang vòng tiếp theo sau 5 giây như trước.
-   - Trạng thái `isReady` của tất cả người chơi được reset về `false`.
-   - **TẤT CẢ người chơi** (bao gồm cả Chủ phòng lẫn Người chơi thường) đều phải bấm xác nhận **"Sẵn Sàng"** thì vòng tiếp theo mới bắt đầu.
-
-3. **Giao thức Socket.IO xác nhận Sẵn Sàng**:
-   * **Client gửi xác nhận**:
-     ```javascript
-     socket.emit('confirm_next_round_ready', { roomId: 'MIMIC99' });
-     ```
-   * **Server cập nhật tiến độ (Broadcast)**:
-     ```json
-     // Event: "round_ready_updated"
-     {
-       "socketId": "sock_123",
-       "userName": "Alice",
-       "readyCount": 2,
-       "totalCount": 3,
-       "allReady": false,
-       "players": [
-         { "socketId": "sock_123", "userName": "Alice", "isReady": true },
-         { "socketId": "sock_456", "userName": "Bob", "isReady": true },
-         { "socketId": "sock_789", "userName": "Charlie", "isReady": false }
-       ]
-     }
-     ```
-   * **Khi 100% người chơi đã sẵn sàng**:
-     Server phát sự kiện đếm ngược 3 giây thông báo:
-     ```json
-     // Event: "all_players_ready"
-     {
-       "message": "🎉 Tất cả người chơi đã SẴN SÀNG! Bắt đầu trong 3 giây...",
-       "countdown": 3
-     }
-     ```
-     Sau 3 giây, server tự động bắt đầu vòng đấu tiếp theo (`THEME_SELECTION`) hoặc trận đấu mới (`GAME_OVER` ➔ `THEME_SELECTION`).
-
-
-
+2. **Quy tắc khi có người rời trận giữa chừng (`Mid-Game Leave`) & Tự động tìm người mới sau trận**:
+   - **Mode `QUICK_MATCH` (`4 Người`)**:
+     - Khi 1 người thoát giữa trận, ván đấu **vẫn tiếp tục chạy bình thường tới hết tất cả các Round (`3/3`)** cho những người chơi còn lại.
+     - Sau khi kết thúc `GAME_OVER` (**8s**), Server tự động xóa các AI Bot cũ, mở lại phòng chờ và bật bộ đếm tìm người chơi mới (`matchmaking_searching` + `matchmaking_tick` + tự hút người từ `matchmakingQueue`). Nếu hết thời gian chờ mà chưa đủ 4 người thật, Server tự động bù thêm AI Bot và bắt đầu ván mới.
+   - **Mode `RACE_1V1` (`2 Người`)**:
+     - Khi đối thủ thoát giữa trận, Server **kết thúc ván đấu ngay lập tức** và chuyển thẳng sang `GAME_OVER` kèm `reason: "OPPONENT_LEFT_FORFEIT"`, `forfeitedBySocketId`, `forfeitedByUserName` để trao chiến thắng ngay cho người ở lại.
+     - Sau `GAME_OVER` (**8s**), phòng tự động mở lại tìm đối thủ 1v1 mới (quá giờ tự bù `1 AI Bot`).
 
 ---
 
@@ -711,6 +1193,8 @@ Client cũng có thể gọi trực tiếp **`GET /api/enums`** (hoặc **`GET /
 | `SYS_BOT_JOINED_ROOM` | 🤖 Bot `{botName}` đã tham gia phòng đấu! | 🤖 Bot `{botName}` joined the room! | `botName`, `difficulty` | `bot_added` & `user_joined` |
 | `SYS_BOT_REMOVED_FROM_ROOM` | 🤖 Bot `{botName}` đã rời khỏi phòng. | 🤖 Bot `{botName}` was removed from the room. | `botName` | `bot_removed` & `user_left` |
 | `SYS_MATCHMAKING_BOTS_FILLED` | 🤖 Không tìm thấy người chơi khác — Hệ thống đã tự động thêm `{botsAdded}` Bot AI vào phòng để bắt đầu trận đấu! | 🤖 No other players found — Automatically added `{botsAdded}` AI Bots to start the match! | `botsAdded`, `totalPlayers` | `bots_auto_filled` |
+| `SYS_MATCHMAKING_SEARCHING` | 🔍 Đang tìm người chơi khác đang rảnh (`{waitSeconds}`s)... | 🔍 Searching for other available players (`{waitSeconds}`s)... | `waitSeconds`, `waitMs` | `matchmaking_searching` |
+| `SYS_MATCHMAKING_CANCELLED` | ❌ Đã hủy tìm trận. | ❌ Matchmaking cancelled. | — | `matchmaking_cancelled` |
 
 ### 11.3. Bảng Mã Thông Báo Gameplay (`GameMessageCode`)
 
@@ -745,37 +1229,77 @@ Client cũng có thể gọi trực tiếp **`GET /api/enums`** (hoặc **`GET /
 
 ---
 
-## 12. 🤖 Hệ Thống AI Bot & Ghép Trận Nhanh (Matchmaking)
+## 12. 🤖 Hệ Thống AI Bot, 4 Chế Độ Chơi & Smart Matchmaking Engine
 
-> **File hướng dẫn chi tiết dành riêng cho AI Client:** Xem tại [`backend/ENUM_LOCALIZATION_GUIDE.md`](./ENUM_LOCALIZATION_GUIDE.md).
+> **Tài liệu liên quan:**
+> - Bản thiết kế trực quan 4 Chế Độ Chơi & Luồng Matchmaking: [`GAME_DESIGN_MODES.html`](./GAME_DESIGN_MODES.html)
+> - Bảng tra cứu Enum đầy đủ: [`ENUM_LOCALIZATION_GUIDE.md`](./ENUM_LOCALIZATION_GUIDE.md)
+> - Thiết kế tổng hợp âm thanh AI Bot: [`BOT_SOUND_GENERATION_PLAN.md`](./BOT_SOUND_GENERATION_PLAN.md)
 
-### 12.1. Tìm trận nhanh (`find_match` / `quick_match`)
-Khi người chơi bấm tìm trận nhưng không tìm thấy phòng chờ nào có người chơi khác:
-- Server tự động tạo phòng mới, thêm mặc định **3 AI Bot** (`DEFAULT_MATCHMAKING_BOT_COUNT = 3`, xoay vòng độ khó `NORMAL`, `EASY`, `HARD` để tạo bàn **4 người chơi**) và tự động bắt đầu ngay vòng 1 (`autoStarted: true`).
+### 12.1. Tổng quan 4 Chế Độ Chơi & Smart Matchmaking Engine (`quick_match` vs `race_1v1` vs `CUSTOM_ROOM`)
+
+| Mode | Socket Event khởi tạo | `room.mode` | Số người (`targetPlayers`) | Thời gian chờ cơ bản | Quy tắc Cộng giờ & Bù AI Bot |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| **1. Quick Match (4P)** | `quick_match` / `find_match` | `QUICK_MATCH` | **4 Người** | `10s` (`waitMs: 10000`) | Khi có người thật mới vào phòng (`2/4` hoặc `3/4`) mà đồng hồ `< 5s` ➔ **Cộng giờ mềm `+5s`** (trần tối đa `16s`). Hết giờ tự bù `(4 - N)` Bot |
+| **2. 1vs1 Race (2P)** | `race_1v1` / `find_1v1_match` | `RACE_1V1` | **2 Người** | `8s` (`waitMs: 8000`) | Đủ `2/2` người thật là bắt đầu ngay (`autoStarted: true`). Hết `8s` chờ tự bù đúng `1 AI Bot` |
+| **3. Create Room** | `create_room` | `CUSTOM_ROOM` | Tối đa **8 Người** | Không tự đếm ngược | Cách ly hoàn toàn (`CUSTOM_ROOM`), người tìm trận ngẫu nhiên không bao giờ bị ghép nhầm vào |
+| **4. Join Room** | `join_room` (`roomId`) | `CUSTOM_ROOM` | Tối đa **8 Người** | Không tự đếm ngược | Vào đúng phòng theo mã Code 6 ký tự; hỗ trợ Reconnect 120s khôi phục điểm |
+
+#### 5 Cơ Chế Tối Ưu Smart Matchmaking Engine Trên Server:
+1. **Best-Fit + FIFO Priority (`3/4 ➔ 2/4 ➔ 1/4`)**: Khi có người bấm tìm trận, Server luôn ưu tiên nhét vào phòng chờ đang có đông người thật nhất (`3/4` trước rồi tới `2/4`, phòng đợi lâu hơn ưu tiên trước) để đủ `4/4` vào trận ngay, thay vì tạo thêm phòng lẻ `2/4`.
+2. **Queue Draining on Room Re-Open**: Ngay khi một phòng `QUICK_MATCH` hoặc `RACE_1V1` kết thúc trận (`GAME_OVER`) và mở lại tìm người mới, Server tự động hút ngay các user đang đứng chờ trong `matchmakingQueue` cùng mode vào các ghế trống.
+3. **Custom Room Isolation (`mode: 'CUSTOM_ROOM'`)**: Phòng tạo qua `create_room` / `join_room` được gắn cứng `CUSTOM_ROOM`, tách biệt 100% khỏi hàng đợi Matchmaking.
+4. **Live Avatar Slots (`currentPlayers`, `members`, `extendedBonusSeconds`)**: Mọi sự kiện `matchmaking_searching`, `matchmaking_tick`, `matchmaking_player_joined` và `get_matchmaking_state` đều trả về mảng `members` thực tế để UI vẽ 4 ô ghế Avatar sáng dần (`1/4 ➔ 2/4 ➔ 3/4 ➔ 4/4`).
+5. **Unified Cancel Match (`cancel_match` / `cancel_quick_match`)**: Hỗ trợ hủy tìm trận ở cả 2 trạng thái: khi đang đứng lẻ `1/4` trong `matchmakingQueue` **và** khi đã được gom tạm vào phòng `2/4`, `3/4` đang đếm ngược chờ đủ người (`IDLE`).
 
 ```javascript
-socket.emit("find_match", {
+// 1. Tìm trận nhanh 4 Người (QUICK_MATCH)
+socket.emit("quick_match", {
   userName: "CaoThuNhaiGiong",
   avatar: "🎧",
-  botCount: 3,      // Mặc định thêm 3 Bot khi không tìm thấy user khác
-  autoStart: true   // Mặc định bắt đầu ngay vòng 1
+  waitMs: 10000 // Cơ bản 10s (Server tự +5s nếu tìm được người lúc < 5s, trần 16s)
 }, (res) => {
-  console.log(res.matchedWithHumans); // false nếu ghép với Bot, true nếu ghép được phòng có người thật
-  console.log(res.botsAdded);         // 3
-  console.log(res.autoStarted);       // true
-  console.log(res.room.members);      // Danh sách 4 thành viên (1 User + 3 AI Bots)
+  console.log(res.mode);              // "QUICK_MATCH"
+  console.log(res.matchedWithHumans); // true nếu gặp người thật, false nếu hết giờ bù Bot
+  console.log(res.room.members);      // Danh sách thành viên hiện tại
+});
+
+// 2. Tìm trận Đấu Tay Đôi 1vs1 Race (2 Người - RACE_1V1)
+socket.emit("race_1v1", {
+  userName: "DuelMaster",
+  avatar: "⚡",
+  waitMs: 8000 // Chờ tối đa 8s, gặp 1 người thật là autoStart ngay, hết 8s bù 1 Bot
+}, (res) => {
+  console.log(res.mode, res.targetPlayers, res.autoStarted); // "RACE_1V1", 2, true
+});
+
+// 3. Lắng nghe đồng hồ tìm trận & ghế Avatar trực tiếp từ Server
+socket.on("matchmaking_tick", ({ currentPlayers, targetPlayers, members, timeRemaining, totalWaitSeconds, extended, extendedBonusSeconds }) => {
+  console.log(`Đang tìm trận [${currentPlayers}/${targetPlayers}]... còn ${timeRemaining}/${totalWaitSeconds}s`, members);
+});
+
+socket.on("matchmaking_player_joined", ({ currentPlayers, targetPlayers, members, extended, extendedBonusSeconds, timeRemaining }) => {
+  if (extended) {
+    console.log(`Tìm thấy người chơi mới (${currentPlayers}/${targetPlayers})! Cộng thêm +${extendedBonusSeconds}s chờ (còn ${timeRemaining}s)`);
+  }
+});
+
+// 4. Hủy tìm trận hợp nhất (hoạt động cả khi đang 1/4 ở Queue lẫn khi đang 2/4, 3/4 ở phòng chờ)
+socket.emit("cancel_match", {}, (res) => {
+  console.log(res.cancelled, res.cancelledFromPreStartRoom);
 });
 ```
 
-### 12.2. Bắt đầu trận hoặc Hết thời gian tìm người tại sảnh (`game_start` / `matchmaking_timeout` / `fill_bots_and_start`)
-Khi Chủ phòng đang đợi ở sảnh mà ít người chơi (hoặc hết thời gian tìm người `matchmaking_timeout`), khi gọi `game_start` (hoặc `matchmaking_timeout` / `fill_bots_and_start`):
-- Mặc định `minPlayers = 4` (`autoFillBots = true`): Nếu phòng có ít hơn 4 người (ví dụ chỉ có 1 mình Host), Server tự động thêm **3 AI Bot** vào phòng để đủ 4 người chơi, phát sự kiện `bots_auto_filled` (`SYS_MATCHMAKING_BOTS_FILLED`) rồi bắt đầu trận đấu ngay!
+### 12.2. Bắt đầu trận tại phòng Custom (`game_start` / `fill_bots_and_start`)
+Khi Chủ phòng ở phòng Custom (`CUSTOM_ROOM`) muốn bắt đầu trận đấu, gọi `game_start`:
+- Mặc định `minPlayers = 4` (`autoFillBots = true`): Nếu phòng có ít hơn 4 người (ví dụ 1–3 người), Server tự động thêm AI Bot cho đủ 4 người chơi, phát sự kiện `bots_auto_filled` (`SYS_MATCHMAKING_BOTS_FILLED`) rồi bắt đầu vòng 1 ngay!
+- Nếu bạn bè trong phòng muốn tự chơi với nhau mà **không thêm Bot**, truyền `autoFillBots: false`.
 
 ```javascript
 socket.emit("game_start", {
   roomId: "K9P2",
   requireAllReady: false,
-  autoFillBots: true, // Mặc định true
+  autoFillBots: true, // Đặt false nếu phòng Custom chỉ muốn chơi giữa người thật với nhau
   minPlayers: 4       // Mặc định bù thêm Bot cho đủ 4 người chơi
 }, (res) => {
   console.log(res); // { success: true, botsAdded: 3, totalPlayers: 4 }
@@ -787,7 +1311,7 @@ socket.emit("game_start", {
   ```javascript
   socket.emit("add_bot", {
     roomId: "K9P2",
-    difficulty: "HARD", // "EASY" (50-73đ) | "NORMAL" (68-88đ) | "HARD" (82-97đ)
+    difficulty: "HARD", // "EASY" | "NORMAL" | "HARD"
     botName: "Bot Cyber",
     avatar: "👾"
   }, (res) => {
@@ -801,4 +1325,13 @@ socket.emit("game_start", {
     botSocketId: "bot_x8k2p" // Nếu bỏ trống sẽ xóa Bot vừa thêm gần nhất
   });
   ```
+
+### 12.4. Cơ chế biến đổi âm thanh bài thi của AI Bot giống người thật theo 3 mức độ khó
+Ngay khi bắt đầu vòng đấu, Server tự động tải và giải mã file `.mp3` gốc của `targetSound` từ Cloudflare R2 CDN sang PCM `20000 Hz` (`warmUpSoundPcm`), sau đó biến đổi trực tiếp trên sóng âm thật bằng thuật toán **WSOLA (Waveform Similarity Overlap-Add)** tách biệt độc lập giữa Cao độ (`pitch`) và Tốc độ (`speed`), kết hợp tiếng lấy hơi tự nhiên (`85ms` đầu câu) và chuỗi **3 bộ lọc Biquad bậc 2** mô phỏng micro điện thoại:
+- **`EASY` (Yếu — Điểm khoảng 50–70đ)**: Lệch cao độ (`pitch` ±11%..18%) và tốc độ (`speed` ±10%..17%) trong ngưỡng giọng người thật, vào nhịp trễ (`startDelayMs` 180..340ms), có tiếng lấy hơi đầu câu, luyến giọng nhẹ và 1–2 nhịp ngập ngừng êm (`dropoutCount`).
+- **`NORMAL` (Thông thường — Điểm khoảng 68–86đ)**: Lệch nhẹ cao độ (`pitch` ±4.5%..9%) và tốc độ (`speed` ±4%..8.5%), âm sắc micro smartphone tiêu chuẩn (`[220Hz, 4200Hz]`), trễ phản xạ tự nhiên 70..140ms.
+- **`HARD` (Khó — Điểm khoảng 84–97đ)**: Bám rất sát âm thanh gốc (`pitch` ±1%..3.2%, `speed` ±1%..3%), thu âm micro trong trẻo (`[150Hz, 6000Hz]`), bắt nhịp nhanh (`startDelayMs` 15..40ms).
+- Bản thu WAV (`audio/wav`) đã biến đổi của Bot được lưu trực tiếp vào `audioStore` của vòng đấu và stream qua `GET /api/attempts/:roomId/:socketId` trong pha `SHOWDOWN_REVEAL` giống hệt bài thu của người chơi thật.
+
+
 

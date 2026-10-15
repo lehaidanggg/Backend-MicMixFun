@@ -236,17 +236,20 @@ test('Socket Handlers — Decision Matrix: Room, Media & Game Enum Error/Message
   destroyRoomData('SOLO_RM');
 
   // 14. Quick Match / Find Match: 2 IDLE users searching concurrently -> paired into the same room immediately
+  // Also verify Unified Cancel Match (cancelling from a 2/4 pre-start room removes player and updates remaining member)
   let p1MatchRes: any = null;
   let p2MatchRes: any = null;
   await hostMock.handlers.get('quick_match')!({ userName: 'IdleUser1', waitMs: 5000 }, (r: any) => {
     p1MatchRes = r;
   });
-  // While IdleUser1 is waiting on timer, matchmaking_searching is emitted
+  // While IdleUser1 is waiting on timer, matchmaking_searching is emitted with live members slot (1/4)
   const searchingEvt = hostMock.emittedToSelf.find(e => e.event === 'matchmaking_searching');
   assert.equal(Boolean(searchingEvt), true);
   assert.equal(searchingEvt?.payload.searching, true);
+  assert.equal(searchingEvt?.payload.currentPlayers, 1);
+  assert.equal(searchingEvt?.payload.members?.length, 1);
 
-  // IdleUser2 calls quick_match while IdleUser1 is waiting -> both get paired into a room!
+  // IdleUser2 calls quick_match while IdleUser1 is waiting -> both get paired into a 2/4 pre-start room!
   await playerMock.handlers.get('quick_match')!({ userName: 'IdleUser2', waitMs: 5000 }, (r: any) => {
     p2MatchRes = r;
   });
@@ -256,6 +259,15 @@ test('Socket Handlers — Decision Matrix: Room, Media & Game Enum Error/Message
   assert.equal(p2MatchRes?.matchedWithHumans, true);
   assert.equal(p1MatchRes?.roomId, p2MatchRes?.roomId);
   assert.equal(p2MatchRes?.room.members.length, 2);
+
+  // Unified Cancel Match: IdleUser2 cancels while in the 2/4 pre-start room -> cleanly removed from room
+  let cancelPreStartRes: any = null;
+  playerMock.handlers.get('cancel_match')!({}, (r: any) => {
+    cancelPreStartRes = r;
+  });
+  assert.equal(cancelPreStartRes?.success, true);
+  assert.equal(cancelPreStartRes?.cancelledFromPreStartRoom, true);
+  assert.equal(rooms.get(p1MatchRes.roomId)?.members.size, 1);
 
   destroyRoomData(p1MatchRes.roomId);
   hostSession.currentRoomId = null;
@@ -275,4 +287,32 @@ test('Socket Handlers — Decision Matrix: Room, Media & Game Enum Error/Message
   assert.equal(timeoutRes.room.members.length, 4);
 
   destroyRoomData(timeoutRes.roomId);
+  hostSession.currentRoomId = null;
+
+  // 16. Custom Room Isolation & Race 1v1 auto-start (2 humans -> autoStarted immediately)
+  let customRoomRes: any = null;
+  await hostMock.handlers.get('create_room')!({ userName: 'CustomHost' }, (r: any) => {
+    customRoomRes = r;
+  });
+  assert.equal(customRoomRes?.success, true);
+  assert.equal(customRoomRes?.room.mode, 'CUSTOM_ROOM');
+  destroyRoomData(customRoomRes.roomId);
+  hostSession.currentRoomId = null;
+
+  let r1v1P1: any = null;
+  let r1v1P2: any = null;
+  await hostMock.handlers.get('race_1v1')!({ userName: 'Duelist1', waitMs: 5000 }, (r: any) => {
+    r1v1P1 = r;
+  });
+  await playerMock.handlers.get('race_1v1')!({ userName: 'Duelist2', waitMs: 5000 }, (r: any) => {
+    r1v1P2 = r;
+  });
+  assert.equal(r1v1P1?.success, true);
+  assert.equal(r1v1P2?.success, true);
+  assert.equal(r1v1P1?.roomId, r1v1P2?.roomId);
+  assert.equal(r1v1P1?.autoStarted, true);
+  assert.equal(r1v1P2?.autoStarted, true);
+  assert.equal(r1v1P2?.room.members.length, 2);
+
+  destroyRoomData(r1v1P1.roomId);
 });

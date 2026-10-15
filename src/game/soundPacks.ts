@@ -10,15 +10,18 @@ import { GameStateType, SoundPack } from '../types';
 // 1. ĐỊNH NGHĨA GAME STATES (STATE ENUMS)
 // ==========================================
 export const GAME_STATES = {
-  IDLE: 'IDLE',                           // Chờ người chơi
-  THEME_SELECTION: 'THEME_SELECTION',     // Random chủ đề (Sound Pack)
-  PLAYING_SAMPLE: 'PLAYING_SAMPLE',       // Phát audio mẫu
-  PREPARE_RECORDING: 'PREPARE_RECORDING', // Thời gian đệm chuẩn bị nhại lại (3s)
-  USER_RECORDING: 'USER_RECORDING',       // User bật mic nhại lại
-  AI_SCORING: 'AI_SCORING',               // AI chấm điểm & phân tích
-  SHOWDOWN_REVEAL: 'SHOWDOWN_REVEAL',     // Nghe lại bản thu & reaction
-  ROUND_RESULT: 'ROUND_RESULT',           // Bảng xếp hạng vòng
-  GAME_OVER: 'GAME_OVER'                  // Kết thúc trận đấu
+  IDLE: 'IDLE',                                         // Chờ người chơi
+  THEME_SELECTION: 'THEME_SELECTION',                   // 5.1 Random chủ đề (Sound Pack)
+  PLAYING_SAMPLE: 'PLAYING_SAMPLE',                     // 5.1 Phát audio mẫu
+  PREPARE_RECORDING: 'PREPARE_RECORDING',               // 5.1 Thời gian đệm chuẩn bị nhại lại (3s)
+  USER_RECORDING: 'USER_RECORDING',                     // 5.2 User bật mic nhại lại
+  UPLOADING_SOUND: 'UPLOADING_SOUND',                   // 5.3 Tải âm thanh thu được lên server
+  LISTENING_NOW_PLAYING: 'LISTENING_NOW_PLAYING',       // 5.4 Phát bản thu trên sân khấu (Now Playing)
+  SHOWDOWN_REVEAL: 'SHOWDOWN_REVEAL',                   // 5.5 Nghe lại bản thu & reaction (Playback Review)
+  AI_SCORING: 'AI_SCORING',                             // 5.6 AI chấm điểm & phân tích
+  ROUND_RESULT: 'ROUND_RESULT',                         // 5.7 Bảng xếp hạng vòng
+  BREAK_TIME: 'BREAK_TIME',                             // 5.8 Giờ giải lao đếm ngược qua vòng tiếp theo
+  GAME_OVER: 'GAME_OVER'                                // Kết thúc trận đấu
 } as const;
 
 export const STATE_LABELS: Record<GameStateType, StateLabelCode> = {
@@ -27,9 +30,12 @@ export const STATE_LABELS: Record<GameStateType, StateLabelCode> = {
   [GAME_STATES.PLAYING_SAMPLE]: StateLabelCode.STATE_LABEL_PLAYING_SAMPLE,
   [GAME_STATES.PREPARE_RECORDING]: StateLabelCode.STATE_LABEL_PREPARE_RECORDING,
   [GAME_STATES.USER_RECORDING]: StateLabelCode.STATE_LABEL_USER_RECORDING,
-  [GAME_STATES.AI_SCORING]: StateLabelCode.STATE_LABEL_AI_SCORING,
+  [GAME_STATES.UPLOADING_SOUND]: StateLabelCode.STATE_LABEL_UPLOADING_SOUND,
+  [GAME_STATES.LISTENING_NOW_PLAYING]: StateLabelCode.STATE_LABEL_LISTENING_NOW_PLAYING,
   [GAME_STATES.SHOWDOWN_REVEAL]: StateLabelCode.STATE_LABEL_SHOWDOWN_REVEAL,
+  [GAME_STATES.AI_SCORING]: StateLabelCode.STATE_LABEL_AI_SCORING,
   [GAME_STATES.ROUND_RESULT]: StateLabelCode.STATE_LABEL_ROUND_RESULT,
+  [GAME_STATES.BREAK_TIME]: StateLabelCode.STATE_LABEL_BREAK_TIME,
   [GAME_STATES.GAME_OVER]: StateLabelCode.STATE_LABEL_GAME_OVER
 };
 

@@ -1,6 +1,12 @@
 import { Express, Request, Response } from 'express';
 import { Server } from 'socket.io';
-import { MAX_MEMBERS_PER_ROOM } from '../config/constants';
+import {
+  DEFAULT_MATCHMAKING_WAIT_MS,
+  DEFAULT_RECORD_DURATION_SEC,
+  DEFAULT_TOTAL_ROUNDS,
+  GAME_STEP_DURATIONS,
+  MAX_MEMBERS_PER_ROOM
+} from '../config/constants';
 import {
   AiRemarkCode,
   ENUM_DICTIONARY,
@@ -26,31 +32,9 @@ import {
   issueAuthToken,
   verifyAuthToken
 } from '../services/auth.service';
-import { buildOpenApiSpec, renderSwaggerHtml } from '../config/swagger';
 import { AuthTokenPayload } from '../types';
 
 export function registerApiRoutes(app: Express, io: Server): void {
-  // Swagger / OpenAPI 3.0 Documentation
-  const resolveServerUrl = (req: Request): string => {
-    const rawHost = req.headers['x-forwarded-host'] || req.get('host') || 'localhost:3000';
-    const host = String(Array.isArray(rawHost) ? rawHost[0] : rawHost).split(',')[0].trim();
-    const isLocal = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(host);
-    const rawProto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-    const proto = isLocal
-      ? String(Array.isArray(rawProto) ? rawProto[0] : rawProto).split(',')[0].trim()
-      : 'https';
-    return `${proto}://${host}`;
-  };
-
-  app.get('/api-docs.json', (req: Request, res: Response) => {
-    res.json(buildOpenApiSpec(resolveServerUrl(req)));
-  });
-
-  app.get(['/api-docs', '/docs', '/api/docs'], (req: Request, res: Response) => {
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(renderSwaggerHtml(buildOpenApiSpec(resolveServerUrl(req))));
-  });
-
   // 0. Phát hành One-Time Challenge Nonce (Chống Server Trung Gian / Replay Attack)
   app.get('/api/auth/challenge', (req: Request, res: Response) => {
     const clientIp = extractClientIp(req);
@@ -249,6 +233,10 @@ export function registerApiRoutes(app: Express, io: Server): void {
     res.json({
       states: GAME_STATES,
       labels: STATE_LABELS,
+      stepDurations: GAME_STEP_DURATIONS,
+      defaultTotalRounds: DEFAULT_TOTAL_ROUNDS,
+      defaultRecordDuration: DEFAULT_RECORD_DURATION_SEC,
+      matchmakingWaitMs: DEFAULT_MATCHMAKING_WAIT_MS,
       enums: {
         errorCodes: ErrorCode,
         systemMessageCodes: SystemMessageCode,
@@ -297,7 +285,7 @@ export function registerApiRoutes(app: Express, io: Server): void {
     res.json({ rooms: roomList });
   });
 
-  // 7. Stream trực tiếp audio bản thu của người chơi (giảm tải payload Socket)
+  // 7. Stream trực tiếp audio bản thu của người chơi (hoặc redirect sang CDN gốc đối với AI Bot)
   app.get('/api/attempts/:roomId/:socketId', (req: Request, res: Response) => {
     const roomId = String(req.params.roomId || '').toUpperCase();
     const socketId = String(req.params.socketId || '');
@@ -311,20 +299,28 @@ export function registerApiRoutes(app: Express, io: Server): void {
       });
       return;
     }
+
     const audioRecord = game.getAttemptAudio(socketId);
-    if (!audioRecord || !audioRecord.buffer) {
-      res.status(404).json({
-        success: false,
-        code: ErrorCode.ATTEMPT_AUDIO_NOT_FOUND,
-        error: ErrorCode.ATTEMPT_AUDIO_NOT_FOUND,
-        message: ErrorCode.ATTEMPT_AUDIO_NOT_FOUND
-      });
+    if (audioRecord && audioRecord.buffer) {
+      res.setHeader('Content-Type', audioRecord.mimeType || 'audio/webm');
+      res.setHeader('Content-Length', audioRecord.buffer.length);
+      res.setHeader('Cache-Control', 'no-store');
+      res.send(audioRecord.buffer);
       return;
     }
-    res.setHeader('Content-Type', audioRecord.mimeType || 'audio/webm');
-    res.setHeader('Content-Length', audioRecord.buffer.length);
-    res.setHeader('Cache-Control', 'no-store');
-    res.send(audioRecord.buffer);
+
+    const player = game.players.get(socketId);
+    if (player && player.isBot && player.currentAttempt?.botAudioEffects?.baseSoundUrl) {
+      res.redirect(302, player.currentAttempt.botAudioEffects.baseSoundUrl);
+      return;
+    }
+
+    res.status(404).json({
+      success: false,
+      code: ErrorCode.ATTEMPT_AUDIO_NOT_FOUND,
+      error: ErrorCode.ATTEMPT_AUDIO_NOT_FOUND,
+      message: ErrorCode.ATTEMPT_AUDIO_NOT_FOUND
+    });
   });
 
   // 8. Lấy danh sách file âm thanh có sẵn từ các folder pack trong catalog.json

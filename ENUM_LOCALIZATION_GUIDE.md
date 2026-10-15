@@ -109,21 +109,24 @@ Khi văn bản mô tả chứa `{key}`, Client thay thế `{key}` bằng giá tr
 
 ---
 
-## 4. Bảng Mapping `GameMessageCode` (7 mã thông báo tiến trình Game)
+## 4. Bảng Mapping `GameMessageCode` (10 mã thông báo tiến trình Game)
 
 | Enum Code | Sự kiện / State | Tham số (`params`) | Tiếng Việt (`vi`) | Tiếng Anh (`en`) |
 | :--- | :--- | :--- | :--- | :--- |
-| `GAME_MSG_PREPARE_RECORDING` | `game_state_change` (`PREPARE_RECORDING`) | `{ countdown: number }` | Lấy hơi! Chuẩn bị micro để nhại lại trong {countdown} giây... | Take a breath! Get your mic ready in {countdown} seconds... |
-| `GAME_MSG_USER_RECORDING` | `game_state_change` (`USER_RECORDING`) | `{ duration: number }` | 🎙️ TỚI LƯỢT BẠN! HÃY NHẠI LẠI NGAY VÀO MICRO! | 🎙️ YOUR TURN! MIMIC THE SOUND INTO YOUR MIC NOW! |
-| `GAME_MSG_AI_SCORING` | `game_state_change` (`AI_SCORING`) | _Không_ | 🤖 AI Voice Detector đang phân tích & đối chiếu phổ âm thanh... | 🤖 AI Voice Detector is analyzing audio spectrum... |
+| `GAME_MSG_PREPARE_RECORDING` | `game_state_changed` (`PREPARE_RECORDING`) | `{ countdown: number }` | Lấy hơi! Chuẩn bị micro để nhại lại trong {countdown} giây... | Take a breath! Get your mic ready in {countdown} seconds... |
+| `GAME_MSG_USER_RECORDING` | `game_state_changed` (`USER_RECORDING`) | `{ duration: number }` | 🎙️ TỚI LƯỢT BẠN! HÃY NHẠI LẠI NGAY VÀO MICRO! | 🎙️ YOUR TURN! MIMIC THE SOUND INTO YOUR MIC NOW! |
+| `GAME_MSG_UPLOADING_SOUND` | `game_state_changed` (`UPLOADING_SOUND`) | `{ duration: number }` | 📨 Đang tải & đồng bộ bản thu âm của tất cả người chơi... | 📨 Uploading & syncing all players' recordings... |
+| `GAME_MSG_LISTENING_NOW_PLAYING` | `game_state_changed` (`LISTENING_NOW_PLAYING`) | `{ duration: number }` | 🔊 Đang phát lại lượt thu âm nổi bật... | 🔊 Now playing highlighted recording... |
+| `GAME_MSG_AI_SCORING` | `game_state_changed` (`AI_SCORING`) | _Không_ | 🤖 AI Voice Detector đang phân tích & đối chiếu phổ âm thanh... | 🤖 AI Voice Detector is analyzing audio spectrum... |
+| `GAME_MSG_BREAK_TIME` | `game_state_changed` (`BREAK_TIME`) | `{ nextRound: number, totalRounds: number, duration: number }` | ☕ Nghỉ giải lao! Chuẩn bị bước vào Vòng {nextRound}/{totalRounds} trong {duration}s... | ☕ Break time! Next Round {nextRound}/{totalRounds} starts in {duration}s... |
 | `GAME_MSG_ALL_SKIP_CONFIRMED` | `all_players_ready` (khi skip Showdown) | _Không_ | 🚀 Tất cả đã đồng ý! Đang mở Bảng Điểm Vòng... | 🚀 All players agreed to skip! Opening Round Leaderboard... |
 | `GAME_MSG_ALL_PLAYERS_READY_COUNTDOWN` | `all_players_ready` (qua vòng mới) | `{ countdown: number }` | 🎉 Tất cả người chơi đã SẴN SÀNG! Bắt đầu trong {countdown} giây... | 🎉 All players READY! Starting in {countdown} seconds... |
-| `GAME_MSG_GAME_OVER_CHAMPION` | `game_state_change` (`GAME_OVER`) | `{ championName: string, totalScore: number }` | 🏆 Chúc mừng {championName} đã trở thành Vua Nhại Giọng! | 🏆 Congratulations to {championName} for becoming the Mimic Champion! |
-| `GAME_MSG_GAME_OVER_FINISHED` | `game_state_change` (`GAME_OVER`) | _Không_ | Trận đấu kết thúc! | Match finished! |
+| `GAME_MSG_GAME_OVER_CHAMPION` | `game_state_changed` (`GAME_OVER`) | `{ championName: string, totalScore: number }` | 🏆 Chúc mừng {championName} đã trở thành Vua Nhại Giọng! | 🏆 Congratulations to {championName} for becoming the Mimic Champion! |
+| `GAME_MSG_GAME_OVER_FINISHED` | `game_state_changed` (`GAME_OVER`) | _Không_ | Trận đấu kết thúc! | Match finished! |
 
 ---
 
-## 5. Bảng Mapping `StateLabelCode` & `GAME_STATES` (9 trạng thái Game)
+## 5. Bảng Mapping `StateLabelCode` & `GAME_STATES` (12 trạng thái Game — 100% Server-Driven)
 
 | `state` (`GameStateType`) | `stateLabel` (`StateLabelCode`) | Tiếng Việt (`vi`) | Tiếng Anh (`en`) |
 | :--- | :--- | :--- | :--- |
@@ -132,10 +135,13 @@ Khi văn bản mô tả chứa `{key}`, Client thay thế `{key}` bằng giá tr
 | `PLAYING_SAMPLE` | `STATE_LABEL_PLAYING_SAMPLE` | Đang phát âm thanh mẫu | Playing Sample Audio |
 | `PREPARE_RECORDING` | `STATE_LABEL_PREPARE_RECORDING` | Chuẩn bị lấy hơi & sẵn sàng micro (3s) | Get Ready to Record (3s) |
 | `USER_RECORDING` | `STATE_LABEL_USER_RECORDING` | Tới lượt người chơi nhại lại | Player Recording Turn |
-| `AI_SCORING` | `STATE_LABEL_AI_SCORING` | AI đang phân tích & chấm điểm | AI Analyzing & Scoring |
-| `SHOWDOWN_REVEAL` | `STATE_LABEL_SHOWDOWN_REVEAL` | Showdown & Nghe lại các bản thu | Showdown & Playback Reveal |
-| `ROUND_RESULT` | `STATE_LABEL_ROUND_RESULT` | Bảng xếp hạng vòng đấu | Round Leaderboard |
-| `GAME_OVER` | `STATE_LABEL_GAME_OVER` | Trận đấu kết thúc | Game Over |
+| `UPLOADING_SOUND` | `STATE_LABEL_UPLOADING_SOUND` | Đang tải & đồng bộ âm thanh (3s) | Uploading Sound (3s) |
+| `LISTENING_NOW_PLAYING` | `STATE_LABEL_LISTENING_NOW_PLAYING` | Đang phát lượt thu nổi bật (5s) | Listening Now Playing (5s) |
+| `SHOWDOWN_REVEAL` | `STATE_LABEL_SHOWDOWN_REVEAL` | Showdown & Nghe lại các bản thu (10s) | Showdown & Playback Reveal (10s) |
+| `AI_SCORING` | `STATE_LABEL_AI_SCORING` | AI đang phân tích & chấm điểm (4s) | AI Analyzing & Scoring (4s) |
+| `ROUND_RESULT` | `STATE_LABEL_ROUND_RESULT` | Bảng xếp hạng vòng đấu (8s) | Round Leaderboard (8s) |
+| `BREAK_TIME` | `STATE_LABEL_BREAK_TIME` | Nghỉ giải lao giữa hiệp (11s) | Break Time (11s) |
+| `GAME_OVER` | `STATE_LABEL_GAME_OVER` | Trận đấu kết thúc (8s) | Game Over (8s) |
 
 ---
 

@@ -202,6 +202,41 @@ export function registerGameHandlers(
     }
   );
 
+  // 3b. NỘP BÀI AUDIO ĐÃ RENDER HỘ CHO AI BOT ĐƯỢC PHÂN CÔNG (game_submit_bot_audio)
+  // Dùng khi phòng có nhiều người thật và muốn Client được phân công (assignedGeneratorSocketId) render file của Bot rồi gửi lên để đồng bộ cho mọi người
+  socket.on(
+    'game_submit_bot_audio',
+    (
+      { roomId, botSocketId, audioData, mimeType }: Record<string, any> = {},
+      callback?: (res: Record<string, unknown>) => void
+    ) => {
+      const targetRoom = String(roomId || sessionState.currentRoomId || '').toUpperCase();
+      if (!targetRoom) {
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.ROOM_NOT_JOINED,
+            message: ErrorCode.ROOM_NOT_JOINED
+          });
+        }
+        return;
+      }
+      const game = gameSessions.get(targetRoom);
+      if (game) {
+        const res = game.submitBotAudio(socket.id, String(botSocketId || ''), audioData, mimeType);
+        if (callback) callback(res);
+      } else {
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.GAME_NOT_FOUND,
+            message: ErrorCode.GAME_NOT_FOUND
+          });
+        }
+      }
+    }
+  );
+
   // 4. BÁO PHÁT XONG AUDIO MẪU (sample_playback_done)
   socket.on('sample_playback_done', ({ roomId }: Record<string, any> = {}) => {
     const targetRoom = String(roomId || sessionState.currentRoomId || '').toUpperCase();

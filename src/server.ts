@@ -30,7 +30,6 @@ if (require.main === module) {
   server.listen(PORT, '0.0.0.0', () => {
     console.log('================================================================');
     console.log(`🚀 MICMIXFUN SOCKET SERVER (TS) ĐANG CHẠY TẠI CỔNG ${PORT}`);
-    console.log(`👉 Tài liệu Swagger API Docs:     http://localhost:${PORT}/api-docs`);
     console.log(`👉 REST API Health Check:         http://localhost:${PORT}/api/health`);
     console.log(`👉 Auth Challenge API:            GET  http://localhost:${PORT}/api/auth/challenge`);
     console.log(`👉 Firebase Auth API:             POST http://localhost:${PORT}/api/auth/firebase`);

@@ -2,9 +2,13 @@ import { Express, Request, Response, NextFunction } from 'express';
 import { resolveSoundFile } from '../services/audio.service';
 
 export function registerWebRoutes(app: Express): void {
-  // Trang chủ tự động điều hướng về trang tài liệu Swagger API Docs
+  // Trang chủ trả về thông tin trạng thái Server
   app.get('/', (_req: Request, res: Response) => {
-    res.redirect('/api-docs');
+    res.json({
+      service: 'MicMixFun & Mimic Party Backend',
+      status: 'online',
+      timestamp: Date.now()
+    });
   });
 
   // Tự động Redirect (302) các đường dẫn cũ /sounds/*, /downloaded_sounds/* và /audio/* sang Cloudflare R2 CDN

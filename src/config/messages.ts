@@ -77,7 +77,10 @@ export enum RoomCloseReasonCode {
 export enum GameMessageCode {
   GAME_MSG_PREPARE_RECORDING = 'GAME_MSG_PREPARE_RECORDING',
   GAME_MSG_USER_RECORDING = 'GAME_MSG_USER_RECORDING',
+  GAME_MSG_UPLOADING_SOUND = 'GAME_MSG_UPLOADING_SOUND',
+  GAME_MSG_LISTENING_NOW_PLAYING = 'GAME_MSG_LISTENING_NOW_PLAYING',
   GAME_MSG_AI_SCORING = 'GAME_MSG_AI_SCORING',
+  GAME_MSG_BREAK_TIME = 'GAME_MSG_BREAK_TIME',
   GAME_MSG_ALL_SKIP_CONFIRMED = 'GAME_MSG_ALL_SKIP_CONFIRMED',
   GAME_MSG_ALL_PLAYERS_READY_COUNTDOWN = 'GAME_MSG_ALL_PLAYERS_READY_COUNTDOWN',
   GAME_MSG_GAME_OVER_CHAMPION = 'GAME_MSG_GAME_OVER_CHAMPION',
@@ -90,9 +93,12 @@ export enum StateLabelCode {
   STATE_LABEL_PLAYING_SAMPLE = 'STATE_LABEL_PLAYING_SAMPLE',
   STATE_LABEL_PREPARE_RECORDING = 'STATE_LABEL_PREPARE_RECORDING',
   STATE_LABEL_USER_RECORDING = 'STATE_LABEL_USER_RECORDING',
-  STATE_LABEL_AI_SCORING = 'STATE_LABEL_AI_SCORING',
+  STATE_LABEL_UPLOADING_SOUND = 'STATE_LABEL_UPLOADING_SOUND',
+  STATE_LABEL_LISTENING_NOW_PLAYING = 'STATE_LABEL_LISTENING_NOW_PLAYING',
   STATE_LABEL_SHOWDOWN_REVEAL = 'STATE_LABEL_SHOWDOWN_REVEAL',
+  STATE_LABEL_AI_SCORING = 'STATE_LABEL_AI_SCORING',
   STATE_LABEL_ROUND_RESULT = 'STATE_LABEL_ROUND_RESULT',
+  STATE_LABEL_BREAK_TIME = 'STATE_LABEL_BREAK_TIME',
   STATE_LABEL_GAME_OVER = 'STATE_LABEL_GAME_OVER'
 }
 
@@ -460,11 +466,32 @@ export const GAME_MESSAGE_DESCRIPTIONS: Record<GameMessageCode, EnumDocItem> = {
     params: ['duration'],
     context: 'Payload message của trạng thái USER_RECORDING.'
   },
+  [GameMessageCode.GAME_MSG_UPLOADING_SOUND]: {
+    code: GameMessageCode.GAME_MSG_UPLOADING_SOUND,
+    vi: '📨 Đang gửi bản thu âm của bạn lên máy chủ...',
+    en: '📨 Uploading your sound recording to the server...',
+    params: ['duration'],
+    context: 'Payload message của trạng thái UPLOADING_SOUND.'
+  },
+  [GameMessageCode.GAME_MSG_LISTENING_NOW_PLAYING]: {
+    code: GameMessageCode.GAME_MSG_LISTENING_NOW_PLAYING,
+    vi: '🔊 Đang phát các bản thu âm trên sân khấu...',
+    en: '🔊 Playing players\' recordings on stage...',
+    params: ['duration'],
+    context: 'Payload message của trạng thái LISTENING_NOW_PLAYING.'
+  },
   [GameMessageCode.GAME_MSG_AI_SCORING]: {
     code: GameMessageCode.GAME_MSG_AI_SCORING,
     vi: '🤖 AI Voice Detector đang phân tích & đối chiếu phổ âm thanh...',
     en: '🤖 AI Voice Detector is analyzing audio spectrum...',
     context: 'Payload message của trạng thái AI_SCORING.'
+  },
+  [GameMessageCode.GAME_MSG_BREAK_TIME]: {
+    code: GameMessageCode.GAME_MSG_BREAK_TIME,
+    vi: '☕ Giờ giải lao! Vòng {nextRound} sẽ tự động bắt đầu sau {countdown} giây...',
+    en: '☕ Break Time! Round {nextRound} starts in {countdown} seconds...',
+    params: ['nextRound', 'countdown'],
+    context: 'Payload message của trạng thái BREAK_TIME.'
   },
   [GameMessageCode.GAME_MSG_ALL_SKIP_CONFIRMED]: {
     code: GameMessageCode.GAME_MSG_ALL_SKIP_CONFIRMED,
@@ -515,17 +542,29 @@ export const STATE_LABEL_DESCRIPTIONS: Record<StateLabelCode, { vi: string; en: 
     vi: 'Tới lượt người chơi nhại lại',
     en: 'Player Recording Turn'
   },
-  [StateLabelCode.STATE_LABEL_AI_SCORING]: {
-    vi: 'AI đang phân tích & chấm điểm',
-    en: 'AI Analyzing & Scoring'
+  [StateLabelCode.STATE_LABEL_UPLOADING_SOUND]: {
+    vi: 'Đang gửi bản thu âm lên máy chủ',
+    en: 'Uploading Sound to Server'
+  },
+  [StateLabelCode.STATE_LABEL_LISTENING_NOW_PLAYING]: {
+    vi: 'Đang phát bản thu trên sân khấu',
+    en: 'Now Playing on Stage'
   },
   [StateLabelCode.STATE_LABEL_SHOWDOWN_REVEAL]: {
     vi: 'Showdown & Nghe lại các bản thu',
     en: 'Showdown & Playback Reveal'
   },
+  [StateLabelCode.STATE_LABEL_AI_SCORING]: {
+    vi: 'AI đang phân tích & chấm điểm',
+    en: 'AI Analyzing & Scoring'
+  },
   [StateLabelCode.STATE_LABEL_ROUND_RESULT]: {
     vi: 'Bảng xếp hạng vòng đấu',
     en: 'Round Leaderboard'
+  },
+  [StateLabelCode.STATE_LABEL_BREAK_TIME]: {
+    vi: 'Giờ giải lao giữa hiệp',
+    en: 'Break Time Voice Chat'
   },
   [StateLabelCode.STATE_LABEL_GAME_OVER]: {
     vi: 'Trận đấu kết thúc',

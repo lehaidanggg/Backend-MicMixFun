@@ -156,7 +156,7 @@ test('Audio Service — Matrix Test: getAllDownloadedSounds & getSoundDuration',
   }
 });
 
-test('Audio Service — Matrix Test: normalizeBotDifficulty & transformTargetSoundForBot (EASY / NORMAL / HARD)', () => {
+test('Audio Service — Matrix Test: normalizeBotDifficulty & transformTargetSoundForBot Client DSP Recipe (EASY / NORMAL / HARD)', () => {
   assert.equal(normalizeBotDifficulty('WEAK'), 'EASY');
   assert.equal(normalizeBotDifficulty('YEU'), 'EASY');
   assert.equal(normalizeBotDifficulty('EASY'), 'EASY');
@@ -169,21 +169,28 @@ test('Audio Service — Matrix Test: normalizeBotDifficulty & transformTargetSou
   const normal = transformTargetSoundForBot('animals/cat-two.mp3', 'animals', 'NORMAL', 202);
   const hard = transformTargetSoundForBot('animals/cat-two.mp3', 'animals', 'HARD', 303);
 
-  // All modes transform the exact original targetSound (not a different sound file)
+  // All modes reference the exact original targetSound (not a different sound file)
   assert.equal(easy.sound.relativePath, 'animals/cat-two.mp3');
   assert.equal(normal.sound.relativePath, 'animals/cat-two.mp3');
   assert.equal(hard.sound.relativePath, 'animals/cat-two.mp3');
 
-  // Noise & distortion scale strictly from HARD < NORMAL < EASY
+  // Noise, distortion, inhaleBreathGain, and startDelayMs scale strictly from HARD < NORMAL < EASY
   assert.ok(hard.effects.noiseLevel < normal.effects.noiseLevel, 'HARD should have less noise than NORMAL');
   assert.ok(normal.effects.noiseLevel < easy.effects.noiseLevel, 'NORMAL should have less noise than EASY');
   assert.ok(hard.effects.distortion < normal.effects.distortion, 'HARD should have less distortion than NORMAL');
   assert.ok(normal.effects.distortion < easy.effects.distortion, 'NORMAL should have less distortion than EASY');
   assert.ok(hard.effects.startDelayMs < normal.effects.startDelayMs);
   assert.ok(normal.effects.startDelayMs < easy.effects.startDelayMs);
+  assert.ok(hard.effects.inhaleBreathMs < normal.effects.inhaleBreathMs);
+  assert.ok(normal.effects.inhaleBreathMs < easy.effects.inhaleBreathMs);
 
-  // Valid WAV buffer & RIFF header generated for each bot
-  assert.equal(easy.audioBuffer.subarray(0, 4).toString('ascii'), 'RIFF');
-  assert.equal(normal.audioBuffer.subarray(0, 4).toString('ascii'), 'RIFF');
-  assert.equal(hard.audioBuffer.subarray(0, 4).toString('ascii'), 'RIFF');
+  // Verify Client-Side Human Mic DSP parameters exist and are within natural human voice bounds
+  assert.equal(typeof easy.effects.pitchSemitones, 'number');
+  assert.equal(typeof easy.effects.pitchScoopCents, 'number');
+  assert.ok(easy.effects.vibratoRateHz >= 1.2 && easy.effects.vibratoRateHz <= 2.5);
+  assert.ok(easy.effects.vocalPresenceHz >= 1000 && easy.effects.vocalPresenceHz <= 1600);
+  assert.ok(easy.clientPlaybackUrl.startsWith(easy.effects.baseSoundUrl));
 });
+
+
+

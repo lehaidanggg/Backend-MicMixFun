@@ -263,7 +263,7 @@ test('MimicGameSession — Decision Matrix: submitMimicAudio, Showdown Skip & Ro
   assert.equal(subDup.success, false);
   assert.equal(subDup.code, ErrorCode.GAME_ALREADY_SUBMITTED_THIS_ROUND);
 
-  // 6. Second player submits -> all active players submitted -> auto transitions to AI_SCORING
+  // 6. Second player submits -> all active players submitted -> stays in USER_RECORDING until Server timer finishes (Strict Server-Driven Timeline)
   const subP2 = game.submitMimicAudio('s_p2', sampleAudio, 'audio/webm', {
     matchPct: 78,
     rhythmScore: 76,
@@ -271,15 +271,23 @@ test('MimicGameSession — Decision Matrix: submitMimicAudio, Showdown Skip & Ro
     activeRatio: 0.6
   });
   assert.equal(subP2.success, true);
-  assert.equal(game.state, GAME_STATES.AI_SCORING);
+  assert.equal(game.state, GAME_STATES.USER_RECORDING);
+  game.startUploadingSoundState();
+  assert.equal(game.state, GAME_STATES.UPLOADING_SOUND);
+  assert.equal(game.timeRemaining, 3);
 
-  // 7. Showdown Skip Matrix
+  // 7. Showdown Skip Matrix (No early skip jump — waits for full Server timer)
   const skipWrongPhase = game.confirmShowdownSkip('s_host');
   assert.equal(skipWrongPhase.success, false);
   assert.equal(skipWrongPhase.code, ErrorCode.GAME_NOT_IN_SHOWDOWN_PHASE);
 
+  game.startListeningNowPlayingState();
+  assert.equal(game.state, GAME_STATES.LISTENING_NOW_PLAYING);
+  assert.equal(game.timeRemaining, 5);
+
   game.startShowdownRevealState();
   assert.equal(game.state, GAME_STATES.SHOWDOWN_REVEAL);
+  assert.equal(game.timeRemaining, 10);
 
   const vote1 = game.confirmShowdownSkip('s_host');
   assert.equal(vote1.success, true);
@@ -291,12 +299,24 @@ test('MimicGameSession — Decision Matrix: submitMimicAudio, Showdown Skip & Ro
   assert.equal(voteToggleOff.isVoted, false);
   game.confirmShowdownSkip('s_host');
 
-  // Second player votes -> allSkipConfirmed = true -> transitions to ROUND_RESULT
+  // Second player votes -> allSkipConfirmed = true -> stays in SHOWDOWN_REVEAL until Server timer completes
   const vote2 = game.confirmShowdownSkip('s_p2');
   assert.equal(vote2.allSkipConfirmed, true);
-  assert.equal(game.state, GAME_STATES.ROUND_RESULT);
+  assert.equal(game.state, GAME_STATES.SHOWDOWN_REVEAL);
+  game.startAiScoringState();
+  assert.equal(game.state, GAME_STATES.AI_SCORING);
+  assert.equal(game.timeRemaining, 4);
 
-  // 8. Round Ready Matrix
+  // Transition to ROUND_RESULT (8s timer) and BREAK_TIME (11s timer)
+  game.startRoundResultState();
+  assert.equal(game.state, GAME_STATES.ROUND_RESULT);
+  assert.equal(game.timeRemaining, 8);
+
+  game.startBreakTimeState();
+  assert.equal(game.state, GAME_STATES.BREAK_TIME);
+  assert.equal(game.timeRemaining, 11);
+
+  // 8. Round Ready Matrix (No manual Next Round jump during BREAK_TIME — waits for Server timer)
   const ready1 = game.confirmRoundReady('s_host');
   assert.equal(ready1.success, true);
   assert.equal(ready1.allReady, false);
@@ -304,12 +324,7 @@ test('MimicGameSession — Decision Matrix: submitMimicAudio, Showdown Skip & Ro
   const ready2 = game.confirmRoundReady('s_p2');
   assert.equal(ready2.success, true);
   assert.equal(ready2.allReady, true);
-
-  // Check emitted all_players_ready uses GameMessageCode enum
-  const countdownEvent = emitted.find(
-    e => e.event === 'all_players_ready' && e.payload.message === GameMessageCode.GAME_MSG_ALL_PLAYERS_READY_COUNTDOWN
-  );
-  assert.ok(countdownEvent, 'Should emit GAME_MSG_ALL_PLAYERS_READY_COUNTDOWN enum code');
+  assert.equal(game.state, GAME_STATES.BREAK_TIME);
 
   game.destroy();
 });
@@ -337,11 +352,11 @@ test('MimicGameSession — AI Bot Lifecycle & Difficulty Scoring Matrix (EASY / 
   assert.ok(normAttempt && normAttempt.evaluation.totalScore >= 63 && normAttempt.evaluation.totalScore <= 92);
   assert.ok(hardAttempt && hardAttempt.evaluation.totalScore >= 78 && hardAttempt.evaluation.totalScore <= 99);
 
-  // Verify each bot transformed the original target sound, saved its buffer to audioStore like a real user, and has distinct stream URLs & effects
+  // Verify each bot references the original target sound with distinct client DSP recipe URLs & 0 bytes in server audioStore
   const targetUrl = game.getTargetSoundUrl(game.targetSound);
-  assert.notEqual(easyAttempt?.audioUrl, targetUrl, 'Bot Easy must not reuse exact target sound URL');
-  assert.notEqual(normAttempt?.audioUrl, targetUrl, 'Bot Normal must not reuse exact target sound URL');
-  assert.notEqual(hardAttempt?.audioUrl, targetUrl, 'Bot Hard must not reuse exact target sound URL');
+  assert.notEqual(easyAttempt?.audioUrl, targetUrl, 'Bot Easy must have distinct parameterized client playback URL');
+  assert.notEqual(normAttempt?.audioUrl, targetUrl, 'Bot Normal must have distinct parameterized client playback URL');
+  assert.notEqual(hardAttempt?.audioUrl, targetUrl, 'Bot Hard must have distinct parameterized client playback URL');
   const uniqueBotUrls = new Set([easyAttempt?.audioUrl, normAttempt?.audioUrl, hardAttempt?.audioUrl]);
   assert.equal(uniqueBotUrls.size, 3, 'All 3 bots must have distinct sound URLs');
   assert.ok(typeof easyAttempt?.botPitch === 'number' && typeof easyAttempt?.botSpeed === 'number');
@@ -353,11 +368,11 @@ test('MimicGameSession — AI Bot Lifecycle & Difficulty Scoring Matrix (EASY / 
       normAttempt!.botAudioEffects!.noiseLevel < easyAttempt!.botAudioEffects!.noiseLevel,
     'Noise level must scale HARD < NORMAL < EASY'
   );
-  assert.ok(game.getAttemptAudio('bot_easy')?.buffer.length, 'Bot Easy audio buffer stored in audioStore');
-  assert.ok(game.getAttemptAudio('bot_norm')?.buffer.length, 'Bot Normal audio buffer stored in audioStore');
-  assert.ok(game.getAttemptAudio('bot_hard')?.buffer.length, 'Bot Hard audio buffer stored in audioStore');
+  assert.equal(game.getAttemptAudio('bot_easy'), null, 'Bot audio must not allocate RAM in server audioStore');
+  assert.equal(game.getAttemptAudio('bot_norm'), null, 'Bot audio must not allocate RAM in server audioStore');
+  assert.equal(game.getAttemptAudio('bot_hard'), null, 'Bot audio must not allocate RAM in server audioStore');
 
-  // 3. When the single human player submits, all players have submitted -> jumps immediately to AI_SCORING
+  // 3. When the single human player submits, stays in USER_RECORDING until Server timer finishes
   const sampleAudio = 'data:audio/webm;base64,' + crypto.randomBytes(800).toString('base64');
   const subSolo = game.submitMimicAudio('s_solo', sampleAudio, 'audio/webm', {
     matchPct: 88,
@@ -366,18 +381,110 @@ test('MimicGameSession — AI Bot Lifecycle & Difficulty Scoring Matrix (EASY / 
     activeRatio: 0.75
   });
   assert.equal(subSolo.success, true);
-  assert.equal(game.state, GAME_STATES.AI_SCORING);
+  assert.equal(game.state, GAME_STATES.USER_RECORDING);
 
-  // 4. In SHOWDOWN_REVEAL, bots pre-vote skip -> single human voting skip immediately triggers ROUND_RESULT
+  // 4. In SHOWDOWN_REVEAL, stays in SHOWDOWN_REVEAL until Server timer finishes
   game.startShowdownRevealState();
   assert.equal(game.state, GAME_STATES.SHOWDOWN_REVEAL);
   const skipRes = game.confirmShowdownSkip('s_solo');
   assert.equal(skipRes.allSkipConfirmed, true);
-  assert.equal(game.state, GAME_STATES.ROUND_RESULT);
+  assert.equal(game.state, GAME_STATES.SHOWDOWN_REVEAL);
 
-  // 5. In ROUND_RESULT, bots are already ready -> single human clicking ready sets allReady = true
+  // 5. In ROUND_RESULT, stays in ROUND_RESULT until Server timer finishes
+  game.startRoundResultState();
   const readyRes = game.confirmRoundReady('s_solo');
   assert.equal(readyRes.allReady, true);
+  assert.equal(game.state, GAME_STATES.ROUND_RESULT);
 
   game.destroy();
 });
+
+test('MimicGameSession — Multi-Human + Bot Round-Robin Generator Assignment & Failover', () => {
+  const { io } = createMockIo();
+  const game = new MimicGameSession('ROOM_MULTI_BOTS', io);
+  try {
+    game.hostId = 's_h1';
+    game.addPlayer('s_h1', 'Human 1', '👑', 'HOST', 'u_h1', true, false, null);
+    game.addPlayer('s_h2', 'Human 2', '🐶', 'PLAYER', 'u_h2', true, false, null);
+    game.addPlayer('bot_1', 'Bot 1', '🤖', 'PLAYER', 'bot_1', false, true, 'NORMAL');
+    game.addPlayer('bot_2', 'Bot 2', '🐱', 'PLAYER', 'bot_2', false, true, 'HARD');
+
+    // Round 1: s_h1 gets bot_1, s_h2 gets bot_2
+    game.currentRound = 1;
+    game.startUserRecordingState(5);
+    const assignmentsR1 = game.getBotGenerationAssignments();
+    assert.equal(assignmentsR1.length, 2);
+    assert.equal(assignmentsR1[0].botSocketId, 'bot_1');
+    assert.equal(assignmentsR1[0].assignedGeneratorSocketId, 's_h1');
+    assert.equal(assignmentsR1[1].botSocketId, 'bot_2');
+    assert.equal(assignmentsR1[1].assignedGeneratorSocketId, 's_h2');
+
+    // If s_h1 disconnects mid-round, bot_1 automatically fails over to s_h2
+    game.removePlayer('s_h1');
+    const assignmentsFailover = game.getBotGenerationAssignments();
+    assert.equal(assignmentsFailover[0].assignedGeneratorSocketId, 's_h2');
+    assert.equal(assignmentsFailover[1].assignedGeneratorSocketId, 's_h2');
+
+    // Optional Mode 1B upload via submitBotAudio
+    const sampleAudio = 'data:audio/wav;base64,' + crypto.randomBytes(600).toString('base64');
+    const uploadRes = game.submitBotAudio('s_h2', 'bot_1', sampleAudio, 'audio/wav');
+    assert.equal(uploadRes.success, true);
+    assert.equal(uploadRes.botSocketId, 'bot_1');
+    assert.ok(game.getAttemptAudio('bot_1')?.buffer);
+  } finally {
+    game.destroy();
+  }
+});
+
+test('MimicGameSession — Mid-Game Player Leave: QUICK_MATCH Continues vs RACE_1V1 Immediate Forfeit Result', () => {
+  const { io, emitted } = createMockIo();
+
+  // Case A: QUICK_MATCH (4P) -> 1 player leaves mid-game -> Match continues through remaining rounds!
+  const qmGame = new MimicGameSession('ROOM_QM_LEAVE', io, { gameMode: 'QUICK_MATCH', targetPlayers: 4 });
+  try {
+    qmGame.hostId = 's_1';
+    qmGame.addPlayer('s_1', 'P1', '👑', 'HOST', 'u_1', true, false, null);
+    qmGame.addPlayer('s_2', 'P2', '🐶', 'PLAYER', 'u_2', true, false, null);
+    qmGame.addPlayer('bot_1', 'Bot 1', '🤖', 'PLAYER', 'bot_1', false, true, 'NORMAL');
+    qmGame.addPlayer('bot_2', 'Bot 2', '🐱', 'PLAYER', 'bot_2', false, true, 'HARD');
+
+    assert.equal(qmGame.startGame({ requireAllReady: false }), true);
+    qmGame.startUserRecordingState(5);
+    assert.equal(qmGame.state, GAME_STATES.USER_RECORDING);
+
+    // P2 leaves mid-game -> game must continue in USER_RECORDING (NOT jump to GAME_OVER)
+    qmGame.removePlayer('s_2');
+    assert.equal(qmGame.state, GAME_STATES.USER_RECORDING);
+    assert.equal(qmGame.players.size, 3);
+  } finally {
+    qmGame.destroy();
+  }
+
+  // Case B: RACE_1V1 (2P) -> 1 player leaves mid-game -> Immediately ends match and reports GAME_OVER (OPPONENT_LEFT_FORFEIT)!
+  const raceGame = new MimicGameSession('ROOM_1V1_LEAVE', io, { gameMode: 'RACE_1V1', targetPlayers: 2 });
+  try {
+    raceGame.hostId = 's_a';
+    raceGame.addPlayer('s_a', 'Racer A', '👑', 'HOST', 'u_a', true, false, null);
+    raceGame.addPlayer('s_b', 'Racer B', '🔥', 'PLAYER', 'u_b', true, false, null);
+
+    assert.equal(raceGame.startGame({ requireAllReady: false }), true);
+    raceGame.startUserRecordingState(5);
+    assert.equal(raceGame.state, GAME_STATES.USER_RECORDING);
+
+    // Racer B leaves mid-game -> immediately transitions to GAME_OVER with reason = OPPONENT_LEFT_FORFEIT
+    raceGame.removePlayer('s_b');
+    assert.equal(raceGame.state, GAME_STATES.GAME_OVER);
+
+    const gameOverEvt = emitted.find(
+      e => e.event === 'game_state_changed' && e.payload.state === GAME_STATES.GAME_OVER && e.payload.roomId === 'ROOM_1V1_LEAVE'
+    );
+    assert.ok(gameOverEvt, 'Should emit GAME_OVER immediately when 1v1 opponent leaves mid-game');
+    assert.equal(gameOverEvt?.payload.payload.reason, 'OPPONENT_LEFT_FORFEIT');
+    assert.equal(gameOverEvt?.payload.payload.forfeitedByUserName, 'Racer B');
+    assert.equal(gameOverEvt?.payload.payload.champion?.socketId, 's_a');
+  } finally {
+    raceGame.destroy();
+  }
+});
+
+
