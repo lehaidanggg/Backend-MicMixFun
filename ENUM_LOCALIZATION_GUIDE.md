@@ -126,21 +126,21 @@ Khi văn bản mô tả chứa `{key}`, Client thay thế `{key}` bằng giá tr
 
 ---
 
-## 5. Bảng Mapping `StateLabelCode` & `GAME_STATES` (12 trạng thái Game — 100% Server-Driven)
+## 5. Bảng Mapping `StateLabelCode` & `GAME_STATES` (12 trạng thái Game — Chuẩn UI Figma `5.0` ➔ `5.10`)
 
 | `state` (`GameStateType`) | `stateLabel` (`StateLabelCode`) | Tiếng Việt (`vi`) | Tiếng Anh (`en`) |
 | :--- | :--- | :--- | :--- |
 | `IDLE` | `STATE_LABEL_IDLE` | Đang chờ tại sảnh | Waiting in Lobby |
-| `THEME_SELECTION` | `STATE_LABEL_THEME_SELECTION` | Đang quay chọn chủ đề âm thanh | Spinning Sound Theme Roulette |
+| `THEME_SELECTION` | `STATE_LABEL_THEME_SELECTION` | Đang quay chọn chủ đề âm thanh (3.5s) | Spinning Sound Theme Roulette (3.5s) |
 | `PLAYING_SAMPLE` | `STATE_LABEL_PLAYING_SAMPLE` | Đang phát âm thanh mẫu | Playing Sample Audio |
 | `PREPARE_RECORDING` | `STATE_LABEL_PREPARE_RECORDING` | Chuẩn bị lấy hơi & sẵn sàng micro (3s) | Get Ready to Record (3s) |
 | `USER_RECORDING` | `STATE_LABEL_USER_RECORDING` | Tới lượt người chơi nhại lại | Player Recording Turn |
 | `UPLOADING_SOUND` | `STATE_LABEL_UPLOADING_SOUND` | Đang tải & đồng bộ âm thanh (3s) | Uploading Sound (3s) |
 | `LISTENING_NOW_PLAYING` | `STATE_LABEL_LISTENING_NOW_PLAYING` | Đang phát lượt thu nổi bật (5s) | Listening Now Playing (5s) |
-| `SHOWDOWN_REVEAL` | `STATE_LABEL_SHOWDOWN_REVEAL` | Showdown & Nghe lại các bản thu (10s) | Showdown & Playback Reveal (10s) |
+| `SHOWDOWN_REVEAL` | `STATE_LABEL_SHOWDOWN_REVEAL` | Nghe lại tự do & bấm "FINISH ROUND ▶" (30s AFK / 100% Done) | Players' Recordings & "FINISH ROUND ▶" (30s AFK / 100% Done) |
 | `AI_SCORING` | `STATE_LABEL_AI_SCORING` | AI đang phân tích & chấm điểm (4s) | AI Analyzing & Scoring (4s) |
-| `ROUND_RESULT` | `STATE_LABEL_ROUND_RESULT` | Bảng xếp hạng vòng đấu (8s) | Round Leaderboard (8s) |
-| `BREAK_TIME` | `STATE_LABEL_BREAK_TIME` | Nghỉ giải lao giữa hiệp (11s) | Break Time (11s) |
+| `ROUND_RESULT` | `STATE_LABEL_ROUND_RESULT` | Bảng xếp hạng Podium vòng đấu (7s) | Round Podium Leaderboard (7s) |
+| `BREAK_TIME` | `STATE_LABEL_BREAK_TIME` | Nghỉ giải lao giữa hiệp & bấm "NEW ROUND NOW" (11s / 100% Ready) | Break Time & "NEW ROUND NOW" (11s / 100% Ready) |
 | `GAME_OVER` | `STATE_LABEL_GAME_OVER` | Trận đấu kết thúc (8s) | Game Over (8s) |
 
 ---

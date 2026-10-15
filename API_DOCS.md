@@ -682,15 +682,15 @@ const socket = io("https://micmixfun.up.railway.app", {
       ]
     }
     ```
-* **`game_state_tick`**: Server bắn định kỳ mỗi `1 giây` trong suốt mọi Step (kể cả `BREAK_TIME`) để Client hiển thị đếm ngược, thanh tiến trình và người chơi đang phát (`spotlightPlayer` trong `LISTENING_NOW_PLAYING` / `SHOWDOWN_REVEAL`):
+* **`game_state_tick`**: Server bắn định kỳ mỗi `1 giây` trong suốt mọi Step (kể cả `SHOWDOWN_REVEAL` và `BREAK_TIME`) để Client hiển thị đếm ngược, thanh tiến trình và người chơi gợi ý (`spotlightPlayer`):
   ```json
   {
     "roomId": "MIMIC99",
     "state": "BREAK_TIME",
     "stateLabel": "STATE_LABEL_BREAK_TIME",
-    "phaseStep": "5.8",
-    "stepIndex": 10,
-    "totalStepsInRound": 10,
+    "phaseStep": "5.9",
+    "stepIndex": 9,
+    "totalStepsInRound": 9,
     "nextState": "THEME_SELECTION",
     "round": 1,
     "totalRounds": 3,
@@ -707,9 +707,9 @@ const socket = io("https://micmixfun.up.railway.app", {
   }
   ```
 * **`game_config_changed`**: Broadcast khi Host đổi cấu hình vòng/thời gian thu âm.
-* **`showdown_skip_updated`**: Broadcast khi có người bấm đồng ý/hủy bỏ qua sớm `SHOWDOWN_REVEAL` (`{ socketId, userName, isVoted, skipCount, totalCount, allSkipConfirmed, votedSockets }`).
-* **`round_ready_updated`**: Broadcast tiến độ bấm sẵn sàng qua vòng mới tại `ROUND_RESULT` / `BREAK_TIME` / `GAME_OVER` (`{ socketId, userName, readyCount, totalCount, allReady, players }`).
-* **`all_players_ready`**: Broadcast khi 100% người chơi đã đồng ý skip hoặc sẵn sàng qua vòng mới (`{ roomId, state, countdown: 3, timeRemaining: 3, totalDuration: 3, messageCode }`).
+* **`showdown_skip_updated`**: Broadcast khi có người bấm nút **"FINISH ROUND ▶"** tại màn `SHOWDOWN_REVEAL` (`{ socketId, userName, isVoted, skipCount, totalCount, allSkipConfirmed, votedSockets }`). Khi `allSkipConfirmed === true`, Server chuyển ngay sang `AI_SCORING` (`5.6`).
+* **`round_ready_updated`**: Broadcast tiến độ bấm sẵn sàng tại `SHOWDOWN_REVEAL`, `ROUND_RESULT`, `BREAK_TIME` (**"NEW ROUND NOW"**) hoặc `GAME_OVER` (`{ socketId, userName, readyCount, totalCount, allReady, players }`).
+* **`all_players_ready`**: Broadcast khi 100% người chơi trong phòng đã bấm **"FINISH ROUND ▶"** (tại `SHOWDOWN_REVEAL` ➔ chuyển ngay sang `AI_SCORING`) hoặc **"NEW ROUND NOW"** (tại `BREAK_TIME` ➔ vào ngay Round kế tiếp).
 * **`game_reaction_broadcast`**: Truyền chuỗi emoji bay trên màn hình (`"😂"`).
 * **`game_error`**: Báo lỗi thao tác game (`{ code: "GAME_HOST_ONLY_START", message: "GAME_HOST_ONLY_START" }`).
 
@@ -739,68 +739,147 @@ $$\text{Total Score} = (\text{Pitch} \times 0.40) + (\text{Rhythm} \times 0.35) 
 
 ---
 
-## 6. 📱 Kiến Trúc Tích Hợp Client (Android Kotlin Pattern)
+## 6. 📱 Kiến Trúc Tích Hợp Client (Android Kotlin MVI Pattern — Chuẩn UI Figma `5.0` ➔ `5.10`)
 
-Client Android sử dụng mô hình MVI (Model-View-Intent) với `StateFlow`:
+Client Android sử dụng mô hình MVI (Model-View-Intent) với `StateFlow` bám sát từng màn hình Figma:
 
 ```kotlin
-// 1. Enum GameState
+// 1. Enum GameState (Đầy đủ các bước 5.0 -> 5.10)
 enum class MimicGameState {
     IDLE,
-    THEME_SELECTION,
-    PLAYING_SAMPLE,
-    USER_RECORDING,
-    AI_SCORING,
-    SHOWDOWN_REVEAL,
-    ROUND_RESULT,
-    GAME_OVER
+    THEME_SELECTION,       // 5.0 (3.5s) - Chọn chủ đề Sound Pack
+    PLAYING_SAMPLE,        // 5.1 (2-12s) - "Listen & Remember"
+    PREPARE_RECORDING,     // 5.1b (3s)   - Đếm ngược 3..2..1 lấy hơi
+    USER_RECORDING,        // 5.2 (2-12s) - "Your Turn — Mimic it!"
+    UPLOADING_SOUND,       // 5.3 (3s)    - "Uploading your sound..."
+    LISTENING_NOW_PLAYING, // (Legacy / Optional)
+    SHOWDOWN_REVEAL,       // 5.4 + 5.5 (30s AFK / 100% Done) - "Players' Recordings" + Nút "FINISH ROUND ▶"
+    AI_SCORING,            // 5.6 (4s)    - "Locking in this round... Melody · Rhythm · Attack"
+    ROUND_RESULT,          // 5.7 (7s)    - "ROUND RESULTS PODIUM"
+    BREAK_TIME,            // 5.9 (11s / 100% Ready) - "BREAK TIME" + Nút "NEW ROUND NOW"
+    GAME_OVER              // 5.10 (8s)   - "FINAL RESULTS"
 }
 
 // 2. Data Class UiState
 data class MimicGameUiState(
     val state: MimicGameState = MimicGameState.IDLE,
+    val phaseStep: String = "5.0",
     val round: Int = 1,
     val totalRounds: Int = 3,
     val timeRemaining: Int = 0,
     val progressPercent: Int = 0,
     val targetSound: TargetSound? = null,
     val attempts: List<PlayerAttempt> = emptyList(),
-    val leaderboard: List<LeaderboardItem> = emptyList()
+    val leaderboard: List<LeaderboardItem> = emptyList(),
+    val isMyFinishRoundClicked: Boolean = false,
+    val finishRoundCount: Int = 0,
+    val totalPlayerCount: Int = 0,
+    val isMyNewRoundClicked: Boolean = false,
+    val readyCount: Int = 0
 )
 
-// 3. Socket Listener trong ViewModel
+// 3. Socket Listeners trong ViewModel
 socket.on("game_state_changed") { args ->
-    val data = args[0] as JSONObject
-    val nextState = MimicGameState.valueOf(data.getString("state"))
-    val round = data.getInt("round")
+    val data = args.firstOrNull() as? JSONObject ?: return@on
+    val nextState = runCatching { MimicGameState.valueOf(data.getString("state")) }
+        .getOrDefault(MimicGameState.IDLE)
     val payload = data.optJSONObject("payload")
 
     _uiState.update { current ->
         current.copy(
             state = nextState,
-            round = round,
-            timeRemaining = data.optInt("timeRemaining")
+            phaseStep = data.optString("phaseStep", current.phaseStep),
+            round = data.optInt("round", current.round),
+            totalRounds = data.optInt("totalRounds", current.totalRounds),
+            timeRemaining = data.optInt("timeRemaining", 0),
+            progressPercent = 0,
+            // Reset trạng thái nút bấm khi sang Step mới
+            isMyFinishRoundClicked = if (nextState == MimicGameState.SHOWDOWN_REVEAL) false else current.isMyFinishRoundClicked,
+            finishRoundCount = payload?.optInt("skipCount", current.finishRoundCount) ?: current.finishRoundCount,
+            totalPlayerCount = payload?.optInt("totalCount", current.totalPlayerCount) ?: current.totalPlayerCount,
+            isMyNewRoundClicked = if (nextState == MimicGameState.BREAK_TIME) false else current.isMyNewRoundClicked
         )
     }
 
-    // Trigger Side-effects
+    // Trigger Side-effects theo từng màn hình Figma
     when (nextState) {
-        MimicGameState.PLAYING_SAMPLE -> {
-            val url = payload?.getJSONObject("targetSound")?.getString("audioUrl")
-            audioPlayer.play(url)
+        MimicGameState.PLAYING_SAMPLE -> { // 5.1: Phát âm thanh mẫu
+            val url = payload?.optJSONObject("targetSound")?.optString("audioUrl")
+            if (!url.isNullOrEmpty()) audioPlayer.play(url)
         }
-        MimicGameState.USER_RECORDING -> {
+        MimicGameState.PREPARE_RECORDING -> { // 5.1b: Dừng âm thanh mẫu, chuẩn bị mic
+            audioPlayer.stop()
+        }
+        MimicGameState.USER_RECORDING -> { // 5.2: Bắt đầu thu âm
             audioRecorder.startRecording()
         }
-        MimicGameState.AI_SCORING -> {
-            val audioBase64 = audioRecorder.stopAndGetBase64()
+        MimicGameState.UPLOADING_SOUND -> { // 5.3: Dừng thu âm & Gửi bản thu lên Server
+            val result = audioRecorder.stopAndBuildPayload()
             socket.emit("game_submit_audio", JSONObject().apply {
                 put("roomId", currentRoomId)
-                put("audioData", audioBase64)
+                put("audioData", result.base64Audio)
+                put("mimeType", "audio/webm")
+                put("metrics", result.metricsJson)
             })
+        }
+        MimicGameState.SHOWDOWN_REVEAL -> { // 5.4 + 5.5: Hiển thị list "Players' Recordings" để user tự click nghe
+            val attemptsJson = payload?.optJSONArray("attempts")
+            _uiState.update { it.copy(attempts = parseAttempts(attemptsJson)) }
         }
         else -> {}
     }
+}
+
+// 4. Lắng nghe nhịp đếm ngược 1s từ Server
+socket.on("game_state_tick") { args ->
+    val data = args.firstOrNull() as? JSONObject ?: return@on
+    _uiState.update { current ->
+        current.copy(
+            timeRemaining = data.optInt("timeRemaining", current.timeRemaining),
+            progressPercent = data.optInt("progressPercent", current.progressPercent)
+        )
+    }
+}
+
+// 5. Lắng nghe cập nhật số người bấm "FINISH ROUND ▶" (5.5) & "NEW ROUND NOW" (5.9)
+socket.on("showdown_skip_updated") { args ->
+    val data = args.firstOrNull() as? JSONObject ?: return@on
+    _uiState.update { current ->
+        current.copy(
+            finishRoundCount = data.optInt("skipCount", current.finishRoundCount),
+            totalPlayerCount = data.optInt("totalCount", current.totalPlayerCount)
+        )
+    }
+}
+
+socket.on("round_ready_updated") { args ->
+    val data = args.firstOrNull() as? JSONObject ?: return@on
+    _uiState.update { current ->
+        current.copy(
+            readyCount = data.optInt("readyCount", current.readyCount),
+            totalPlayerCount = data.optInt("totalCount", current.totalPlayerCount)
+        )
+    }
+}
+
+// 6. Hành động khi User bấm nút "FINISH ROUND ▶" tại màn 5.5 (SHOWDOWN_REVEAL)
+fun onFinishRoundClicked() {
+    socket.emit("finish_round", JSONObject().put("roomId", currentRoomId), Ack { ackArgs ->
+        val res = ackArgs.firstOrNull() as? JSONObject ?: return@Ack
+        if (res.optBoolean("success")) {
+            _uiState.update { it.copy(isMyFinishRoundClicked = res.optBoolean("isVoted", true)) }
+        }
+    })
+}
+
+// 7. Hành động khi User bấm nút "NEW ROUND NOW" tại màn 5.9 (BREAK_TIME)
+fun onNewRoundNowClicked() {
+    socket.emit("new_round_now", JSONObject().put("roomId", currentRoomId), Ack { ackArgs ->
+        val res = ackArgs.firstOrNull() as? JSONObject ?: return@Ack
+        if (res.optBoolean("success")) {
+            _uiState.update { it.copy(isMyNewRoundClicked = true) }
+        }
+    })
 }
 ```
 
@@ -912,19 +991,24 @@ Client tự động mở khóa giao diện Host (hiển thị nút Bắt đầu,
 
 ---
 
-### 7.3. ⏳ Cơ Chế Chuyển Vòng 100% Server-Driven (Không Chủ Động Next Round) & Xử Lý Rời Trận Giữa Chừng
+### 7.3. ⏳ Cơ Chế Chuyển Step & Sẵn Sàng Qua Vòng Theo Chuẩn UI Figma (`5.0` ➔ `5.10`) & Xử Lý Rời Trận Giữa Chừng
 
-Để đảm bảo mọi người chơi trong phòng luôn đồng bộ tuyệt đối và không bị treo phòng nếu có người thoát hoặc quên bấm nút:
+Để đảm bảo người chơi vừa được **tự do click nghe lại các bản thu âm theo ý muốn**, vừa **không bị treo phòng nếu có người AFK**:
 
-1. **100% Server-Driven Step & Round Transitions (Không có chủ động Next Round)**:
-   - Mọi bước trong vòng đấu đều chạy hết đúng thời lượng đếm ngược do Server điều phối:
-     - `USER_RECORDING` (hết giờ thu âm mới kết thúc, không cắt ngang sớm) ➔ `UPLOADING_SOUND` (**3s**) ➔ `LISTENING_NOW_PLAYING` (**5s**) ➔ `SHOWDOWN_REVEAL` (**10s**) ➔ `AI_SCORING` (**4s**) ➔ `ROUND_RESULT` (**8s**) ➔ `BREAK_TIME` (**11s**) ➔ Tự động sang vòng kế tiếp (`THEME_SELECTION`).
-   - Nếu là vòng cuối (`round === totalRounds`), sau `ROUND_RESULT` (**8s**) Server chuyển sang `GAME_OVER` (**8s**) để vinh danh nhà vô địch.
-   - Các sự kiện `confirm_showdown_skip` và `confirm_next_round_ready` vẫn được ghi nhận để hiển thị trạng thái tích xanh trên UI (`showdown_skip_updated` / `round_ready_updated`), nhưng **không cắt ngang đồng hồ của Server** trong trận.
+1. **Luồng Chuyển Step & Đồng Thuận 100% Player (`5.0` ➔ `5.10`)**:
+   - **Giai đoạn Thu âm & Upload (`5.0` ➔ `5.3` — 100% Server Auto)**:
+     - `THEME_SELECTION` (**3.5s**) ➔ `PLAYING_SAMPLE` (theo độ dài mẫu) ➔ `PREPARE_RECORDING` (**3s**) ➔ `USER_RECORDING` (đợi hết giờ thu âm) ➔ `UPLOADING_SOUND` (**3s**).
+   - **Màn `SHOWDOWN_REVEAL` (`5.4 + 5.5` gộp chung — `"Players' Recordings"` & Nút `"FINISH ROUND ▶"`)**:
+     - Ngay sau `UPLOADING_SOUND` (**3s**), Server vào thẳng `SHOWDOWN_REVEAL` với bộ đếm bảo hiểm AFK **30s**.
+     - Người chơi tự do click vào từng dòng trong `"Players' Recordings"` để nghe lại trên máy mình.
+     - Tất cả AI Bot luôn được đánh dấu Done sẵn (`isReady = true`). Khi người chơi nghe xong và bấm **"FINISH ROUND ▶"** (`confirm_showdown_skip` / `finish_round` / `confirm_next_round_ready`), ngay khi **100% người chơi trong phòng đã bấm Done** (hoặc khi hết **30s** AFK timer), Server lập tức chuyển sang **`AI_SCORING` (`5.6`)**!
+   - **Màn `AI_SCORING` (`5.6` — 4s) ➔ `ROUND_RESULT` (`5.7` — 7s) ➔ `BREAK_TIME` (`5.9` — 11s)**:
+     - `AI_SCORING` chạy **4s** (*"Locking in this round... Melody · Rhythm · Attack"*) rồi sang `ROUND_RESULT` (**7s** Podium).
+     - Tại `BREAK_TIME` (**11s**), nếu **100% người thật bấm nút `"NEW ROUND NOW"`** (`confirm_next_round_ready` / `new_round_now`), Server bắt đầu ngay Round tiếp theo mà không cần đợi hết 11s; nếu có người chưa bấm thì hết 11s Server tự động qua vòng mới.
 
 2. **Quy tắc khi có người rời trận giữa chừng (`Mid-Game Leave`) & Tự động tìm người mới sau trận**:
    - **Mode `QUICK_MATCH` (`4 Người`)**:
-     - Khi 1 người thoát giữa trận, ván đấu **vẫn tiếp tục chạy bình thường tới hết tất cả các Round (`3/3`)** cho những người chơi còn lại.
+     - Khi 1 người thoát giữa trận, ván đấu **vẫn tiếp tục chạy bình thường tới hết tất cả các Round (`3/3`)** cho những người chơi còn lại. Nếu phòng đang ở `SHOWDOWN_REVEAL` hoặc `BREAK_TIME` và những người còn lại đều đã bấm Done/Ready, Server lập tức chuyển bước ngay mà không bị kẹt bởi người vừa thoát.
      - Sau khi kết thúc `GAME_OVER` (**8s**), Server tự động xóa các AI Bot cũ, mở lại phòng chờ và bật bộ đếm tìm người chơi mới (`matchmaking_searching` + `matchmaking_tick` + tự hút người từ `matchmakingQueue`). Nếu hết thời gian chờ mà chưa đủ 4 người thật, Server tự động bù thêm AI Bot và bắt đầu ván mới.
    - **Mode `RACE_1V1` (`2 Người`)**:
      - Khi đối thủ thoát giữa trận, Server **kết thúc ván đấu ngay lập tức** và chuyển thẳng sang `GAME_OVER` kèm `reason: "OPPONENT_LEFT_FORFEIT"`, `forfeitedBySocketId`, `forfeitedByUserName` để trao chiến thắng ngay cho người ở lại.
