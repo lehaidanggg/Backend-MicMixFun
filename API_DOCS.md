@@ -422,8 +422,8 @@ const socket = io("https://micmixfun.up.railway.app", {
 | `game_start` (hoặc `fill_bots_and_start`, `matchmaking_timeout`) | `{ roomId?, requireAllReady?: false, autoFillBots?: true, minPlayers?: 4, botCount?, botDifficulty? }` | `{ success: true, botsAdded, totalPlayers }` | **(Chỉ Host)** Bắt đầu trận đấu. Mặc định nếu phòng < `targetPlayers` sẽ tự động điền thêm AI Bot cho đủ số người |
 | `game_update_config` | `{ roomId?, totalRounds?: 3\|5\|7\|10, recordDuration?: 3..15, useCustomRecordDuration?: boolean }` | `{ success: true, totalRounds, recordDuration }` | **(Chỉ Host)** Cập nhật số vòng đấu và thời gian thu âm khi ở sảnh chờ |
 | `sample_playback_done` | `{ roomId? }` | — | Ghi nhận thiết bị đã phát xong file âm thanh mẫu (Server vẫn giữ đúng bộ đếm `PLAYING_SAMPLE` trước khi sang `PREPARE_RECORDING`) |
-| `game_submit_audio` | `{ roomId?, audioData: "data:audio/webm;base64,...", mimeType?: "audio/webm", metrics?: { matchPct, rhythmScore, energyScore, activeRatio } }` | `{ success: true, evaluation: { totalScore, pitchScore, rhythmScore, energyScore, grade, remark } }` | Nộp bản thu âm nhại giọng của vòng hiện tại. **Không cắt ngang đồng hồ thu âm** — chờ hết giờ `USER_RECORDING` Server mới chuyển bước |
-| `game_submit_bot_audio` | `{ roomId?, botSocketId, audioData: "data:audio/wav;base64,...", mimeType?: "audio/wav" }` | `{ success: true, botSocketId, uploadedBy, assignedGeneratorSocketId }` | *(Tuỳ chọn — Chế độ 1B)* Client được phân công (`assignedGeneratorSocketId`) nộp file audio đã render hộ cho AI Bot để đồng bộ qua `/api/attempts/:roomId/:botSocketId` |
+| `game_submit_audio` | `{ roomId?, botSocketId?, audioData: "data:audio/webm;base64,...", mimeType?: "audio/webm", metrics?: { matchPct?, melodyScore?, pitchScore?, rhythmScore?, energyScore?, attackScore?, activeRatio? } }` | `{ success: true, evaluation: { totalScore, pitchScore, melodyScore, rhythmScore, energyScore, attackScore, grade, remark } }` | Nộp bản thu âm nhại giọng của User (hoặc của Bot nếu truyền `botSocketId`). Server chấm điểm theo chuẩn Figma (`Melody 50% · Rhythm 30% · Attack 20%`). Nếu gói tin tới trễ nhẹ vào đầu `SHOWDOWN_REVEAL`, Server vẫn nhận bài, chấm điểm và phát `attempts_updated` cho cả phòng |
+| `game_submit_bot_audio` | `{ roomId?, botSocketId, audioData: "data:audio/wav;base64,...", mimeType?: "audio/wav", metrics?: { matchPct?, melodyScore?, rhythmScore?, attackScore?, activeRatio? } }` | `{ success: true, botSocketId, uploadedBy, assignedGeneratorSocketId, audioUrl, evaluation: { totalScore, pitchScore, melodyScore, rhythmScore, energyScore, attackScore, grade, remark } }` | Client được phân công (`assignedGeneratorSocketId`) nộp file audio đã gen cho AI Bot lên Server: Server **lưu vào `audioStore` để phát lại qua `/api/attempts/:roomId/:botSocketId` VÀ chấm điểm thực tế trên Server (`evaluateMimicAttempt`)**, cập nhật lại `bot.roundScore` & `bot.totalScore` (nếu Client không upload thì dùng điểm DSP fallback) |
 | `game_emoji_reaction` | `{ roomId?, emoji: "😂" }` | — | Thả biểu tượng cảm xúc bay trên màn hình (tối đa 5 lần / giây) |
 | `confirm_showdown_skip` (hoặc `finish_round`, `skip_to_round_result`) | `{ roomId? }` | `{ success: true, isVoted, skipCount, totalCount, allSkipConfirmed }` | **Màn `SHOWDOWN_REVEAL` (`5.4 + 5.5` — `"FINISH ROUND ▶"`)**: Người chơi click nghe tự do các bản thu âm trong danh sách `"Players' Recordings"`, nghe xong bấm **"FINISH ROUND ▶"**. AI Bot luôn được đánh dấu Done sẵn (`100%`). Ngay khi **100% người chơi đã bấm Done** (hoặc hết `30s` AFK safety timer), Server lập tức chuyển sang `AI_SCORING` (`5.6`) |
 | `confirm_next_round_ready` (hoặc `new_round_now`) | `{ roomId? }` | `{ success: true, readyCount, totalCount, allReady }` | **Màn `BREAK_TIME` (`5.9` — `"NEW ROUND NOW"`) / `ROUND_RESULT` (`5.7`) / `GAME_OVER` (`5.10`)**: Khi người chơi bấm **"NEW ROUND NOW"**, nếu **100% người thật trong phòng đã bấm**, Server chuyển thẳng sang Round tiếp theo ngay lập tức mà không cần đợi hết `11s` đếm ngược (hoặc tự chuyển khi hết giờ) |
@@ -710,6 +710,8 @@ const socket = io("https://micmixfun.up.railway.app", {
 * **`showdown_skip_updated`**: Broadcast khi có người bấm nút **"FINISH ROUND ▶"** tại màn `SHOWDOWN_REVEAL` (`{ socketId, userName, isVoted, skipCount, totalCount, allSkipConfirmed, votedSockets }`). Khi `allSkipConfirmed === true`, Server chuyển ngay sang `AI_SCORING` (`5.6`).
 * **`round_ready_updated`**: Broadcast tiến độ bấm sẵn sàng tại `SHOWDOWN_REVEAL`, `ROUND_RESULT`, `BREAK_TIME` (**"NEW ROUND NOW"**) hoặc `GAME_OVER` (`{ socketId, userName, readyCount, totalCount, allReady, players }`).
 * **`all_players_ready`**: Broadcast khi 100% người chơi trong phòng đã bấm **"FINISH ROUND ▶"** (tại `SHOWDOWN_REVEAL` ➔ chuyển ngay sang `AI_SCORING`) hoặc **"NEW ROUND NOW"** (tại `BREAK_TIME` ➔ vào ngay Round kế tiếp).
+* **`attempts_updated`**: Broadcast nếu bản thu âm của User tới Server trễ vài trăm ms đúng lúc vừa bước vào `SHOWDOWN_REVEAL` (`{ roomId, socketId, userName, audioUrl, audioStreamUrl, evaluation, attempts }`) để mọi máy cập nhật danh sách `"Players' Recordings"` tức thì.
+* **`bot_audio_synced`**: Broadcast khi máy Client được phân công (`assignedGeneratorSocketId`) upload xong bản sound của AI Bot lên Server (`{ roomId, botSocketId, botName, uploadedBy, audioUrl, audioStreamUrl, evaluation, attempts }`) kèm kết quả chấm điểm thực tế trên Server.
 * **`game_reaction_broadcast`**: Truyền chuỗi emoji bay trên màn hình (`"😂"`).
 * **`game_error`**: Báo lỗi thao tác game (`{ code: "GAME_HOST_ONLY_START", message: "GAME_HOST_ONLY_START" }`).
 
@@ -720,15 +722,19 @@ const socket = io("https://micmixfun.up.railway.app", {
 * **`new_audio_shared`**: Khi có thành viên chia sẻ voice clip vào phòng (`{ id, audioData, audioName, mimeType, duration, senderId, senderName, avatar, timestamp }`).
 * **`user_mic_stream_started` / `user_mic_stream_chunk` / `user_mic_stream_stopped`**: Sự kiện nhận luồng giọng nói trực tiếp từ thành viên khác trong phòng.
 
-## 5. 🤖 Thuật Toán Chấm Điểm AI Voice Scoring
+## 5. 🤖 Thuật Toán Chấm Điểm AI Voice Scoring (Cho Cả User & AI Bot)
 
-AI Voice Detector chấm điểm bản thu của người chơi dựa trên trọng số 3 thành phần:
+AI Voice Detector trên Server (`evaluateMimicAttempt`) chấm điểm bản thu của cả **User** (`game_submit_audio`) lẫn **AI Bot** (`game_submit_bot_audio`) dựa trên trọng số 3 thành phần theo đúng chuẩn UI Figma (`5.6 AI_SCORING`: **Melody 50% · Rhythm 30% · Attack 20%**):
 
-$$\text{Total Score} = (\text{Pitch} \times 0.40) + (\text{Rhythm} \times 0.35) + (\text{Energy} \times 0.25)$$
+$$\text{Total Score} = \text{round}\big((\text{Melody/Pitch} \times 0.50) + (\text{Rhythm} \times 0.30) + (\text{Attack/Energy} \times 0.20)\big)$$
 
-1. **Cao độ (Pitch Accuracy - 40%)**: So sánh tần số cơ bản (F0) và độ vuốt giọng.
-2. **Nhịp điệu & Độ nảy (Rhythm & Attacks - 35%)**: So sánh thời lượng và các điểm nhấn âm lượng.
-3. **Năng lượng thanh quản (Vocal Energy - 25%)**: Cường độ âm thanh (RMS amplitude) để nhận diện độ nhiệt tình.
+1. **Giai điệu & Cao độ (`pitchScore` / `melodyScore` — 50%)**: So sánh tần số cơ bản (F0) và độ khớp cao độ (`matchPct` / `melodyScore` / `pitchScore`).
+2. **Nhịp điệu (`rhythmScore` — 30%)**: So sánh độ khớp trường độ và nhịp độ phát âm (`rhythmScore`).
+3. **Độ nảy & Năng lượng (`energyScore` / `attackScore` — 20%)**: Cường độ âm thanh (RMS amplitude) và độ bén khi vào nhịp (`energyScore` / `attackScore`).
+4. **Hỗ trợ phân tích đa chế độ trên Server**:
+   - **Khi Client gửi kèm `metrics`**: Server kiểm tra ngưỡng im lặng (`activeRatio < 0.05` ➔ phạt `15 điểm - Hạng F`), sau đó chuẩn hóa 3 chỉ số (`35..100`) và tính tổng điểm theo trọng số `50% / 30% / 20%`.
+   - **Khi Client gửi file `RIFF WAV (16-bit PCM)` mà không kèm `metrics`**: Server tự động đọc trực tiếp mẫu sóng âm PCM 16-bit từ Buffer để tính `RMS Energy`, `Active Voice Ratio`, `Zero-Crossing Rate` và `Attack Transients` (nếu file WAV im lặng `activeRatio < 0.04` hoặc `rms < 0.008` ➔ phạt `15 điểm - Hạng F`).
+   - **Khi Client upload sound của AI Bot (`game_submit_bot_audio`)**: Server giải mã file audio của Bot lưu vào `audioStore`, chạy `evaluateMimicAttempt()` chấm điểm thực tế trên Server, trừ điểm giả lập tạm và cập nhật điểm chính thức (`roundScore`, `totalScore`, `evaluation`) cho Bot đó!
 
 ### Tiêu chuẩn xếp hạng:
 * **Hạng S (>= 90 điểm)**: Thánh nhại âm! Giống y bản gốc.
@@ -810,17 +816,30 @@ socket.on("game_state_changed") { args ->
         MimicGameState.PREPARE_RECORDING -> { // 5.1b: Dừng âm thanh mẫu, chuẩn bị mic
             audioPlayer.stop()
         }
-        MimicGameState.USER_RECORDING -> { // 5.2: Bắt đầu thu âm
+        MimicGameState.USER_RECORDING -> { // 5.2: Bắt đầu thu âm của User & Render ngầm sound cho Bot được phân công
             audioRecorder.startRecording()
+            val botAssignments = payload?.optJSONArray("botAssignments")
+            botAudioGenerator.prepareAssignedBotsAsync(socket.id(), botAssignments)
         }
-        MimicGameState.UPLOADING_SOUND -> { // 5.3: Dừng thu âm & Gửi bản thu lên Server
+        MimicGameState.UPLOADING_SOUND -> { // 5.3: Dừng thu âm & Upload cả bài của User lẫn bài của Bot được phân công lên Server để chấm điểm
             val result = audioRecorder.stopAndBuildPayload()
             socket.emit("game_submit_audio", JSONObject().apply {
                 put("roomId", currentRoomId)
                 put("audioData", result.base64Audio)
                 put("mimeType", "audio/webm")
-                put("metrics", result.metricsJson)
+                put("metrics", result.metricsJson) // { melodyScore, rhythmScore, attackScore, activeRatio }
             })
+
+            // Upload sound của các AI Bot mà máy này được giao gen (assignedGeneratorSocketId == socket.id) để Server lưu & chấm điểm!
+            botAudioGenerator.getRenderedBotsForUpload().forEach { renderedBot ->
+                socket.emit("game_submit_bot_audio", JSONObject().apply {
+                    put("roomId", currentRoomId)
+                    put("botSocketId", renderedBot.botSocketId)
+                    put("audioData", renderedBot.base64Wav)
+                    put("mimeType", "audio/wav")
+                    put("metrics", renderedBot.metricsJson)
+                })
+            }
         }
         MimicGameState.SHOWDOWN_REVEAL -> { // 5.4 + 5.5: Hiển thị list "Players' Recordings" để user tự click nghe
             val attemptsJson = payload?.optJSONArray("attempts")
@@ -1415,12 +1434,17 @@ socket.emit("game_start", {
   });
   ```
 
-### 12.4. Cơ chế biến đổi âm thanh bài thi của AI Bot giống người thật theo 3 mức độ khó
-Ngay khi bắt đầu vòng đấu, Server tự động tải và giải mã file `.mp3` gốc của `targetSound` từ Cloudflare R2 CDN sang PCM `20000 Hz` (`warmUpSoundPcm`), sau đó biến đổi trực tiếp trên sóng âm thật bằng thuật toán **WSOLA (Waveform Similarity Overlap-Add)** tách biệt độc lập giữa Cao độ (`pitch`) và Tốc độ (`speed`), kết hợp tiếng lấy hơi tự nhiên (`85ms` đầu câu) và chuỗi **3 bộ lọc Biquad bậc 2** mô phỏng micro điện thoại:
-- **`EASY` (Yếu — Điểm khoảng 50–70đ)**: Lệch cao độ (`pitch` ±11%..18%) và tốc độ (`speed` ±10%..17%) trong ngưỡng giọng người thật, vào nhịp trễ (`startDelayMs` 180..340ms), có tiếng lấy hơi đầu câu, luyến giọng nhẹ và 1–2 nhịp ngập ngừng êm (`dropoutCount`).
-- **`NORMAL` (Thông thường — Điểm khoảng 68–86đ)**: Lệch nhẹ cao độ (`pitch` ±4.5%..9%) và tốc độ (`speed` ±4%..8.5%), âm sắc micro smartphone tiêu chuẩn (`[220Hz, 4200Hz]`), trễ phản xạ tự nhiên 70..140ms.
-- **`HARD` (Khó — Điểm khoảng 84–97đ)**: Bám rất sát âm thanh gốc (`pitch` ±1%..3.2%, `speed` ±1%..3%), thu âm micro trong trẻo (`[150Hz, 6000Hz]`), bắt nhịp nhanh (`startDelayMs` 15..40ms).
-- Bản thu WAV (`audio/wav`) đã biến đổi của Bot được lưu trực tiếp vào `audioStore` của vòng đấu và stream qua `GET /api/attempts/:roomId/:socketId` trong pha `SHOWDOWN_REVEAL` giống hệt bài thu của người chơi thật.
+### 12.4. Cơ chế Gen Sound của AI Bot dưới Client & Upload Lên Server Để Chấm Điểm (`game_submit_bot_audio`)
+1. **Phân công Round-Robin (`botAssignments`)**:
+   - Khi vào `USER_RECORDING` (`5.2`) và `UPLOADING_SOUND` (`5.3`), Server tính sẵn công thức biến đổi giọng người thật `botAudioEffects` theo 3 độ khó (`EASY` / `NORMAL` / `HARD`) và chia đều (Round-Robin) cho các máy người thật trong phòng qua trường `assignedGeneratorSocketId` (tự động Failover sang người thật khác nếu người được giao rớt mạng):
+     - **`EASY` (Yếu — Điểm khoảng 50–70đ)**: Lệch cao độ (`pitch` ±11%..18%) và tốc độ (`speed` ±10%..17%) trong ngưỡng giọng người thật, vào nhịp trễ (`startDelayMs` 180..340ms), có tiếng lấy hơi đầu câu, luyến giọng nhẹ và 1–2 nhịp ngập ngừng êm (`dropoutCount`).
+     - **`NORMAL` (Thông thường — Điểm khoảng 68–86đ)**: Lệch nhẹ cao độ (`pitch` ±4.5%..9%) và tốc độ (`speed` ±4%..8.5%), âm sắc micro smartphone tiêu chuẩn (`[220Hz, 4200Hz]`), trễ phản xạ tự nhiên 70..140ms.
+     - **`HARD` (Khó — Điểm khoảng 84–97đ)**: Bám rất sát âm thanh gốc (`pitch` ±1%..3.2%, `speed` ±1%..3%), thu âm micro trong trẻo (`[150Hz, 6000Hz]`), bắt nhịp nhanh (`startDelayMs` 15..40ms).
+2. **Upload & Chấm Điểm Thực Tế Trên Server (`game_submit_bot_audio`)**:
+   - Khi máy Client có `socket.id === assignedGeneratorSocketId` gen xong file âm thanh của Bot (ví dụ `audio/wav` hoặc `audio/webm`) và gửi lên qua `game_submit_bot_audio` (`{ roomId, botSocketId, audioData, mimeType, metrics }`):
+     - Server lưu `Buffer` âm thanh của Bot vào `audioStore` để toàn bộ người chơi trong phòng bấm nghe đồng bộ qua `GET /api/attempts/:roomId/:botSocketId`.
+     - Server **gọi trực tiếp `evaluateMimicAttempt(audioData, metrics)` để chấm điểm bản sound vừa upload của Bot trên Server**, trừ điểm fallback tạm và cập nhật lại `bot.roundScore`, `bot.totalScore` cùng `bot.currentAttempt.evaluation` (`botAudioUploaded = true`), đồng thời trả về `evaluation` trong callback và broadcast `bot_audio_synced` nếu đang ở màn `SHOWDOWN_REVEAL`.
+     - Nếu vì lý do mạng mà Client không upload kịp `game_submit_bot_audio`, Server tự động dùng công thức DSP fallback để ván đấu không bao giờ bị kẹt.
 
 
 

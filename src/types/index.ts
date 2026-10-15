@@ -74,16 +74,21 @@ export interface SoundPack {
 
 export interface ClientMetrics {
   matchPct?: number;
+  pitchScore?: number;
+  melodyScore?: number;
   rhythmScore?: number;
   energyScore?: number;
+  attackScore?: number;
   activeRatio?: number;
 }
 
 export interface EvaluationResult {
   totalScore: number;
   pitchScore: number;
+  melodyScore?: number;
   rhythmScore: number;
   energyScore: number;
+  attackScore?: number;
   grade: string;
   remark: string;
 }
@@ -124,6 +129,7 @@ export interface PlayerAttempt {
   botPitch?: number | null;
   botSpeed?: number | null;
   botAudioEffects?: BotAudioEffects | null;
+  botAudioUploaded?: boolean;
   assignedGeneratorSocketId?: string | null;
   evaluation: EvaluationResult;
   submittedAt?: number;

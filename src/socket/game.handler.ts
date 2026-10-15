@@ -168,11 +168,11 @@ export function registerGameHandlers(
     }
   );
 
-  // 3. NỘP BÀI THU ÂM NHẠI GIỌNG (game_submit_audio)
+  // 3. NỘP BÀI THU ÂM NHẠI GIỌNG CỦA USER HOẶC BOT (game_submit_audio)
   socket.on(
     'game_submit_audio',
     (
-      { roomId, audioData, mimeType, metrics }: Record<string, any> = {},
+      { roomId, botSocketId, audioData, mimeType, metrics }: Record<string, any> = {},
       callback?: (res: Record<string, unknown>) => void
     ) => {
       const targetRoom = String(roomId || sessionState.currentRoomId || '').toUpperCase();
@@ -188,6 +188,12 @@ export function registerGameHandlers(
       }
       const game = gameSessions.get(targetRoom);
       if (game) {
+        // Nếu Client gửi kèm botSocketId trong game_submit_audio -> tự động chấm điểm & lưu audio cho Bot đó
+        if (botSocketId) {
+          const botRes = game.submitBotAudio(socket.id, String(botSocketId), audioData, mimeType, metrics);
+          if (callback) callback(botRes);
+          return;
+        }
         const res = game.submitMimicAudio(socket.id, audioData, mimeType, metrics);
         if (callback) callback(res);
       } else {
@@ -202,12 +208,11 @@ export function registerGameHandlers(
     }
   );
 
-  // 3b. NỘP BÀI AUDIO ĐÃ RENDER HỘ CHO AI BOT ĐƯỢC PHÂN CÔNG (game_submit_bot_audio)
-  // Dùng khi phòng có nhiều người thật và muốn Client được phân công (assignedGeneratorSocketId) render file của Bot rồi gửi lên để đồng bộ cho mọi người
+  // 3b. NỘP BÀI AUDIO ĐÃ RENDER HỘ CHO AI BOT ĐƯỢC PHÂN CÔNG & CHẤM ĐIỂM TRÊN SERVER (game_submit_bot_audio)
   socket.on(
     'game_submit_bot_audio',
     (
-      { roomId, botSocketId, audioData, mimeType }: Record<string, any> = {},
+      { roomId, botSocketId, audioData, mimeType, metrics }: Record<string, any> = {},
       callback?: (res: Record<string, unknown>) => void
     ) => {
       const targetRoom = String(roomId || sessionState.currentRoomId || '').toUpperCase();
@@ -223,7 +228,7 @@ export function registerGameHandlers(
       }
       const game = gameSessions.get(targetRoom);
       if (game) {
-        const res = game.submitBotAudio(socket.id, String(botSocketId || ''), audioData, mimeType);
+        const res = game.submitBotAudio(socket.id, String(botSocketId || ''), audioData, mimeType, metrics);
         if (callback) callback(res);
       } else {
         if (callback) {

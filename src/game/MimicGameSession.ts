@@ -844,13 +844,14 @@ export class MimicGameSession {
 
   /**
    * Cho phép máy Client được phân công (`assignedGeneratorSocketId` hoặc Host) nộp bản audio đã render của Bot
-   * (Tuỳ chọn: hỗ trợ cả chế độ Client-Baked Upload lẫn chế độ Pure Local Realtime DSP)
+   * và CHẤM ĐIỂM THỰC TẾ TRÊN SERVER từ bản audio / metrics vừa upload (cập nhật lại điểm của Bot trong vòng hiện tại).
    */
   submitBotAudio(
     requesterSocketId: string,
     botSocketId: string,
     audioBase64?: string | null,
-    mimeType = 'audio/wav'
+    mimeType = 'audio/wav',
+    clientMetrics: ClientMetrics | null = null
   ): {
     success: boolean;
     code?: ErrorCode;
@@ -859,12 +860,14 @@ export class MimicGameSession {
     uploadedBy?: string;
     assignedGeneratorSocketId?: string | null;
     audioUrl?: string;
+    evaluation?: EvaluationResult;
   } {
     if (
       this.state !== GAME_STATES.USER_RECORDING &&
       this.state !== GAME_STATES.UPLOADING_SOUND &&
       this.state !== GAME_STATES.LISTENING_NOW_PLAYING &&
-      this.state !== GAME_STATES.SHOWDOWN_REVEAL
+      this.state !== GAME_STATES.SHOWDOWN_REVEAL &&
+      this.state !== GAME_STATES.AI_SCORING
     ) {
       return {
         success: false,
@@ -911,20 +914,69 @@ export class MimicGameSession {
         });
         const streamUrl = `/api/attempts/${encodeURIComponent(this.roomId)}/${encodeURIComponent(botSocketId)}?r=${this.currentRound}`;
         const resolvedUrl = `${streamUrl}&t=${Date.now()}`;
+
+        // Chấm điểm thực tế trên Server cho bản sound của Bot vừa được Client gen và upload lên!
+        const evaluation = this.evaluateMimicAttempt(audioBase64, clientMetrics);
+        const oldRoundScore = bot.roundScore || 0;
+        bot.roundScore = evaluation.totalScore;
+        bot.totalScore = Math.max(0, bot.totalScore - oldRoundScore) + evaluation.totalScore;
+
         if (bot.currentAttempt) {
           bot.currentAttempt.audioUrl = resolvedUrl;
           bot.currentAttempt.audioStreamUrl = streamUrl;
           bot.currentAttempt.mimeType = mimeType || 'audio/wav';
+          bot.currentAttempt.botAudioUploaded = true;
+          bot.currentAttempt.evaluation = evaluation;
+          bot.currentAttempt.submittedAt = Date.now();
         }
+
+        console.log(
+          `[MimicGame:${this.roomId}] 🤖🎯 Bot ${bot.userName} (${botSocketId}) đã nhận audio từ Client ${requester.userName} & chấm điểm trên Server: ${evaluation.totalScore}đ (${evaluation.grade})`
+        );
+
+        // Nếu đang ở pha nghe lại (SHOWDOWN_REVEAL / LISTENING_NOW_PLAYING), cập nhật lại danh sách attempts cho cả phòng
+        if (
+          this.state === GAME_STATES.SHOWDOWN_REVEAL ||
+          this.state === GAME_STATES.LISTENING_NOW_PLAYING
+        ) {
+          const updatedAttempts = this.ensureAllPlayerAttempts();
+          if (this.currentPayload) {
+            this.currentPayload.attempts = updatedAttempts;
+            this.currentPayload.roundWinner = updatedAttempts[0] || null;
+          }
+          this.io.to(this.roomId).emit('bot_audio_synced', {
+            roomId: this.roomId,
+            botSocketId,
+            botName: bot.userName,
+            uploadedBy: requesterSocketId,
+            audioUrl: resolvedUrl,
+            audioStreamUrl: streamUrl,
+            evaluation,
+            attempts: updatedAttempts
+          });
+        }
+
         return {
           success: true,
           botSocketId,
           uploadedBy: requesterSocketId,
           assignedGeneratorSocketId: assignedId || requesterSocketId,
-          audioUrl: resolvedUrl
+          audioUrl: resolvedUrl,
+          evaluation
         };
       } catch {
         // ignore invalid base64
+      }
+    }
+
+    // Trường hợp Client chỉ gửi metrics của Bot lên để chấm điểm lại mà không gửi kèm audioBase64
+    if (clientMetrics && typeof clientMetrics === 'object') {
+      const evaluation = this.evaluateMimicAttempt('__BOT_CLIENT_DSP__', clientMetrics);
+      const oldRoundScore = bot.roundScore || 0;
+      bot.roundScore = evaluation.totalScore;
+      bot.totalScore = Math.max(0, bot.totalScore - oldRoundScore) + evaluation.totalScore;
+      if (bot.currentAttempt) {
+        bot.currentAttempt.evaluation = evaluation;
       }
     }
 
@@ -933,7 +985,8 @@ export class MimicGameSession {
       botSocketId,
       uploadedBy: requesterSocketId,
       assignedGeneratorSocketId: assignedId || requesterSocketId,
-      audioUrl: bot.currentAttempt?.audioUrl || undefined
+      audioUrl: bot.currentAttempt?.audioUrl || undefined,
+      evaluation: bot.currentAttempt?.evaluation
     };
   }
 
@@ -946,6 +999,8 @@ export class MimicGameSession {
     if (
       this.state !== GAME_STATES.USER_RECORDING &&
       this.state !== GAME_STATES.UPLOADING_SOUND &&
+      this.state !== GAME_STATES.LISTENING_NOW_PLAYING &&
+      this.state !== GAME_STATES.SHOWDOWN_REVEAL &&
       this.state !== GAME_STATES.AI_SCORING
     ) {
       return {
@@ -964,7 +1019,9 @@ export class MimicGameSession {
       };
     }
 
-    if (player.currentAttempt !== null) {
+    // Chặn nộp trùng lặp nếu người chơi đã nộp bài thực sự trong vòng này
+    // (Nếu currentAttempt chỉ là bản ghi khuyết audioUrl === null do gói tin upload tới trễ vào đầu SHOWDOWN_REVEAL thì vẫn cho phép cập nhật!)
+    if (player.currentAttempt !== null && player.currentAttempt.audioUrl !== null) {
       console.warn(`[MimicGame:${this.roomId}] ⚠️ Chặn ${player.userName} nộp bài trùng lặp trong vòng ${this.currentRound}`);
       return {
         success: false,
@@ -976,6 +1033,7 @@ export class MimicGameSession {
     const evaluation = this.evaluateMimicAttempt(audioBase64, clientMetrics);
 
     let resolvedAudioUrl: string | null = audioBase64 || null;
+    const streamUrl = `/api/attempts/${encodeURIComponent(this.roomId)}/${encodeURIComponent(socketId)}?r=${this.currentRound}`;
     if (audioBase64 && typeof audioBase64 === 'string') {
       const commaIdx = audioBase64.indexOf(',');
       const rawB64 = commaIdx !== -1 ? audioBase64.slice(commaIdx + 1) : audioBase64;
@@ -987,18 +1045,19 @@ export class MimicGameSession {
           updatedAt: Date.now()
         });
         if (audioBase64.length > 65536) {
-          resolvedAudioUrl = `/api/attempts/${encodeURIComponent(this.roomId)}/${encodeURIComponent(socketId)}?r=${this.currentRound}&t=${Date.now()}`;
+          resolvedAudioUrl = `${streamUrl}&t=${Date.now()}`;
         }
       } catch {
         // Bỏ qua lỗi giải mã base64
       }
     }
 
+    const oldRoundScore = player.roundScore || 0;
     player.roundScore = evaluation.totalScore;
-    player.totalScore += evaluation.totalScore;
+    player.totalScore = Math.max(0, player.totalScore - oldRoundScore) + evaluation.totalScore;
     player.currentAttempt = {
       audioUrl: resolvedAudioUrl,
-      audioStreamUrl: `/api/attempts/${encodeURIComponent(this.roomId)}/${encodeURIComponent(socketId)}?r=${this.currentRound}`,
+      audioStreamUrl: streamUrl,
       mimeType,
       evaluation,
       submittedAt: Date.now()
@@ -1008,6 +1067,27 @@ export class MimicGameSession {
 
     // Đảm bảo mọi AI Bot đều đã có bài nộp trong vòng hiện tại
     this.simulateAllBotsAttempts();
+
+    // Nếu gói upload của User tới trễ đúng lúc vừa vào SHOWDOWN_REVEAL, cập nhật ngay danh sách attempts cho cả phòng
+    if (
+      this.state === GAME_STATES.SHOWDOWN_REVEAL ||
+      this.state === GAME_STATES.LISTENING_NOW_PLAYING
+    ) {
+      const updatedAttempts = this.ensureAllPlayerAttempts();
+      if (this.currentPayload) {
+        this.currentPayload.attempts = updatedAttempts;
+        this.currentPayload.roundWinner = updatedAttempts[0] || null;
+      }
+      this.io.to(this.roomId).emit('attempts_updated', {
+        roomId: this.roomId,
+        socketId,
+        userName: player.userName,
+        audioUrl: resolvedAudioUrl,
+        audioStreamUrl: streamUrl,
+        evaluation,
+        attempts: updatedAttempts
+      });
+    }
 
     // Không tự động nhảy sớm khi nộp đủ — giữ 100% thời lượng USER_RECORDING theo đúng Timer của Server
     return { success: true, evaluation };
@@ -1029,8 +1109,10 @@ export class MimicGameSession {
           evaluation: {
             totalScore: 0,
             pitchScore: 0,
+            melodyScore: 0,
             rhythmScore: 0,
             energyScore: 0,
+            attackScore: 0,
             grade: 'F',
             remark: AiRemarkCode.AI_REMARK_MISSED_RECORDING
           }
@@ -1044,6 +1126,7 @@ export class MimicGameSession {
       avatar: p.avatar,
       isBot: Boolean(p.isBot),
       botDifficulty: p.botDifficulty || null,
+      botAudioUploaded: Boolean(p.currentAttempt && p.currentAttempt.botAudioUploaded),
       hasRecording: Boolean((p.currentAttempt && p.currentAttempt.audioUrl) || p.isBot),
       roundScore: p.roundScore,
       totalScore: p.totalScore,
@@ -1572,8 +1655,10 @@ export class MimicGameSession {
       return {
         totalScore: 0,
         pitchScore: 0,
+        melodyScore: 0,
         rhythmScore: 0,
         energyScore: 0,
+        attackScore: 0,
         grade: 'F',
         remark: AI_REMARKS.terrible[Math.floor(Math.random() * AI_REMARKS.terrible.length)]
       };
@@ -1583,57 +1668,152 @@ export class MimicGameSession {
     let rhythmScore = 0;
     let energyScore = 0;
 
-    if (clientMetrics && typeof clientMetrics === 'object' && typeof clientMetrics.matchPct === 'number') {
+    const rawMelody =
+      clientMetrics && typeof clientMetrics === 'object'
+        ? (typeof clientMetrics.matchPct === 'number'
+            ? clientMetrics.matchPct
+            : typeof clientMetrics.melodyScore === 'number'
+              ? clientMetrics.melodyScore
+              : typeof clientMetrics.pitchScore === 'number'
+                ? clientMetrics.pitchScore
+                : undefined)
+        : undefined;
+
+    if (clientMetrics && typeof clientMetrics === 'object' && typeof rawMelody === 'number') {
       if (typeof clientMetrics.activeRatio === 'number' && clientMetrics.activeRatio < 0.05) {
         return {
           totalScore: 15,
           pitchScore: 18,
+          melodyScore: 18,
           rhythmScore: 12,
           energyScore: 10,
+          attackScore: 10,
           grade: 'F',
           remark: AI_REMARKS.terrible[Math.floor(Math.random() * AI_REMARKS.terrible.length)]
         };
       }
-      pitchScore = Math.min(99, Math.max(35, Math.round(clientMetrics.matchPct)));
-      rhythmScore = Math.min(98, Math.max(35, Math.round((clientMetrics.rhythmScore || clientMetrics.matchPct * 0.95))));
-      energyScore = Math.min(100, Math.max(35, Math.round((clientMetrics.energyScore || clientMetrics.matchPct * 1.02))));
+      const rawRhythm =
+        typeof clientMetrics.rhythmScore === 'number' ? clientMetrics.rhythmScore : rawMelody * 0.95;
+      const rawAttack =
+        typeof clientMetrics.energyScore === 'number'
+          ? clientMetrics.energyScore
+          : typeof clientMetrics.attackScore === 'number'
+            ? clientMetrics.attackScore
+            : rawMelody * 1.02;
+
+      pitchScore = Math.min(99, Math.max(35, Math.round(rawMelody)));
+      rhythmScore = Math.min(98, Math.max(35, Math.round(rawRhythm)));
+      energyScore = Math.min(100, Math.max(35, Math.round(rawAttack)));
     } else {
       const safeAudio = audioBase64 || '';
       const commaIdx = safeAudio.indexOf(',');
       const rawB64 = commaIdx !== -1 ? safeAudio.slice(commaIdx + 1) : safeAudio;
       const buf = Buffer.from(rawB64, 'base64');
 
-      const uniqueBytes = new Set<number>();
-      let deltaSum = 0;
-      const step = Math.max(1, Math.floor(buf.length / 256));
-      let samples = 0;
-      for (let i = step; i < buf.length; i += step) {
-        uniqueBytes.add(buf[i]);
-        deltaSum += Math.abs(buf[i] - buf[i - step]);
-        samples++;
+      // Nếu là file RIFF WAV (16-bit PCM) được upload từ Client (User hoặc Bot): phân tích trực tiếp sóng âm PCM!
+      const isWavPcm =
+        buf.length > 128 &&
+        buf.toString('ascii', 0, 4) === 'RIFF' &&
+        buf.toString('ascii', 8, 12) === 'WAVE';
+
+      if (isWavPcm) {
+        let dataOffset = 44;
+        for (let i = 12; i < Math.min(buf.length - 8, 256); i++) {
+          if (
+            buf[i] === 0x64 && // 'd'
+            buf[i + 1] === 0x61 && // 'a'
+            buf[i + 2] === 0x74 && // 't'
+            buf[i + 3] === 0x61 // 'a'
+          ) {
+            dataOffset = i + 8;
+            break;
+          }
+        }
+        const totalSamples = Math.floor((buf.length - dataOffset) / 2);
+        const stride = Math.max(1, Math.floor(totalSamples / 1024));
+        let sumSq = 0;
+        let activeCount = 0;
+        let zeroCrossings = 0;
+        let attackPeaks = 0;
+        let prevSample = 0;
+        let inspected = 0;
+
+        for (let s = 0; s < totalSamples; s += stride) {
+          const bytePos = dataOffset + s * 2;
+          if (bytePos + 1 >= buf.length) break;
+          const sample = buf.readInt16LE(bytePos) / 32768;
+          const abs = Math.abs(sample);
+          sumSq += sample * sample;
+          if (abs > 0.025) activeCount++;
+          if ((sample >= 0 && prevSample < 0) || (sample < 0 && prevSample >= 0)) {
+            zeroCrossings++;
+          }
+          if (abs - Math.abs(prevSample) > 0.12) {
+            attackPeaks++;
+          }
+          prevSample = sample;
+          inspected++;
+        }
+
+        const rms = inspected > 0 ? Math.sqrt(sumSq / inspected) : 0;
+        const activeRatio = inspected > 0 ? activeCount / inspected : 0;
+
+        if (activeRatio < 0.04 || rms < 0.008) {
+          return {
+            totalScore: 15,
+            pitchScore: 18,
+            melodyScore: 18,
+            rhythmScore: 12,
+            energyScore: 10,
+            attackScore: 10,
+            grade: 'F',
+            remark: AI_REMARKS.terrible[Math.floor(Math.random() * AI_REMARKS.terrible.length)]
+          };
+        }
+
+        const zcrRatio = inspected > 0 ? zeroCrossings / inspected : 0;
+        const attackRatio = inspected > 0 ? attackPeaks / inspected : 0;
+        const seed = buf.length + Math.round(rms * 1000) + zeroCrossings + attackPeaks;
+
+        pitchScore = Math.min(99, Math.max(45, Math.round(58 + Math.min(28, activeRatio * 34) + Math.min(12, zcrRatio * 40) + (seed % 9) - 4)));
+        rhythmScore = Math.min(98, Math.max(45, Math.round(56 + Math.min(28, activeRatio * 32) + Math.min(14, attackRatio * 55) + ((seed * 7) % 9) - 4)));
+        energyScore = Math.min(100, Math.max(45, Math.round(55 + Math.min(35, rms * 140) + ((seed * 13) % 9) - 4)));
+      } else {
+        const uniqueBytes = new Set<number>();
+        let deltaSum = 0;
+        const step = Math.max(1, Math.floor(buf.length / 256));
+        let samples = 0;
+        for (let i = step; i < buf.length; i += step) {
+          uniqueBytes.add(buf[i]);
+          deltaSum += Math.abs(buf[i] - buf[i - step]);
+          samples++;
+        }
+
+        const avgDelta = samples > 0 ? deltaSum / samples : 0;
+        const diversity = uniqueBytes.size / 256;
+
+        if (uniqueBytes.size < 4) {
+          return {
+            totalScore: 10,
+            pitchScore: 10,
+            melodyScore: 10,
+            rhythmScore: 10,
+            energyScore: 10,
+            attackScore: 10,
+            grade: 'F',
+            remark: AI_REMARKS.terrible[Math.floor(Math.random() * AI_REMARKS.terrible.length)]
+          };
+        }
+
+        const seed = buf.length + Math.round(avgDelta * 10) + uniqueBytes.size;
+        pitchScore = Math.min(99, Math.max(48, Math.round(68 + diversity * 12 + (seed % 20) - 4)));
+        rhythmScore = Math.min(98, Math.max(52, Math.round(70 + diversity * 10 + ((seed * 7) % 20) - 4)));
+        energyScore = Math.min(100, Math.max(45, Math.round(69 + Math.min(15, avgDelta / 6) + ((seed * 13) % 18) - 3)));
       }
-
-      const avgDelta = samples > 0 ? deltaSum / samples : 0;
-      const diversity = uniqueBytes.size / 256;
-
-      if (uniqueBytes.size < 4) {
-        return {
-          totalScore: 10,
-          pitchScore: 10,
-          rhythmScore: 10,
-          energyScore: 10,
-          grade: 'F',
-          remark: AI_REMARKS.terrible[Math.floor(Math.random() * AI_REMARKS.terrible.length)]
-        };
-      }
-
-      const seed = buf.length + Math.round(avgDelta * 10) + uniqueBytes.size;
-      pitchScore = Math.min(99, Math.max(48, Math.round(68 + diversity * 12 + (seed % 20) - 4)));
-      rhythmScore = Math.min(98, Math.max(52, Math.round(70 + diversity * 10 + ((seed * 7) % 20) - 4)));
-      energyScore = Math.min(100, Math.max(45, Math.round(69 + Math.min(15, avgDelta / 6) + ((seed * 13) % 18) - 3)));
     }
 
-    const totalScore = Math.round(pitchScore * 0.4 + rhythmScore * 0.35 + energyScore * 0.25);
+    // Đồng bộ trọng số với UI Figma 5.6 AI_SCORING: Melody (Pitch) 50% · Rhythm 30% · Attack (Energy) 20%
+    const totalScore = Math.round(pitchScore * 0.5 + rhythmScore * 0.3 + energyScore * 0.2);
 
     let grade = 'B';
     let remark = '';
@@ -1655,8 +1835,10 @@ export class MimicGameSession {
     return {
       totalScore,
       pitchScore,
+      melodyScore: pitchScore,
       rhythmScore,
       energyScore,
+      attackScore: energyScore,
       grade,
       remark
     };

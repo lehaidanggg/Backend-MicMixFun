@@ -423,12 +423,24 @@ test('MimicGameSession — Multi-Human + Bot Round-Robin Generator Assignment & 
     assert.equal(assignmentsFailover[0].assignedGeneratorSocketId, 's_h2');
     assert.equal(assignmentsFailover[1].assignedGeneratorSocketId, 's_h2');
 
-    // Optional Mode 1B upload via submitBotAudio
+    // Client uploads generated Bot sound via submitBotAudio -> Server evaluates and updates Bot score!
     const sampleAudio = 'data:audio/wav;base64,' + crypto.randomBytes(600).toString('base64');
-    const uploadRes = game.submitBotAudio('s_h2', 'bot_1', sampleAudio, 'audio/wav');
+    const uploadRes = game.submitBotAudio('s_h2', 'bot_1', sampleAudio, 'audio/wav', {
+      melodyScore: 94,
+      rhythmScore: 90,
+      attackScore: 92,
+      activeRatio: 0.85
+    });
     assert.equal(uploadRes.success, true);
     assert.equal(uploadRes.botSocketId, 'bot_1');
     assert.ok(game.getAttemptAudio('bot_1')?.buffer);
+    assert.ok(uploadRes.evaluation, 'submitBotAudio must return Server evaluation of Bot audio');
+    // 94 * 0.5 + 90 * 0.3 + 92 * 0.2 = 47 + 27 + 18.4 = 92.4 -> 92 (Grade S)
+    assert.equal(uploadRes.evaluation?.totalScore, 92);
+    assert.equal(uploadRes.evaluation?.grade, 'S');
+    assert.equal(game.players.get('bot_1')?.roundScore, 92);
+    assert.equal(game.players.get('bot_1')?.totalScore, 92);
+    assert.equal(game.players.get('bot_1')?.currentAttempt?.botAudioUploaded, true);
   } finally {
     game.destroy();
   }
