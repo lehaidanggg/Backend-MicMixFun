@@ -8,7 +8,8 @@
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/auth.service.test.ts tests/audio.service.test.ts tests/game.session.test.ts tests/room.and.api.test.ts tests/socket.handlers.test.ts"
+    "test": "tsx --test tests/auth.service.test.ts tests/audio.service.test.ts tests/game.session.test.ts tests/room.and.api.test.ts tests/socket.handlers.test.ts tests/load.benchmark.test.ts",
+    "test:load": "tsx --test tests/load.benchmark.test.ts"
   },
   "keywords": [
     "micmixfun",
