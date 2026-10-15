@@ -233,7 +233,26 @@ export class MimicGameSession {
       return;
     }
 
-    // Với Quick Match và Custom Room: vẫn tiếp tục trận đấu bình thường tới hết tất cả các Round theo đúng Timer của Server
+    // Với Quick Match và Custom Room: nếu có người rời đi ngay lúc đang chờ 100% bấm Done ở SHOWDOWN_REVEAL / BREAK_TIME / GAME_OVER
+    // thì kiểm tra lại: nếu những người còn lại đều đã bấm Done thì chuyển bước ngay để không bị kẹt phòng!
+    if (this.state === GAME_STATES.SHOWDOWN_REVEAL || this.state === GAME_STATES.LISTENING_NOW_PLAYING) {
+      for (const p of this.players.values()) {
+        if (p.isBot) this.showdownSkipVotes.add(p.socketId);
+      }
+      if (this.players.size > 0 && this.showdownSkipVotes.size === this.players.size) {
+        this.startAiScoringState();
+      }
+    } else if (this.state === GAME_STATES.BREAK_TIME) {
+      const allRemainingReady = Array.from(this.players.values()).every(p => p.isBot || p.isReady);
+      if (allRemainingReady) {
+        this.startNextRound();
+      }
+    } else if (this.state === GAME_STATES.GAME_OVER) {
+      const allRemainingReady = Array.from(this.players.values()).every(p => p.isBot || p.isReady);
+      if (allRemainingReady) {
+        this.triggerNextStageAfterAllReady();
+      }
+    }
   }
 
   getStepMeta(state: GameStateType = this.state): {
@@ -245,34 +264,34 @@ export class MimicGameSession {
     const isLastRound = this.currentRound >= this.totalRounds;
     switch (state) {
       case GAME_STATES.THEME_SELECTION:
-        return { phaseStep: '5.0', stepIndex: 1, totalStepsInRound: 10, nextState: GAME_STATES.PLAYING_SAMPLE };
+        return { phaseStep: '5.0', stepIndex: 1, totalStepsInRound: 9, nextState: GAME_STATES.PLAYING_SAMPLE };
       case GAME_STATES.PLAYING_SAMPLE:
-        return { phaseStep: '5.1', stepIndex: 2, totalStepsInRound: 10, nextState: GAME_STATES.PREPARE_RECORDING };
+        return { phaseStep: '5.1', stepIndex: 2, totalStepsInRound: 9, nextState: GAME_STATES.PREPARE_RECORDING };
       case GAME_STATES.PREPARE_RECORDING:
-        return { phaseStep: '5.1b', stepIndex: 3, totalStepsInRound: 10, nextState: GAME_STATES.USER_RECORDING };
+        return { phaseStep: '5.1b', stepIndex: 3, totalStepsInRound: 9, nextState: GAME_STATES.USER_RECORDING };
       case GAME_STATES.USER_RECORDING:
-        return { phaseStep: '5.2', stepIndex: 4, totalStepsInRound: 10, nextState: GAME_STATES.UPLOADING_SOUND };
+        return { phaseStep: '5.2', stepIndex: 4, totalStepsInRound: 9, nextState: GAME_STATES.UPLOADING_SOUND };
       case GAME_STATES.UPLOADING_SOUND:
-        return { phaseStep: '5.3', stepIndex: 5, totalStepsInRound: 10, nextState: GAME_STATES.LISTENING_NOW_PLAYING };
+        return { phaseStep: '5.3', stepIndex: 5, totalStepsInRound: 9, nextState: GAME_STATES.SHOWDOWN_REVEAL };
       case GAME_STATES.LISTENING_NOW_PLAYING:
-        return { phaseStep: '5.4', stepIndex: 6, totalStepsInRound: 10, nextState: GAME_STATES.SHOWDOWN_REVEAL };
+        return { phaseStep: '5.4', stepIndex: 6, totalStepsInRound: 9, nextState: GAME_STATES.SHOWDOWN_REVEAL };
       case GAME_STATES.SHOWDOWN_REVEAL:
-        return { phaseStep: '5.5', stepIndex: 7, totalStepsInRound: 10, nextState: GAME_STATES.AI_SCORING };
+        return { phaseStep: '5.5', stepIndex: 6, totalStepsInRound: 9, nextState: GAME_STATES.AI_SCORING };
       case GAME_STATES.AI_SCORING:
-        return { phaseStep: '5.6', stepIndex: 8, totalStepsInRound: 10, nextState: GAME_STATES.ROUND_RESULT };
+        return { phaseStep: '5.6', stepIndex: 7, totalStepsInRound: 9, nextState: GAME_STATES.ROUND_RESULT };
       case GAME_STATES.ROUND_RESULT:
         return {
           phaseStep: '5.7',
-          stepIndex: 9,
-          totalStepsInRound: 10,
+          stepIndex: 8,
+          totalStepsInRound: 9,
           nextState: isLastRound ? GAME_STATES.GAME_OVER : GAME_STATES.BREAK_TIME
         };
       case GAME_STATES.BREAK_TIME:
-        return { phaseStep: '5.8', stepIndex: 10, totalStepsInRound: 10, nextState: GAME_STATES.THEME_SELECTION };
+        return { phaseStep: '5.9', stepIndex: 9, totalStepsInRound: 9, nextState: GAME_STATES.THEME_SELECTION };
       case GAME_STATES.GAME_OVER:
-        return { phaseStep: '5.9', stepIndex: 10, totalStepsInRound: 10, nextState: GAME_STATES.IDLE };
+        return { phaseStep: '5.10', stepIndex: 9, totalStepsInRound: 9, nextState: GAME_STATES.IDLE };
       default:
-        return { phaseStep: '0.0', stepIndex: 0, totalStepsInRound: 10, nextState: GAME_STATES.THEME_SELECTION };
+        return { phaseStep: '0.0', stepIndex: 0, totalStepsInRound: 9, nextState: GAME_STATES.THEME_SELECTION };
     }
   }
 
@@ -1025,6 +1044,7 @@ export class MimicGameSession {
       avatar: p.avatar,
       isBot: Boolean(p.isBot),
       botDifficulty: p.botDifficulty || null,
+      hasRecording: Boolean((p.currentAttempt && p.currentAttempt.audioUrl) || p.isBot),
       roundScore: p.roundScore,
       totalScore: p.totalScore,
       audioUrl: p.currentAttempt ? p.currentAttempt.audioUrl : null,
@@ -1055,7 +1075,8 @@ export class MimicGameSession {
         messageCode: GameMessageCode.GAME_MSG_UPLOADING_SOUND,
         messageParams: { duration: uploadDuration }
       },
-      () => this.startListeningNowPlayingState()
+      // Gộp chung 5.4 + 5.5 vào màn SHOWDOWN_REVEAL ("Players' Recordings" + nút "FINISH ROUND ▶")
+      () => this.startShowdownRevealState()
     );
   }
 
@@ -1087,12 +1108,15 @@ export class MimicGameSession {
 
     this.showdownSkipVotes.clear();
     for (const player of this.players.values()) {
+      player.isReady = Boolean(player.isBot);
       if (player.isBot) {
         this.showdownSkipVotes.add(player.socketId);
       }
     }
 
-    console.log(`[MimicGame:${this.roomId}] 🎧 Step 5.5 Playback Review / Showdown Reveal (${reviewDuration}s)...`);
+    console.log(
+      `[MimicGame:${this.roomId}] 🎧 Step 5.4/5.5 Players' Recordings & Playback Review (chờ 100% FINISH ROUND hoặc auto sau ${reviewDuration}s)...`
+    );
 
     this.transitionToState(
       GAME_STATES.SHOWDOWN_REVEAL,
@@ -1103,8 +1127,11 @@ export class MimicGameSession {
         pack: this.selectedPack,
         targetSound: this.targetSound,
         attempts: attemptsList,
+        spotlightIndex: 0,
+        spotlightPlayer: attemptsList[0] || null,
         roundWinner: attemptsList[0] || null,
         skipCount: this.showdownSkipVotes.size,
+        readyCount: this.showdownSkipVotes.size,
         totalCount: this.players.size,
         votedSockets: Array.from(this.showdownSkipVotes)
       },
@@ -1166,6 +1193,7 @@ export class MimicGameSession {
 
     for (const p of this.players.values()) {
       if (p.isBot) {
+        p.isReady = true;
         this.showdownSkipVotes.add(p.socketId);
       }
     }
@@ -1178,24 +1206,58 @@ export class MimicGameSession {
       this.showdownSkipVotes.add(socketId);
       isVoted = true;
     }
+    player.isReady = isVoted;
 
     const totalCount = this.players.size;
     const skipCount = this.showdownSkipVotes.size;
     const allSkipConfirmed = (totalCount > 0 && skipCount === totalCount);
 
-    console.log(`[MimicGame:${this.roomId}] ⏩ [${player.userName}] ${isVoted ? 'đồng ý' : 'hủy'} xem bảng điểm sớm (${skipCount}/${totalCount})`);
+    console.log(
+      `[MimicGame:${this.roomId}] ⏩ [${player.userName}] ${isVoted ? 'bấm FINISH ROUND (Done)' : 'hủy FINISH ROUND'} (${skipCount}/${totalCount})`
+    );
 
     this.io.to(this.roomId).emit('showdown_skip_updated', {
       socketId,
       userName: player.userName,
       isVoted,
       skipCount,
+      readyCount: skipCount,
       totalCount,
       allSkipConfirmed,
+      allReady: allSkipConfirmed,
       votedSockets: Array.from(this.showdownSkipVotes)
     });
 
-    // Không tự động cắt ngang SHOWDOWN_REVEAL — mọi thứ tự và thời gian đều do Server quyết định theo Timer!
+    this.io.to(this.roomId).emit('round_ready_updated', {
+      socketId,
+      userName: player.userName,
+      readyCount: skipCount,
+      totalCount,
+      allReady: allSkipConfirmed,
+      players: Array.from(this.players.values()).map(p => ({
+        socketId: p.socketId,
+        userName: p.userName,
+        avatar: p.avatar,
+        role: p.role,
+        isBot: Boolean(p.isBot),
+        isReady: this.showdownSkipVotes.has(p.socketId)
+      }))
+    });
+
+    // Khi 100% người chơi trong phòng đã bấm "FINISH ROUND ▶" (Done) -> Chuyển ngay sang Step 5.6 AI_SCORING ("Locking in this round...")!
+    if (allSkipConfirmed) {
+      this.io.to(this.roomId).emit('all_players_ready', {
+        roomId: this.roomId,
+        state: this.state,
+        message: GameMessageCode.GAME_MSG_ALL_SKIP_CONFIRMED,
+        messageCode: GameMessageCode.GAME_MSG_ALL_SKIP_CONFIRMED,
+        countdown: 0,
+        timeRemaining: 0,
+        totalDuration: 0
+      });
+      this.startAiScoringState();
+    }
+
     return {
       success: true,
       isVoted,
@@ -1213,7 +1275,8 @@ export class MimicGameSession {
   }
 
   startRoundResultState(resultDuration: number = GAME_STEP_DURATIONS.ROUND_RESULT): void {
-    this.clearRoundAudioData();
+    // Giữ nguyên audioStore trong suốt ROUND_RESULT (chỉ xóa khi bước sang startNextRound hoặc finishGame)
+    const attemptsList = this.ensureAllPlayerAttempts();
 
     for (const player of this.players.values()) {
       player.isReady = Boolean(player.isBot);
@@ -1226,8 +1289,12 @@ export class MimicGameSession {
         avatar: p.avatar,
         role: p.role,
         isBot: Boolean(p.isBot),
+        hasRecording: Boolean((p.currentAttempt && p.currentAttempt.audioUrl) || p.isBot),
         roundScore: p.roundScore,
         totalScore: p.totalScore,
+        audioUrl: p.currentAttempt ? p.currentAttempt.audioUrl : null,
+        audioStreamUrl: (p.currentAttempt && p.currentAttempt.audioStreamUrl) || null,
+        evaluation: p.currentAttempt ? p.currentAttempt.evaluation : null,
         isReady: Boolean(p.isBot)
       }))
       .sort((a, b) => b.totalScore - a.totalScore);
@@ -1235,7 +1302,7 @@ export class MimicGameSession {
     const readyCount = leaderboard.filter(p => p.isReady).length;
     const isLastRound = this.currentRound >= this.totalRounds;
 
-    console.log(`[MimicGame:${this.roomId}] 🏆 Step 5.7 Round Results (${resultDuration}s)...`);
+    console.log(`[MimicGame:${this.roomId}] 🏆 Step 5.7 Round Results Podium (${resultDuration}s)...`);
 
     this.transitionToState(
       GAME_STATES.ROUND_RESULT,
@@ -1244,6 +1311,8 @@ export class MimicGameSession {
         phaseStep: '5.7',
         duration: resultDuration,
         leaderboard,
+        attempts: attemptsList,
+        roundWinner: attemptsList[0] || null,
         isLastRound,
         nextRound: isLastRound ? null : this.currentRound + 1,
         readyCount,
@@ -1281,13 +1350,13 @@ export class MimicGameSession {
     const nextRound = Math.min(this.totalRounds, this.currentRound + 1);
     const readyCount = leaderboard.filter(p => p.isReady).length;
 
-    console.log(`[MimicGame:${this.roomId}] ☕ Step 5.8 Break Time (${breakDuration}s) -> Chuẩn bị vào Vòng ${nextRound}/${this.totalRounds}...`);
+    console.log(`[MimicGame:${this.roomId}] ☕ Step 5.9 Break Time (${breakDuration}s) -> Chuẩn bị vào Vòng ${nextRound}/${this.totalRounds}...`);
 
     this.transitionToState(
       GAME_STATES.BREAK_TIME,
       breakDuration,
       {
-        phaseStep: '5.8',
+        phaseStep: '5.9',
         duration: breakDuration,
         nextRound,
         totalRounds: this.totalRounds,
@@ -1338,7 +1407,7 @@ export class MimicGameSession {
       GAME_STATES.GAME_OVER,
       gameOverDuration,
       {
-        phaseStep: '5.9',
+        phaseStep: '5.10',
         gameMode: this.gameMode,
         finalRanking,
         champion,
@@ -1369,6 +1438,28 @@ export class MimicGameSession {
     totalCount?: number;
     allReady?: boolean;
   } {
+    // Nếu Client gọi confirm_next_round_ready ngay tại màn "Players' Recordings" (SHOWDOWN_REVEAL / LISTENING_NOW_PLAYING),
+    // xử lý tương đương nút "FINISH ROUND ▶" (confirmShowdownSkip)!
+    if (
+      this.state === GAME_STATES.SHOWDOWN_REVEAL ||
+      this.state === GAME_STATES.LISTENING_NOW_PLAYING
+    ) {
+      const skipRes = this.confirmShowdownSkip(socketId);
+      if (!skipRes.success) {
+        return {
+          success: false,
+          code: skipRes.code,
+          message: skipRes.message
+        };
+      }
+      return {
+        success: true,
+        readyCount: skipRes.skipCount,
+        totalCount: skipRes.totalCount,
+        allReady: skipRes.allSkipConfirmed
+      };
+    }
+
     if (
       this.state !== GAME_STATES.ROUND_RESULT &&
       this.state !== GAME_STATES.BREAK_TIME &&
@@ -1420,10 +1511,30 @@ export class MimicGameSession {
       }))
     });
 
-    // Không có chủ động Next Round giữa các vòng (ROUND_RESULT / BREAK_TIME đều chạy theo đúng Timer của Server).
-    // Chỉ khi đã ở màn kết thúc trận (GAME_OVER) của phòng Custom thì mới cho phép bắt đầu lại ván mới khi tất cả đã sẵn sàng.
-    if (allReady && this.state === GAME_STATES.GAME_OVER) {
-      this.triggerNextStageAfterAllReady();
+    if (allReady) {
+      if (this.state === GAME_STATES.BREAK_TIME) {
+        // Màn 5.9 BREAK_TIME: Khi 100% người chơi bấm "NEW ROUND NOW" -> Bắt đầu ngay vòng đấu tiếp theo!
+        this.io.to(this.roomId).emit('all_players_ready', {
+          roomId: this.roomId,
+          state: this.state,
+          message: GameMessageCode.GAME_MSG_ALL_PLAYERS_READY_COUNTDOWN,
+          messageCode: GameMessageCode.GAME_MSG_ALL_PLAYERS_READY_COUNTDOWN,
+          countdown: 0,
+          timeRemaining: 0,
+          totalDuration: 0,
+          messageParams: { countdown: 0 }
+        });
+        this.startNextRound();
+      } else if (this.state === GAME_STATES.ROUND_RESULT) {
+        const isLastRound = this.currentRound >= this.totalRounds;
+        if (isLastRound) {
+          this.finishGame();
+        } else {
+          this.startBreakTimeState();
+        }
+      } else if (this.state === GAME_STATES.GAME_OVER) {
+        this.triggerNextStageAfterAllReady();
+      }
     }
 
     return { success: true, readyCount, totalCount, allReady };

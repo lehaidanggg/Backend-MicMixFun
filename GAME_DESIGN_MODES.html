@@ -847,33 +847,33 @@
       </div>
     </div>
 
-    <!-- Panel 7: Không Chủ Động Next Round (100% Server) -->
+    <!-- Panel 7: Chuẩn UI Figma (5.1 -> 5.10) -->
     <div id="tab-servertime" class="flow-panel">
-      <h3>⏱️ Luồng Chuyển Step &amp; Chuyển Round 100% Do Server Quyết Định (Không Có Chủ Động Next Round)</h3>
+      <h3>⏱️ Luồng Chuyển Step &amp; Sẵn Sàng Qua Vòng Theo Chuẩn UI Figma (5.1 ➔ 5.10)</h3>
       <div class="flow-steps">
         <div class="flow-step" style="border-color: rgba(168, 85, 247, 0.5);">
-          <span class="step-num" style="background: rgba(168, 85, 247, 0.2); color: #c084fc;">NGUYÊN TẮC 1 • THU ÂM</span>
-          <h4>Đợi Hết Giờ USER_RECORDING</h4>
-          <p>Dù cả 4 người chơi (hoặc Bot) đã nộp xong bản thu âm sớm hơn đồng hồ, Server <b>vẫn giữ nguyên màn hình thu âm đếm ngược tới 0s</b> rồi mới chuyển sang <code>UPLOADING_SOUND</code>.</p>
-          <code>No Early Jump on Submit</code>
+          <span class="step-num" style="background: rgba(168, 85, 247, 0.2); color: #c084fc;">BƯỚC 5.1 ➔ 5.3 • THU ÂM &amp; UPLOAD</span>
+          <h4>Server Auto-Timer (Không Cắt Ngang)</h4>
+          <p><code>PLAYING_SAMPLE</code> ➔ <code>PREPARE_RECORDING (3s)</code> ➔ <code>USER_RECORDING</code> ➔ <code>UPLOADING_SOUND (3s)</code> hoàn toàn do Server đếm ngược tự động để mọi máy thu âm và tải audio lên đồng bộ.</p>
+          <code>100% Server Auto-Timer</code>
         </div>
-        <div class="flow-step" style="border-color: rgba(168, 85, 247, 0.5);">
-          <span class="step-num" style="background: rgba(168, 85, 247, 0.2); color: #c084fc;">NGUYÊN TẮC 2 • NGHE LẠI &amp; CHẤM ĐIỂM</span>
-          <h4>Đợi Hết Giờ Playback &amp; AI Scoring</h4>
-          <p>Sau khi hết giờ thu âm, Server tuần tự chạy hết thời gian <code>UPLOADING_SOUND (3s)</code> ➔ <code>LISTENING_NOW_PLAYING (5s)</code> ➔ <code>SHOWDOWN_REVEAL (10s)</code> ➔ <code>AI_SCORING (4s)</code> ➔ <code>ROUND_RESULT (8s)</code>. Không cắt ngang giữa chừng.</p>
-          <code>Full Playback &amp; Scoring Timer</code>
+        <div class="flow-step" style="border-color: rgba(56, 189, 248, 0.5);">
+          <span class="step-num" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8;">BƯỚC 5.4 + 5.5 • SHOWDOWN REVEAL</span>
+          <h4>Nghe Lại Tự Do + Nút "FINISH ROUND ▶"</h4>
+          <p>Gộp chung vào 1 màn hình <b>"Players' Recordings"</b> (tối đa <code>30s</code> AFK). User tự do click nghe lại bất kỳ bản thu nào. AI Bot luôn <code>Done = true</code>. Khi <b>100% người chơi bấm "FINISH ROUND ▶"</b> (hoặc hết 30s), chuyển ngay sang <code>AI_SCORING</code>!</p>
+          <code>confirm_showdown_skip / finish_round</code>
         </div>
-        <div class="flow-step" style="border-color: rgba(168, 85, 247, 0.5);">
-          <span class="step-num" style="background: rgba(168, 85, 247, 0.2); color: #c084fc;">NGUYÊN TẮC 3 • NGHỈ GIỮA HIỆP</span>
-          <h4>Đợi Hết Giờ BREAK_TIME Mới Qua Round</h4>
-          <p>Giữa các vòng đấu, <b>không có nút chủ động bấm Next Round để bỏ qua thời gian nghỉ</b>. Server chạy hết <code>ROUND_RESULT (8s)</code> + <code>BREAK_TIME (11s)</code> rồi tự động mở <code>Round + 1</code>.</p>
-          <code>Zero Manual Next Round</code>
+        <div class="flow-step" style="border-color: rgba(245, 158, 11, 0.5);">
+          <span class="step-num" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24;">BƯỚC 5.6 ➔ 5.7 • CHẤM ĐIỂM &amp; PODIUM</span>
+          <h4>AI_SCORING (4s) ➔ ROUND_RESULT (7s)</h4>
+          <p>Màn hình <b>"Locking in this round..."</b> phân tích <code>Melody · Rhythm · Attack</code> trong <code>4s</code>, sau đó hiển thị <b>ROUND RESULTS PODIUM</b> trong <code>7s</code> (hoặc chuyển sớm khi 100% người thật bấm Ready).</p>
+          <code>AI_SCORING (4s) ➔ ROUND_RESULT (7s)</code>
         </div>
         <div class="flow-step" style="border-color: rgba(34, 197, 94, 0.5);">
-          <span class="step-num" style="background: rgba(34, 197, 94, 0.2); color: #4ade80;">NGUYÊN TẮC 4 • CLIENT DUMB UI</span>
-          <h4>Client Chỉ Hiển Thị Theo Server</h4>
-          <p>Client hoàn toàn không cần tự tính toán lúc nào qua bước hay qua vòng. Mọi đồng hồ (kể cả Find Match, Record, BreakTime) đều được Server bắn xuống qua <code>matchmaking_tick</code> và <code>game_state_tick</code>.</p>
-          <code>100% Server-Authoritative</code>
+          <span class="step-num" style="background: rgba(34, 197, 94, 0.2); color: #4ade80;">BƯỚC 5.9 • BREAK TIME (11s)</span>
+          <h4>Đếm Ngược 11s + Nút "NEW ROUND NOW"</h4>
+          <p>Màn hình <b>"BREAK TIME — Round X starts in 11s"</b>. Nếu <b>100% người thật bấm "NEW ROUND NOW"</b> (<code>confirm_next_round_ready</code> / <code>new_round_now</code>), Server vào Round mới ngay lập tức; ngược lại hết <code>11s</code> tự vào vòng sau.</p>
+          <code>confirm_next_round_ready / new_round_now</code>
         </div>
       </div>
     </div>
@@ -915,31 +915,34 @@
       </div>
     </div>
 
-    <!-- 3. TIMELINE 10 STEPS -->
+    <!-- 3. TIMELINE STEPS THEO CHUẨN FIGMA -->
     <div class="section-title">
-      3. Timeline 10 Bước Trong 1 Vòng Đấu Do Server Điều Phối 100% (Không Có Chủ Động Next Round)
-      <span class="sub">Mọi thứ tự, thời gian Record, BreakTime, Chấm điểm đều do Server tự chuyển khi hết giờ</span>
+      3. Timeline Các Bước Trong 1 Vòng Đấu Theo Chuẩn UI Figma (5.0 ➔ 5.10)
+      <span class="sub">Kết hợp Server Auto-Timer &amp; Đồng thuận 100% Player ("FINISH ROUND ▶" tại 5.5 + "NEW ROUND NOW" tại 5.9)</span>
     </div>
 
     <div class="timeline-box">
-      <div style="margin-bottom: 14px; padding: 12px 16px; border-radius: 10px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.35); font-size: 13.5px; color: #fecaca;">
-        🔒 <strong>Quy tắc Cố định Đã Chốt (Cách 2 — Zero Manual Skip / Next Round):</strong> Không có chủ động bấm Next Round hay cắt ngang bất kỳ bước nào. Sau khi chạy <strong>hết thời gian Record (<code>USER_RECORDING</code>)</strong> ➔ chạy hết chuỗi <strong>Nghe lại &amp; Chấm điểm (<code>UPLOADING_SOUND</code> ➔ <code>LISTENING_NOW_PLAYING</code> ➔ <code>SHOWDOWN_REVEAL</code> ➔ <code>AI_SCORING</code> ➔ <code>ROUND_RESULT</code>)</strong> ➔ chạy <strong>hết thời gian nghỉ giữa các vòng (<code>BREAK_TIME</code>)</strong> thì Server mới tự động chuyển sang Round tiếp theo!
+      <div style="margin-bottom: 14px; padding: 12px 16px; border-radius: 10px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.35); font-size: 13.5px; color: #bae6fd;">
+        ✅ <strong>Luồng Chuẩn UI Figma Đã Chốt (5.0 ➔ 5.10):</strong><br/>
+        • <strong>Giai đoạn Đầu &amp; Thu âm (5.0 ➔ 5.3):</strong> Server tự chạy đồng hồ 100%.<br/>
+        • <strong>Màn <code>SHOWDOWN_REVEAL</code> (5.4 + 5.5 gộp chung):</strong> User tự do click nghe lại danh sách <em>"Players' Recordings"</em>, nghe xong bấm <strong>"FINISH ROUND ▶"</strong> (<code>confirm_showdown_skip</code> / <code>finish_round</code>). Khi <strong>100% Player bấm Done</strong> (hoặc hết <code>30s</code> AFK timer) ➔ Chuyển ngay sang <code>AI_SCORING (4s)</code> ➔ <code>ROUND_RESULT (7s)</code>.<br/>
+        • <strong>Màn <code>BREAK_TIME</code> (5.9 — <code>11s</code>):</strong> Khi <strong>100% Player bấm "NEW ROUND NOW"</strong> (<code>confirm_next_round_ready</code> / <code>new_round_now</code>) ➔ Bắt đầu ngay Round tiếp theo (hoặc tự bắt đầu khi hết <code>11s</code>).
       </div>
       <p style="font-size: 13.5px; color: var(--text-muted);">
-        Trình tự thời gian cố định từng Step trong mỗi Round do Server quyết định 100%:
+        Trình tự thời gian từng Step trong mỗi Round theo thiết kế Figma:
       </p>
       <div class="timeline-track">
         <div class="t-node">
           <div class="t-code">STEP 5.0</div>
           <div class="t-name">THEME_SELECTION</div>
           <div class="t-dur">3.5s</div>
-          <span class="t-dur-1v1">Server Timer</span>
+          <span class="t-dur-1v1">Server Auto</span>
         </div>
         <div class="t-node">
           <div class="t-code">STEP 5.1</div>
           <div class="t-name">PLAYING_SAMPLE</div>
           <div class="t-dur">2s – 12s</div>
-          <span class="t-dur-1v1">Đợi hết giờ mẫu</span>
+          <span class="t-dur-1v1">Listen &amp; Remember</span>
         </div>
         <div class="t-node">
           <div class="t-code">STEP 5.1b</div>
@@ -951,43 +954,37 @@
           <div class="t-code">STEP 5.2</div>
           <div class="t-name">USER_RECORDING</div>
           <div class="t-dur">2s – 12s</div>
-          <span class="t-dur-1v1">Đợi hết giờ Record</span>
+          <span class="t-dur-1v1">Your Turn — Mimic!</span>
         </div>
         <div class="t-node">
           <div class="t-code">STEP 5.3</div>
           <div class="t-name">UPLOADING_SOUND</div>
           <div class="t-dur">3.0s</div>
-          <span class="t-dur-1v1">Đồng bộ Audio</span>
+          <span class="t-dur-1v1">Uploading sound...</span>
         </div>
-        <div class="t-node">
-          <div class="t-code">STEP 5.4</div>
-          <div class="t-name">LISTENING_NOW_PLAYING</div>
-          <div class="t-dur">5.0s</div>
-          <span class="t-dur-1v1">Spotlight phát</span>
-        </div>
-        <div class="t-node">
-          <div class="t-code">STEP 5.5</div>
+        <div class="t-node" style="border-color: rgba(56, 189, 248, 0.6);">
+          <div class="t-code">STEP 5.4 + 5.5</div>
           <div class="t-name">SHOWDOWN_REVEAL</div>
-          <div class="t-dur">10.0s</div>
-          <span class="t-dur-1v1">Đợi hết 10s</span>
+          <div class="t-dur">30s / 100% Done</div>
+          <span class="t-dur-1v1">FINISH ROUND ▶</span>
         </div>
         <div class="t-node">
           <div class="t-code">STEP 5.6</div>
           <div class="t-name">AI_SCORING</div>
           <div class="t-dur">4.0s</div>
-          <span class="t-dur-1v1">AI chấm điểm</span>
+          <span class="t-dur-1v1">Locking in round...</span>
         </div>
         <div class="t-node">
           <div class="t-code">STEP 5.7</div>
           <div class="t-name">ROUND_RESULT</div>
-          <div class="t-dur">8.0s</div>
-          <span class="t-dur-1v1">Bảng điểm vòng</span>
+          <div class="t-dur">7.0s</div>
+          <span class="t-dur-1v1">Round Podium</span>
         </div>
-        <div class="t-node">
-          <div class="t-code">STEP 5.8</div>
+        <div class="t-node" style="border-color: rgba(34, 197, 94, 0.6);">
+          <div class="t-code">STEP 5.9</div>
           <div class="t-name">BREAK_TIME</div>
-          <div class="t-dur">11.0s</div>
-          <span class="t-dur-1v1">Hết giờ ➔ Next Round</span>
+          <div class="t-dur">11s / 100% Ready</div>
+          <span class="t-dur-1v1">NEW ROUND NOW</span>
         </div>
       </div>
     </div>

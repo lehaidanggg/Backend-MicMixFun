@@ -255,67 +255,54 @@ export function registerGameHandlers(
     socket.to(targetRoom).emit('game_reaction_broadcast', String(emoji).slice(0, 8));
   });
 
-  // 6. XÁC NHẬN SẴN SÀNG QUA VÒNG MỚI (confirm_next_round_ready)
-  socket.on(
-    'confirm_next_round_ready',
-    ({ roomId }: Record<string, any> = {}, callback?: (res: Record<string, unknown>) => void) => {
-      const targetRoom = String(roomId || sessionState.currentRoomId || '').toUpperCase();
-      const game = gameSessions.get(targetRoom);
-      if (game) {
-        const res = game.confirmRoundReady(socket.id);
-        if (callback) callback(res);
-      } else {
-        if (callback) {
-          callback({
-            success: false,
-            code: ErrorCode.GAME_NOT_FOUND,
-            message: ErrorCode.GAME_NOT_FOUND
-          });
-        }
+  // 6. XÁC NHẬN SẴN SÀNG QUA VÒNG MỚI / BẤM "FINISH ROUND" / "NEW ROUND NOW" (confirm_next_round_ready & new_round_now)
+  const handleConfirmNextRoundReady = (
+    { roomId }: Record<string, any> = {},
+    callback?: (res: Record<string, unknown>) => void
+  ): void => {
+    const targetRoom = String(roomId || sessionState.currentRoomId || '').toUpperCase();
+    const game = gameSessions.get(targetRoom);
+    if (game) {
+      const res = game.confirmRoundReady(socket.id);
+      if (callback) callback(res);
+    } else {
+      if (callback) {
+        callback({
+          success: false,
+          code: ErrorCode.GAME_NOT_FOUND,
+          message: ErrorCode.GAME_NOT_FOUND
+        });
       }
     }
-  );
+  };
 
-  // 7. BỎ QUA SHOWDOWN SỚM (skip_to_round_result & confirm_showdown_skip)
-  socket.on(
-    'skip_to_round_result',
-    ({ roomId }: Record<string, any> = {}, callback?: (res: Record<string, unknown>) => void) => {
-      const targetRoom = String(roomId || sessionState.currentRoomId || '').toUpperCase();
-      const game = gameSessions.get(targetRoom);
-      if (game) {
-        const res = game.confirmShowdownSkip(socket.id);
-        if (callback) callback(res);
-      } else {
-        if (callback) {
-          callback({
-            success: false,
-            code: ErrorCode.GAME_NOT_FOUND,
-            message: ErrorCode.GAME_NOT_FOUND
-          });
-        }
-      }
-    }
-  );
+  socket.on('confirm_next_round_ready', handleConfirmNextRoundReady);
+  socket.on('new_round_now', handleConfirmNextRoundReady);
 
-  socket.on(
-    'confirm_showdown_skip',
-    ({ roomId }: Record<string, any> = {}, callback?: (res: Record<string, unknown>) => void) => {
-      const targetRoom = String(roomId || sessionState.currentRoomId || '').toUpperCase();
-      const game = gameSessions.get(targetRoom);
-      if (game) {
-        const res = game.confirmShowdownSkip(socket.id);
-        if (callback) callback(res);
-      } else {
-        if (callback) {
-          callback({
-            success: false,
-            code: ErrorCode.GAME_NOT_FOUND,
-            message: ErrorCode.GAME_NOT_FOUND
-          });
-        }
+  // 7. BẤM "FINISH ROUND ▶" TẠI MÀN SHOWDOWN REVEAL (confirm_showdown_skip / skip_to_round_result / finish_round)
+  const handleConfirmShowdownSkip = (
+    { roomId }: Record<string, any> = {},
+    callback?: (res: Record<string, unknown>) => void
+  ): void => {
+    const targetRoom = String(roomId || sessionState.currentRoomId || '').toUpperCase();
+    const game = gameSessions.get(targetRoom);
+    if (game) {
+      const res = game.confirmShowdownSkip(socket.id);
+      if (callback) callback(res);
+    } else {
+      if (callback) {
+        callback({
+          success: false,
+          code: ErrorCode.GAME_NOT_FOUND,
+          message: ErrorCode.GAME_NOT_FOUND
+        });
       }
     }
-  );
+  };
+
+  socket.on('skip_to_round_result', handleConfirmShowdownSkip);
+  socket.on('confirm_showdown_skip', handleConfirmShowdownSkip);
+  socket.on('finish_round', handleConfirmShowdownSkip);
 
   // 8. LẤY SNAPSHOT STATE HIỆN TẠI (get_game_state)
   socket.on(

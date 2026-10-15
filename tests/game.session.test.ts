@@ -276,55 +276,53 @@ test('MimicGameSession — Decision Matrix: submitMimicAudio, Showdown Skip & Ro
   assert.equal(game.state, GAME_STATES.UPLOADING_SOUND);
   assert.equal(game.timeRemaining, 3);
 
-  // 7. Showdown Skip Matrix (No early skip jump — waits for full Server timer)
+  // 7. Showdown Skip Matrix (Figma 5.4 + 5.5: Free interactive replay + 100% "FINISH ROUND ▶" jump to AI_SCORING)
   const skipWrongPhase = game.confirmShowdownSkip('s_host');
   assert.equal(skipWrongPhase.success, false);
   assert.equal(skipWrongPhase.code, ErrorCode.GAME_NOT_IN_SHOWDOWN_PHASE);
 
-  game.startListeningNowPlayingState();
-  assert.equal(game.state, GAME_STATES.LISTENING_NOW_PLAYING);
-  assert.equal(game.timeRemaining, 5);
-
   game.startShowdownRevealState();
   assert.equal(game.state, GAME_STATES.SHOWDOWN_REVEAL);
-  assert.equal(game.timeRemaining, 10);
+  assert.equal(game.timeRemaining, 30);
 
   const vote1 = game.confirmShowdownSkip('s_host');
   assert.equal(vote1.success, true);
   assert.equal(vote1.isVoted, true);
   assert.equal(vote1.allSkipConfirmed, false);
+  assert.equal(game.state, GAME_STATES.SHOWDOWN_REVEAL);
 
   // Toggle off then on again
   const voteToggleOff = game.confirmShowdownSkip('s_host');
   assert.equal(voteToggleOff.isVoted, false);
   game.confirmShowdownSkip('s_host');
 
-  // Second player votes -> allSkipConfirmed = true -> stays in SHOWDOWN_REVEAL until Server timer completes
+  // Second player taps "FINISH ROUND ▶" -> allSkipConfirmed = true -> immediately transitions to AI_SCORING (5.6: 4s)
   const vote2 = game.confirmShowdownSkip('s_p2');
   assert.equal(vote2.allSkipConfirmed, true);
-  assert.equal(game.state, GAME_STATES.SHOWDOWN_REVEAL);
-  game.startAiScoringState();
   assert.equal(game.state, GAME_STATES.AI_SCORING);
   assert.equal(game.timeRemaining, 4);
 
-  // Transition to ROUND_RESULT (8s timer) and BREAK_TIME (11s timer)
+  // Transition to ROUND_RESULT (5.7: 7s timer) -> audioStore remains available during ROUND_RESULT
   game.startRoundResultState();
   assert.equal(game.state, GAME_STATES.ROUND_RESULT);
-  assert.equal(game.timeRemaining, 8);
+  assert.equal(game.timeRemaining, 7);
+  assert.ok(game.getAttemptAudio('s_host'), 'Audio buffer stays intact during ROUND_RESULT until next round');
 
   game.startBreakTimeState();
   assert.equal(game.state, GAME_STATES.BREAK_TIME);
   assert.equal(game.timeRemaining, 11);
 
-  // 8. Round Ready Matrix (No manual Next Round jump during BREAK_TIME — waits for Server timer)
+  // 8. Round Ready Matrix in BREAK_TIME (5.9: "NEW ROUND NOW" -> when 100% human players confirm, starts next round immediately)
   const ready1 = game.confirmRoundReady('s_host');
   assert.equal(ready1.success, true);
   assert.equal(ready1.allReady, false);
+  assert.equal(game.state, GAME_STATES.BREAK_TIME);
 
   const ready2 = game.confirmRoundReady('s_p2');
   assert.equal(ready2.success, true);
   assert.equal(ready2.allReady, true);
-  assert.equal(game.state, GAME_STATES.BREAK_TIME);
+  assert.equal(game.state, GAME_STATES.THEME_SELECTION);
+  assert.equal(game.currentRound, 2);
 
   game.destroy();
 });
@@ -383,18 +381,18 @@ test('MimicGameSession — AI Bot Lifecycle & Difficulty Scoring Matrix (EASY / 
   assert.equal(subSolo.success, true);
   assert.equal(game.state, GAME_STATES.USER_RECORDING);
 
-  // 4. In SHOWDOWN_REVEAL, stays in SHOWDOWN_REVEAL until Server timer finishes
+  // 4. In SHOWDOWN_REVEAL, bots are pre-marked ready; when solo human taps "FINISH ROUND ▶", transitions immediately to AI_SCORING
   game.startShowdownRevealState();
   assert.equal(game.state, GAME_STATES.SHOWDOWN_REVEAL);
   const skipRes = game.confirmShowdownSkip('s_solo');
   assert.equal(skipRes.allSkipConfirmed, true);
-  assert.equal(game.state, GAME_STATES.SHOWDOWN_REVEAL);
+  assert.equal(game.state, GAME_STATES.AI_SCORING);
 
-  // 5. In ROUND_RESULT, stays in ROUND_RESULT until Server timer finishes
+  // 5. In ROUND_RESULT, when solo human taps Ready, transitions immediately to BREAK_TIME
   game.startRoundResultState();
   const readyRes = game.confirmRoundReady('s_solo');
   assert.equal(readyRes.allReady, true);
-  assert.equal(game.state, GAME_STATES.ROUND_RESULT);
+  assert.equal(game.state, GAME_STATES.BREAK_TIME);
 
   game.destroy();
 });

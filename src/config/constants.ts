@@ -14,16 +14,16 @@ export const MATCHMAKING_MAX_WAIT_CAP_MS = 16000; // Trần thời gian chờ t�
 export const DEFAULT_TOTAL_ROUNDS = 3;
 export const DEFAULT_RECORD_DURATION_SEC = 5;
 
-// Thời lượng chuẩn của toàn bộ các Step trong 1 Round do Server quản lý tập trung (đơn vị: giây)
+// Thời lượng chuẩn của toàn bộ các Step trong 1 Round theo Figma UI Flow (đơn vị: giây)
 export const GAME_STEP_DURATIONS = {
   THEME_SELECTION: 3.5,
   PREPARE_RECORDING: 3,
   UPLOADING_SOUND: 3,
   LISTENING_NOW_PLAYING: 5,
-  SHOWDOWN_REVEAL: 10,
-  AI_SCORING: 4,
-  ROUND_RESULT: 8,
-  BREAK_TIME: 11,
+  SHOWDOWN_REVEAL: 30, // Màn 5.4 + 5.5 ("Players' Recordings" - FINISH ROUND): Chờ 100% user bấm Done (kèm đồng hồ bảo hiểm AFK 30s)
+  AI_SCORING: 4,       // Màn 5.6 ("Locking in this round..."): 4s AI phân tích & khóa điểm vòng đấu
+  ROUND_RESULT: 7,     // Màn 5.7 ("ROUND RESULTS PODIUM"): 7s vinh danh Top 1-2-3 của vòng
+  BREAK_TIME: 11,      // Màn 5.9 ("BREAK TIME - NEW ROUND NOW"): 11s nghỉ giải lao mở mic (hoặc qua ngay khi 100% bấm NEW ROUND NOW)
   READY_COUNTDOWN: 3,
   GAME_OVER_REMATCH_DELAY: 8
 } as const;

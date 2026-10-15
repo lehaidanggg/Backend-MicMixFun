@@ -415,7 +415,7 @@ const socket = io("https://micmixfun.up.railway.app", {
 | `cancel_match` (hoặc `cancel_quick_match`) | `{}` (hoặc không truyền data) | `{ success: true, cancelled: boolean, cancelledFromPreStartRoom: boolean, searching: false, state: "IDLE", systemMessage: "SYS_MATCHMAKING_CANCELLED" }` | **Unified Cancel Match**: Hủy tìm trận được ở cả 2 trạng thái: khi đang đứng lẻ `1/4` trong Queue **và** khi đã được gom tạm vào phòng `2/4`, `3/4` đang đếm ngược chờ đủ người (`IDLE`) |
 | `get_matchmaking_state` | `{}` | `{ searching: boolean, state: "FINDING_MATCH"\|"IDLE", roomId?, mode, currentPlayers, targetPlayers, members, waitMs, remainingMs, timeRemaining, elapsedSeconds, totalDuration, progressPercent, startedAt, endsAt }` | Lấy trạng thái đồng hồ tìm trận và danh sách ghế Avatar (`members`) hiện tại từ Server |
 
-#### Nhóm C — Gameplay Đấu Trường Nhại Giọng (`game.handler.ts`) — 100% Server-Driven (Không Có Chủ Động Next Round)
+#### Nhóm C — Gameplay Đấu Trường Nhại Giọng (`game.handler.ts`) — Chuẩn UI Figma (`5.1` ➔ `5.10`)
 
 | Event Name | Payload Gửi Lên | Callback Response (`ack`) | Mô tả |
 | :--- | :--- | :--- | :--- |
@@ -425,8 +425,8 @@ const socket = io("https://micmixfun.up.railway.app", {
 | `game_submit_audio` | `{ roomId?, audioData: "data:audio/webm;base64,...", mimeType?: "audio/webm", metrics?: { matchPct, rhythmScore, energyScore, activeRatio } }` | `{ success: true, evaluation: { totalScore, pitchScore, rhythmScore, energyScore, grade, remark } }` | Nộp bản thu âm nhại giọng của vòng hiện tại. **Không cắt ngang đồng hồ thu âm** — chờ hết giờ `USER_RECORDING` Server mới chuyển bước |
 | `game_submit_bot_audio` | `{ roomId?, botSocketId, audioData: "data:audio/wav;base64,...", mimeType?: "audio/wav" }` | `{ success: true, botSocketId, uploadedBy, assignedGeneratorSocketId }` | *(Tuỳ chọn — Chế độ 1B)* Client được phân công (`assignedGeneratorSocketId`) nộp file audio đã render hộ cho AI Bot để đồng bộ qua `/api/attempts/:roomId/:botSocketId` |
 | `game_emoji_reaction` | `{ roomId?, emoji: "😂" }` | — | Thả biểu tượng cảm xúc bay trên màn hình (tối đa 5 lần / giây) |
-| `confirm_showdown_skip` (hoặc `skip_to_round_result`) | `{ roomId? }` | `{ success: true, isVoted, skipCount, totalCount, allSkipConfirmed }` | Ghi nhận trạng thái UI (không cắt ngang đồng hồ `SHOWDOWN_REVEAL` — Server điều phối 100% thời gian từng Step) |
-| `confirm_next_round_ready` | `{ roomId? }` | `{ success: true, readyCount, totalCount, allReady }` | Ghi nhận trạng thái sẵn sàng của người chơi (trong trận, Server tự động chuyển vòng khi hết thời gian `ROUND_RESULT` + `BREAK_TIME`, **không có chủ động Next Round sớm**) |
+| `confirm_showdown_skip` (hoặc `finish_round`, `skip_to_round_result`) | `{ roomId? }` | `{ success: true, isVoted, skipCount, totalCount, allSkipConfirmed }` | **Màn `SHOWDOWN_REVEAL` (`5.4 + 5.5` — `"FINISH ROUND ▶"`)**: Người chơi click nghe tự do các bản thu âm trong danh sách `"Players' Recordings"`, nghe xong bấm **"FINISH ROUND ▶"**. AI Bot luôn được đánh dấu Done sẵn (`100%`). Ngay khi **100% người chơi đã bấm Done** (hoặc hết `30s` AFK safety timer), Server lập tức chuyển sang `AI_SCORING` (`5.6`) |
+| `confirm_next_round_ready` (hoặc `new_round_now`) | `{ roomId? }` | `{ success: true, readyCount, totalCount, allReady }` | **Màn `BREAK_TIME` (`5.9` — `"NEW ROUND NOW"`) / `ROUND_RESULT` (`5.7`) / `GAME_OVER` (`5.10`)**: Khi người chơi bấm **"NEW ROUND NOW"**, nếu **100% người thật trong phòng đã bấm**, Server chuyển thẳng sang Round tiếp theo ngay lập tức mà không cần đợi hết `11s` đếm ngược (hoặc tự chuyển khi hết giờ) |
 | `get_game_state` | `{ roomId? }` | `GameStateSnapshot \| null` | Lấy toàn bộ trạng thái hiện tại của bàn chơi khi vừa kết nối lại |
 
 #### Nhóm D — Chat, Soundboard, Chia Sẻ Audio & Live Mic (`media.handler.ts`)
@@ -522,31 +522,35 @@ const socket = io("https://micmixfun.up.railway.app", {
 * **`match_found`**: Gửi ngay khi ghép được người chơi thật hoặc khi hết thời gian chờ trên Server và tự động tạo phòng với AI Bot + bắt đầu Gameplay.
 * **`matchmaking_cancelled`**: Gửi khi người chơi hủy tìm trận (`{ success: true, cancelled: true, cancelledFromPreStartRoom: boolean, searching: false, state: "IDLE", timeRemaining: 0, remainingMs: 0, systemMessage: "SYS_MATCHMAKING_CANCELLED" }`).
 
-#### 2) Sự kiện Gameplay Mimic Party (Server-Authoritative 100%: State, Step, Round, Timer & Xử Lý Rời Trận Giữa Chừng)
+#### 2) Sự kiện Gameplay Mimic Party — Chuẩn Luồng Figma (`5.0` ➔ `5.10`)
 
-> **Nguyên tắc thiết kế bắt buộc cho Client:**
-> 1. **100% Server-Driven Timeline (Không có chủ động Next Round / Không nhảy cóc Step)**:
->    - Khi bắt đầu Gameplay (`game_start` hoặc `match_found`), **Server quyết định tuyệt đối mọi thứ tự và thời gian của từng Step (`5.0` ➔ `5.9`), số Round (`round`/`totalRounds`) và thời gian nghỉ giữa các vòng (`BREAK_TIME`)**.
->    - Chỉ khi chạy **hết thời gian thu âm (`USER_RECORDING`)** ➔ qua đầy đủ các bước đồng bộ, nghe lại & chấm điểm (`UPLOADING_SOUND` ➔ `LISTENING_NOW_PLAYING` ➔ `SHOWDOWN_REVEAL` ➔ `AI_SCORING` ➔ `ROUND_RESULT`) ➔ chạy **hết thời gian nghỉ (`BREAK_TIME`)** thì Server mới chuyển sang Round tiếp theo.
-> 2. **Quy tắc khi có người rời trận giữa chừng & Tự động tìm người mới sau trận**:
->    - **`QUICK_MATCH` (`4 Người`)**: Nếu 1 người rời giữa chừng, trận đấu **vẫn tiếp tục chạy bình thường tới hết toàn bộ các Round (`3/3`)** (trừ khi không còn người thật nào). Sau khi kết thúc trận (`GAME_OVER` `8s`), Server **tự động mở lại phòng đó để tìm người chơi thật mới** với bộ đếm giờ tìm trận (`matchmaking_searching` + `matchmaking_tick`), nếu quá thời gian chờ thì tự động bù AI Bot cho đủ 4 người và bắt đầu ván mới.
->    - **`RACE_1V1` (`2 Người`)**: Nếu đối thủ rời phòng giữa chừng, Server **kết thúc trận đấu ngay lập tức và báo kết quả `GAME_OVER` (`reason: "OPPONENT_LEFT_FORFEIT"`, `forfeitedBySocketId`, `forfeitedByUserName`)** vinh danh người ở lại thắng cuộc! Sau `GAME_OVER` (`8s`), phòng tự động mở lại bộ đếm giờ tìm đối thủ `1v1` mới (quá giờ thì bù `1 AI Bot`).
+> **Nguyên tắc thiết kế theo luồng UI Figma đã chốt:**
+> 1. **Giai đoạn Thu âm & Đồng bộ (`5.0` ➔ `5.3` — 100% Server Auto)**:
+>    - `THEME_SELECTION` (`3.5s`) ➔ `PLAYING_SAMPLE` (theo độ dài mẫu) ➔ `PREPARE_RECORDING` (`3s`) ➔ `USER_RECORDING` (đợi hết giờ thu âm) ➔ `UPLOADING_SOUND` (`3s`).
+> 2. **Giai đoạn Nghe lại tương tác `SHOWDOWN_REVEAL` (`5.4 + 5.5` gộp chung — `"Players' Recordings"` & `"FINISH ROUND ▶"`)**:
+>    - Ngay sau `UPLOADING_SOUND` (`3s`), Server chuyển thẳng vào `SHOWDOWN_REVEAL` (bộ đếm bảo hiểm AFK **`30s`**).
+>    - Trên màn hình hiển thị danh sách `"Players' Recordings"` của cả phòng (User + AI Bot). Mỗi người chơi **tự do bấm Play nghe bất kỳ bản thu nào trên máy mình** (không bị Server ép tự nhảy người làm ngắt đoạn đang nghe).
+>    - Tất cả AI Bot luôn được đánh dấu Done sẵn (`isReady = true`). Khi người chơi nghe xong và bấm nút **"FINISH ROUND ▶"** (`confirm_showdown_skip` / `finish_round` / `confirm_next_round_ready`), Server broadcast `showdown_skip_updated` + `round_ready_updated` (`skipCount / totalCount`).
+>    - Ngay khi **100% người chơi trong phòng đã bấm `"FINISH ROUND ▶"`** (hoặc hết `30s` AFK timer), Server lập tức chuyển sang **`AI_SCORING` (`5.6`)**!
+> 3. **Giai đoạn Chấm điểm AI (`5.6` — `4s`), Bảng điểm Hiệp (`5.7` — `7s`) & Nghỉ giữa hiệp (`5.9` — `11s` + `"NEW ROUND NOW"`)**:
+>    - **`AI_SCORING` (`5.6` — `4s`)**: Màn hình khóa sổ & phân tích 3 tiêu chí (`Melody · Rhythm · Attack`), sau `4s` tự chuyển sang `ROUND_RESULT`.
+>    - **`ROUND_RESULT` (`5.7` — `7s`)**: Hiển thị Podium xếp hạng của hiệp (audio trong `audioStore` vẫn giữ nguyên suốt pha này để nghe lại nếu cần). Hết `7s` (hoặc khi 100% người thật bấm Ready), chuyển sang `BREAK_TIME` (nếu chưa phải hiệp cuối) hoặc `GAME_OVER` (nếu là hiệp cuối).
+>    - **`BREAK_TIME` (`5.9` — `11s`)**: Hiển thị đồng hồ nghỉ `"Round X starts in 11s"` kèm nút **"NEW ROUND NOW"** (`confirm_next_round_ready` / `new_round_now`). Nếu **100% người thật bấm `"NEW ROUND NOW"`**, Server mở Round tiếp theo ngay lập tức; ngược lại hết `11s` tự động bắt đầu Round mới.
 
-##### Bảng Lịch Trình Các Step Trong 1 Round Do Server Điều Phối (`GAME_STEP_DURATIONS`)
+##### Bảng Lịch Trình Các Step Trong 1 Round Theo Chuẩn UI Figma (`GAME_STEP_DURATIONS`)
 
-| Thứ tự (`stepIndex`) | Mã Step (`phaseStep`) | `state` (`GameStateType`) | Thời lượng Server (`duration`) | `nextState` tự động khi hết giờ | Mô tả hiển thị trên Client |
+| Thứ tự (`stepIndex`) | Mã Figma (`phaseStep`) | `state` (`GameStateType`) | Thời lượng Server (`duration`) | Điều kiện chuyển sang `nextState` | Mô tả hiển thị trên Client |
 | :---: | :---: | :--- | :---: | :--- | :--- |
-| `1` | `5.0` | `THEME_SELECTION` | **`3.5s`** (`4s` tick) | `PLAYING_SAMPLE` | Quay/chọn chủ đề Sound Pack của vòng đấu |
-| `2` | `5.1` | `PLAYING_SAMPLE` | **Theo độ dài file mẫu** (`2s – 12s`) | `PREPARE_RECORDING` | Phát âm thanh mẫu gốc (`targetSound.audioUrl`) |
-| `3` | `5.1b` | `PREPARE_RECORDING` | **`3s`** | `USER_RECORDING` | Đếm ngược `3..2..1` chuẩn bị lấy hơi & bật mic |
-| `4` | `5.2` | `USER_RECORDING` | **Theo độ dài file mẫu** (hoặc custom `3s – 15s`) | `UPLOADING_SOUND` | Người chơi thu âm nhại lại (**chờ hết giờ Server mới chuyển bước**) |
-| `5` | `5.3` | `UPLOADING_SOUND` | **`3s`** | `LISTENING_NOW_PLAYING` | Đồng bộ & tải bản thu âm của tất cả người chơi |
-| `6` | `5.4` | `LISTENING_NOW_PLAYING` | **`5s`** | `SHOWDOWN_REVEAL` | Nghe nhanh lượt phát nổi bật (`spotlightPlayer` tự động xoay theo tick) |
-| `7` | `5.5` | `SHOWDOWN_REVEAL` | **`10s`** | `AI_SCORING` | Nghe lại toàn bộ bài thi (**chờ hết giờ Server mới sang chấm điểm**) |
-| `8` | `5.6` | `AI_SCORING` | **`4s`** | `ROUND_RESULT` | AI Voice Detector phân tích & chấm điểm |
-| `9` | `5.7` | `ROUND_RESULT` | **`8s`** | `BREAK_TIME` (hoặc `GAME_OVER` nếu vòng cuối) | Hiển thị bảng xếp hạng vòng hiện tại |
-| `10` | `5.8` | `BREAK_TIME` | **`11s`** | `THEME_SELECTION` (vòng kế tiếp) | Nghỉ giải lao giữa 2 vòng đấu (**chờ hết giờ nghỉ Server mới qua vòng kế tiếp**) |
-| `—` | `5.9` | `GAME_OVER` | **`8s`** (tự mở lại tìm trận cho `QUICK_MATCH` / `RACE_1V1`) | `IDLE` / `FINDING_MATCH` | Vinh danh nhà vô địch chung cuộc |
+| `1` | `5.0` | `THEME_SELECTION` | **`3.5s`** (`4s` tick) | Tự động khi hết `3.5s` ➔ `PLAYING_SAMPLE` | Quay/chọn chủ đề Sound Pack của vòng đấu |
+| `2` | `5.1` | `PLAYING_SAMPLE` | **Theo độ dài file mẫu** (`2s – 12s`) | Tự động khi hết giờ mẫu ➔ `PREPARE_RECORDING` | `"Listen & Remember"` — Phát âm thanh mẫu gốc (`targetSound.audioUrl`) |
+| `3` | `5.1b` | `PREPARE_RECORDING` | **`3s`** | Tự động khi hết `3s` ➔ `USER_RECORDING` | Đếm ngược `3..2..1` chuẩn bị lấy hơi & bật mic |
+| `4` | `5.2` | `USER_RECORDING` | **Theo độ dài file mẫu** (hoặc custom `3s – 15s`) | Tự động khi hết giờ thu âm ➔ `UPLOADING_SOUND` | `"Your Turn — Mimic it!"` — Người chơi thu âm nhại lại |
+| `5` | `5.3` | `UPLOADING_SOUND` | **`3s`** | Tự động khi hết `3s` ➔ `SHOWDOWN_REVEAL` | `"Uploading your sound..."` — Đồng bộ bản thu âm của cả phòng |
+| `6` | `5.4 + 5.5` | `SHOWDOWN_REVEAL` | **`30s`** (AFK Safety Timer) | **100% người chơi bấm `"FINISH ROUND ▶"`** (hoặc hết `30s`) ➔ `AI_SCORING` | `"Players' Recordings"` — Tự do click nghe lại các bản thu & bấm `"FINISH ROUND ▶"` |
+| `7` | `5.6` | `AI_SCORING` | **`4s`** | Tự động khi hết `4s` ➔ `ROUND_RESULT` | `"Locking in this round..."` — AI phân tích Melody · Rhythm · Attack |
+| `8` | `5.7` | `ROUND_RESULT` | **`7s`** | Tự động khi hết `7s` (hoặc 100% Ready) ➔ `BREAK_TIME` / `GAME_OVER` | `"ROUND RESULTS"` — Podium 1st / 2nd / 3rd + Cộng điểm hiệp |
+| `9` | `5.9` | `BREAK_TIME` | **`11s`** | **100% người chơi bấm `"NEW ROUND NOW"`** (hoặc hết `11s`) ➔ `THEME_SELECTION` (vòng sau) | `"BREAK TIME"` — Nghỉ giải lao giữa 2 vòng + Nút `"NEW ROUND NOW"` |
+| `—` | `5.10` | `GAME_OVER` | **`8s`** (hoặc 100% Ready) | Tự mở lại tìm trận cho `QUICK_MATCH` / `RACE_1V1` (`FINDING_MATCH`) | `"FINAL RESULTS"` — Vinh danh nhà vô địch chung cuộc |
 
 * **`game_state_changed`**: Sự kiện trung tâm điều khiển UI mỗi khi Server chuyển sang Step mới:
   ```json
@@ -577,9 +581,9 @@ const socket = io("https://micmixfun.up.railway.app", {
       "userRecording": 4,
       "uploadingSound": 3,
       "listeningNowPlaying": 5,
-      "showdownReveal": 10,
+      "showdownReveal": 30,
       "aiScoring": 4,
-      "roundResult": 8,
+      "roundResult": 7,
       "breakTime": 11,
       "readyCountdown": 3
     },
@@ -600,11 +604,12 @@ const socket = io("https://micmixfun.up.railway.app", {
     }
   }
   ```
-  - **Cấu trúc `payload` trong pha `SHOWDOWN_REVEAL` (Step `5.5`)**:
+  - **Cấu trúc `payload` trong pha `SHOWDOWN_REVEAL` (Step `5.4 + 5.5` — `"Players' Recordings"` & `"FINISH ROUND ▶"`)**:
     ```json
     {
       "phaseStep": "5.5",
-      "duration": 10,
+      "duration": 30,
+      "interactiveReplay": true,
       "pack": { ... },
       "targetSound": { ... },
       "roundWinner": { "socketId": "...", "userName": "Alex", "roundScore": 92, ... },
