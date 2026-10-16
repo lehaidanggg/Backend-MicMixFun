@@ -2,7 +2,9 @@ import { Server } from 'socket.io';
 import {
   DEFAULT_RECORD_DURATION_SEC,
   DEFAULT_TOTAL_ROUNDS,
-  GAME_STEP_DURATIONS
+  GAME_STEP_DURATIONS,
+  MAX_BOTS_PER_CLIENT_PER_ROUND,
+  MAX_BOT_AUDIO_UPLOAD_BYTES
 } from '../config/constants';
 import {
   getSoundDuration,
@@ -16,6 +18,7 @@ import { GAME_STATES, STATE_LABELS, SOUND_PACKS, AI_REMARKS } from './soundPacks
 import {
   AudioStoreRecord,
   BotDifficulty,
+  BotGenerationMode,
   ClientMetrics,
   DisconnectedPlayerRecord,
   EvaluationResult,
@@ -541,6 +544,17 @@ export class MimicGameSession {
       this.usedSoundIds.add(this.targetSound.id);
     }
 
+    const sound = this.targetSound || SOUND_PACKS[0].sounds[0];
+    const soundRef = sound.relativePath || sound.fileName;
+    const rawDuration = getSoundDuration(soundRef);
+    const playDuration = Math.max(2, Math.ceil(rawDuration));
+    const audioUrl = this.getTargetSoundUrl(sound);
+
+    // Pre-Recording Staggered Queue: Khởi tạo sẵn công thức DSP & phân công Quota 1:1 ngay từ bước 5.0 THEME_SELECTION
+    // giúp Client có trọn vẹn ~10s rảnh rỗi (5.0 + 5.1 + 5.1b) để chuẩn bị/gen 1 Bot trong background trước khi mở Mic
+    this.simulateAllBotsAttempts();
+    const botAssignments = this.getBotGenerationAssignments();
+
     this.transitionToState(
       GAME_STATES.THEME_SELECTION,
       GAME_STEP_DURATIONS.THEME_SELECTION,
@@ -552,6 +566,18 @@ export class MimicGameSession {
           emoji: this.selectedPack.emoji,
           description: this.selectedPack.description
         },
+        targetSound: {
+          id: sound.id,
+          name: sound.name,
+          emoji: sound.emoji,
+          hint: sound.hint,
+          audioUrl,
+          rawDuration,
+          exactDuration: rawDuration,
+          duration: playDuration
+        },
+        botAssignments,
+        maxBotsPerClient: MAX_BOTS_PER_CLIENT_PER_ROUND,
         allPacks: SOUND_PACKS.map(p => ({ id: p.id, name: p.name, emoji: p.emoji }))
       },
       () => this.startPlaySampleState()
@@ -582,6 +608,9 @@ export class MimicGameSession {
     }
     this.sampleStartTime = Date.now();
 
+    this.simulateAllBotsAttempts();
+    const botAssignments = this.getBotGenerationAssignments();
+
     console.log(`[MimicGame:${this.roomId}] 🔊 Phát âm thanh mẫu: ${sound.name} (Độ dài: ${rawDuration}s | Timer: ${playDuration}s)`);
 
     this.transitionToState(
@@ -603,7 +632,9 @@ export class MimicGameSession {
           rawDuration,
           exactDuration: rawDuration,
           duration: playDuration
-        }
+        },
+        botAssignments,
+        maxBotsPerClient: MAX_BOTS_PER_CLIENT_PER_ROUND
       },
       () => {
         if (!this.sampleFinishedHandled) {
@@ -638,6 +669,9 @@ export class MimicGameSession {
     const audioUrl = this.getTargetSoundUrl(sound);
     const prepDuration = GAME_STEP_DURATIONS.PREPARE_RECORDING;
 
+    this.simulateAllBotsAttempts();
+    const botAssignments = this.getBotGenerationAssignments();
+
     console.log(`[MimicGame:${this.roomId}] 🧘 Chuẩn bị lấy hơi & bật micro (${prepDuration}s đệm) -> Thời gian nhại: ${exactDuration}s`);
 
     this.transitionToState(
@@ -655,6 +689,8 @@ export class MimicGameSession {
           exactDuration,
           duration: roundedDuration
         },
+        botAssignments,
+        maxBotsPerClient: MAX_BOTS_PER_CLIENT_PER_ROUND,
         exactDuration,
         recordingDuration: roundedDuration,
         message: GameMessageCode.GAME_MSG_PREPARE_RECORDING,
@@ -676,6 +712,11 @@ export class MimicGameSession {
 
   /**
    * Lấy danh sách phân công máy người thật nào chịu trách nhiệm render âm thanh cho Bot nào trong vòng hiện tại
+   * Áp dụng giới hạn cứng Quota 1:1 (`MAX_BOTS_PER_CLIENT_PER_ROUND = 1`):
+   * - Mỗi Client người thật chỉ phải render & upload tối đa 1 Bot/vòng (`generationMode = 'CLIENT_UPLOAD'`).
+   * - Nếu phòng có nhiều Bot hơn số người thật (VD: 1 người + 3 Bot), các Bot vượt hạn mức tự động chuyển sang
+   *   `generationMode = 'LIVE_PLAYBACK_DSP'` (`assignedGeneratorSocketId = null`, `requiresClientUpload = false`)
+   *   để Client chỉ áp pitch/speed trực tiếp lúc phát ở màn 5.5 mà không bị quá tải render/upload.
    */
   getBotGenerationAssignments(): Array<{
     botSocketId: string;
@@ -683,55 +724,111 @@ export class MimicGameSession {
     botDifficulty: BotDifficulty | null;
     assignedGeneratorSocketId: string | null;
     assignedGeneratorUserName: string | null;
+    generationMode: BotGenerationMode;
+    requiresClientUpload: boolean;
     botAudioEffects: Record<string, any> | null;
   }> {
     const humans = this.getActiveHumanPlayers();
-    const list: Array<{
-      botSocketId: string;
-      botName: string;
-      botDifficulty: BotDifficulty | null;
-      assignedGeneratorSocketId: string | null;
-      assignedGeneratorUserName: string | null;
-      botAudioEffects: Record<string, any> | null;
-    }> = [];
+    const humanIds = new Set(humans.map(h => h.socketId));
+    const bots = Array.from(this.players.values()).filter(p => p.isBot);
+    const roundOffset = Math.max(0, this.currentRound - 1);
 
-    let botIdx = 0;
-    for (const p of this.players.values()) {
-      if (!p.isBot) continue;
-      let assignedId = p.currentAttempt?.assignedGeneratorSocketId || null;
-      if (!assignedId || !this.players.has(assignedId) || this.players.get(assignedId)?.isBot) {
-        const assignedHuman =
-          humans.length > 0
-            ? humans[(botIdx + Math.max(0, this.currentRound - 1)) % humans.length]
-            : null;
-        assignedId = assignedHuman ? assignedHuman.socketId : this.hostId;
-        if (p.currentAttempt) {
-          p.currentAttempt.assignedGeneratorSocketId = assignedId;
-          if (p.currentAttempt.botAudioEffects) {
-            p.currentAttempt.botAudioEffects.assignedGeneratorSocketId = assignedId;
+    const assignedCountByHuman = new Map<string, number>();
+
+    // Pass 1: Giữ nguyên phân công hợp lệ hiện tại nếu người chơi thật đó vẫn còn trong phòng và chưa vượt quá trần Quota 1:1
+    for (const bot of bots) {
+      const att = bot.currentAttempt;
+      if (!att) continue;
+      const existingId = att.assignedGeneratorSocketId;
+      if (existingId && humanIds.has(existingId)) {
+        const currentCount = assignedCountByHuman.get(existingId) || 0;
+        if (currentCount < MAX_BOTS_PER_CLIENT_PER_ROUND) {
+          assignedCountByHuman.set(existingId, currentCount + 1);
+          att.generationMode = 'CLIENT_UPLOAD';
+          att.requiresClientUpload = true;
+          if (att.botAudioEffects) {
+            att.botAudioEffects.assignedGeneratorSocketId = existingId;
+            att.botAudioEffects.generationMode = 'CLIENT_UPLOAD';
+            att.botAudioEffects.requiresClientUpload = true;
+          }
+          continue;
+        }
+      }
+      // Nếu người được phân công đã thoát hoặc vượt quá hạn mức 1:1 -> Reset để Pass 2 phân bổ lại
+      att.assignedGeneratorSocketId = null;
+    }
+
+    // Pass 2: Phân bổ các Bot chưa có người nhận theo thứ tự xoay vòng Round-Robin (tối đa MAX_BOTS_PER_CLIENT_PER_ROUND mỗi người thật)
+    if (bots.length > 0) {
+      for (let step = 0; step < bots.length; step++) {
+        const botIdx = (step + roundOffset) % bots.length;
+        const bot = bots[botIdx];
+        const att = bot.currentAttempt;
+        if (!att || att.assignedGeneratorSocketId) continue;
+
+        let chosenHuman: GamePlayer | null = null;
+        if (humans.length > 0) {
+          for (let hStep = 0; hStep < humans.length; hStep++) {
+            const candidate = humans[(botIdx + roundOffset + hStep) % humans.length];
+            const count = assignedCountByHuman.get(candidate.socketId) || 0;
+            if (count < MAX_BOTS_PER_CLIENT_PER_ROUND) {
+              chosenHuman = candidate;
+              break;
+            }
+          }
+        }
+
+        if (chosenHuman) {
+          const assignedId = chosenHuman.socketId;
+          assignedCountByHuman.set(assignedId, (assignedCountByHuman.get(assignedId) || 0) + 1);
+          att.assignedGeneratorSocketId = assignedId;
+          att.generationMode = 'CLIENT_UPLOAD';
+          att.requiresClientUpload = true;
+          if (att.botAudioEffects) {
+            att.botAudioEffects.assignedGeneratorSocketId = assignedId;
+            att.botAudioEffects.generationMode = 'CLIENT_UPLOAD';
+            att.botAudioEffects.requiresClientUpload = true;
+          }
+        } else {
+          // Vượt quá hạn mức Quota 1:1 -> Chuyển sang chế độ Live Playback DSP (0 upload, phát trực tiếp tại màn 5.5)
+          att.assignedGeneratorSocketId = null;
+          att.generationMode = 'LIVE_PLAYBACK_DSP';
+          att.requiresClientUpload = false;
+          if (att.botAudioEffects) {
+            att.botAudioEffects.assignedGeneratorSocketId = null;
+            att.botAudioEffects.generationMode = 'LIVE_PLAYBACK_DSP';
+            att.botAudioEffects.requiresClientUpload = false;
           }
         }
       }
+    }
+
+    return bots.map(p => {
+      const assignedId = p.currentAttempt?.assignedGeneratorSocketId || null;
       const assignedPlayer = assignedId ? this.players.get(assignedId) : null;
-      list.push({
+      const generationMode: BotGenerationMode =
+        p.currentAttempt?.generationMode || (assignedId ? 'CLIENT_UPLOAD' : 'LIVE_PLAYBACK_DSP');
+      const requiresClientUpload = Boolean(assignedId && generationMode === 'CLIENT_UPLOAD');
+
+      return {
         botSocketId: p.socketId,
         botName: p.userName,
         botDifficulty: p.botDifficulty || null,
         assignedGeneratorSocketId: assignedId,
         assignedGeneratorUserName: assignedPlayer ? assignedPlayer.userName : null,
+        generationMode,
+        requiresClientUpload,
         botAudioEffects: (p.currentAttempt?.botAudioEffects as Record<string, any>) || null
-      });
-      botIdx++;
-    }
-    return list;
+      };
+    });
   }
 
   /**
    * Mô phỏng bài dự thi nhại âm cho AI Bot dựa trên 3 mode độ khó (EASY: Yếu / NORMAL: Thông thường / HARD: Khó)
-   * Theo Kiến trúc Client-Side Bot DSP (0% tải CPU/RAM/Bandwidth cho Server):
+   * Theo Kiến trúc Client-Side Bot DSP + Quota 1:1 Hybrid Fallback:
    * - Server tính toán tức thì bộ thông số `botAudioEffects` từ `targetSound` gốc và chấm điểm qua `evaluateMimicAttempt`.
-   * - Khi phòng có nhiều người chơi thật (2, 3... người), Server chia đều (Round-Robin) từng Bot cho các máy người thật
-   *   qua trường `assignedGeneratorSocketId` (VD: 2 người + 2 Bot -> mỗi người phụ trách 1 Bot; 3 người + 1 Bot -> 1 người phụ trách 1 Bot).
+   * - Mỗi máy người thật chỉ phải phụ trách tối đa `MAX_BOTS_PER_CLIENT_PER_ROUND` (1 Bot/vòng).
+   * - Các Bot dư ra vượt quá số người thật sẽ tự động đánh dấu `LIVE_PLAYBACK_DSP` (`requiresClientUpload = false`).
    */
   simulateBotAttempt(
     bot: GamePlayer,
@@ -756,15 +853,6 @@ export class MimicGameSession {
       seed
     );
 
-    // Chia đều (Round-Robin xoay vòng theo round) người chơi thật chịu trách nhiệm cho Bot này
-    const humans = this.getActiveHumanPlayers();
-    const assignedHuman =
-      humans.length > 0
-        ? humans[(botIndex + Math.max(0, this.currentRound - 1)) % humans.length]
-        : null;
-    const assignedGeneratorSocketId = assignedHuman ? assignedHuman.socketId : this.hostId;
-    transformed.effects.assignedGeneratorSocketId = assignedGeneratorSocketId;
-
     // Chấm điểm bằng chính hàm evaluateMimicAttempt như 1 user thông thường (0 byte cấp phát RAM)
     const evaluation = this.evaluateMimicAttempt('__BOT_CLIENT_DSP__', transformed.metrics);
 
@@ -779,25 +867,37 @@ export class MimicGameSession {
       botPitch: transformed.pitch,
       botSpeed: transformed.speed,
       botAudioEffects: transformed.effects,
-      assignedGeneratorSocketId,
+      assignedGeneratorSocketId: null,
+      generationMode: 'LIVE_PLAYBACK_DSP',
+      requiresClientUpload: false,
       evaluation,
       submittedAt: Date.now()
     };
 
-    console.log(
-      `[MimicGame:${this.roomId}] 🤖 ${bot.userName} (${difficulty}) tạo Client DSP recipe từ "${transformed.sound.relativePath}" (assignedTo=${assignedGeneratorSocketId || 'local'}, pitch=${transformed.pitch}, speed=${transformed.speed}): ${evaluation.totalScore}đ (${evaluation.grade})`
-    );
     return evaluation;
   }
 
   simulateAllBotsAttempts(): void {
     let idx = 0;
+    let newlySimulated = false;
     for (const player of this.players.values()) {
       if (player.isBot) {
         if (player.currentAttempt === null) {
           this.simulateBotAttempt(player, new Set(), idx);
+          newlySimulated = true;
         }
         idx++;
+      }
+    }
+    if (idx > 0) {
+      const assignments = this.getBotGenerationAssignments();
+      if (newlySimulated) {
+        for (const a of assignments) {
+          const b = this.players.get(a.botSocketId);
+          console.log(
+            `[MimicGame:${this.roomId}] 🤖 ${a.botName} (${a.botDifficulty}) recipe ready [mode=${a.generationMode}, assignedTo=${a.assignedGeneratorSocketId || 'none (live DSP)'}]: ${b?.roundScore ?? 0}đ`
+          );
+        }
       }
     }
   }
@@ -812,7 +912,7 @@ export class MimicGameSession {
 
     console.log(`[MimicGame:${this.roomId}] 🎙️ Tới lượt user nhại lại - Thời gian nhại: ${exactDuration}s (Timer: ${duration}s)`);
 
-    // Tự động sinh công thức DSP & chia Round-Robin người phụ trách cho tất cả AI Bots trong phòng
+    // Tự động sinh công thức DSP & chia Quota 1:1 người phụ trách cho AI Bots trong phòng
     this.simulateAllBotsAttempts();
     const botAssignments = this.getBotGenerationAssignments();
 
@@ -832,6 +932,7 @@ export class MimicGameSession {
           duration
         },
         botAssignments,
+        maxBotsPerClient: MAX_BOTS_PER_CLIENT_PER_ROUND,
         exactDuration,
         duration,
         message: GameMessageCode.GAME_MSG_USER_RECORDING,
@@ -844,7 +945,8 @@ export class MimicGameSession {
 
   /**
    * Cho phép máy Client được phân công (`assignedGeneratorSocketId` hoặc Host) nộp bản audio đã render của Bot
-   * và CHẤM ĐIỂM THỰC TẾ TRÊN SERVER từ bản audio / metrics vừa upload (cập nhật lại điểm của Bot trong vòng hiện tại).
+   * (hoặc chỉ gửi `metrics` nhẹ < 200 bytes) ngay từ các bước chuẩn bị 5.0 / 5.1 / 5.1b / 5.2 / 5.3
+   * và CHẤM ĐIỂM THỰC TẾ TRÊN SERVER (cập nhật lại điểm của Bot trong vòng hiện tại).
    */
   submitBotAudio(
     requesterSocketId: string,
@@ -859,10 +961,14 @@ export class MimicGameSession {
     botSocketId?: string;
     uploadedBy?: string;
     assignedGeneratorSocketId?: string | null;
+    generationMode?: BotGenerationMode;
     audioUrl?: string;
     evaluation?: EvaluationResult;
   } {
     if (
+      this.state !== GAME_STATES.THEME_SELECTION &&
+      this.state !== GAME_STATES.PLAYING_SAMPLE &&
+      this.state !== GAME_STATES.PREPARE_RECORDING &&
       this.state !== GAME_STATES.USER_RECORDING &&
       this.state !== GAME_STATES.UPLOADING_SOUND &&
       this.state !== GAME_STATES.LISTENING_NOW_PLAYING &&
@@ -907,69 +1013,73 @@ export class MimicGameSession {
       const rawB64 = commaIdx !== -1 ? audioBase64.slice(commaIdx + 1) : audioBase64;
       try {
         const buf = Buffer.from(rawB64, 'base64');
-        this.audioStore.set(botSocketId, {
-          buffer: buf,
-          mimeType: mimeType || 'audio/wav',
-          updatedAt: Date.now()
-        });
-        const streamUrl = `/api/attempts/${encodeURIComponent(this.roomId)}/${encodeURIComponent(botSocketId)}?r=${this.currentRound}`;
-        const resolvedUrl = `${streamUrl}&t=${Date.now()}`;
-
-        // Chấm điểm thực tế trên Server cho bản sound của Bot vừa được Client gen và upload lên!
-        const evaluation = this.evaluateMimicAttempt(audioBase64, clientMetrics);
-        const oldRoundScore = bot.roundScore || 0;
-        bot.roundScore = evaluation.totalScore;
-        bot.totalScore = Math.max(0, bot.totalScore - oldRoundScore) + evaluation.totalScore;
-
-        if (bot.currentAttempt) {
-          bot.currentAttempt.audioUrl = resolvedUrl;
-          bot.currentAttempt.audioStreamUrl = streamUrl;
-          bot.currentAttempt.mimeType = mimeType || 'audio/wav';
-          bot.currentAttempt.botAudioUploaded = true;
-          bot.currentAttempt.evaluation = evaluation;
-          bot.currentAttempt.submittedAt = Date.now();
-        }
-
-        console.log(
-          `[MimicGame:${this.roomId}] 🤖🎯 Bot ${bot.userName} (${botSocketId}) đã nhận audio từ Client ${requester.userName} & chấm điểm trên Server: ${evaluation.totalScore}đ (${evaluation.grade})`
-        );
-
-        // Nếu đang ở pha nghe lại (SHOWDOWN_REVEAL / LISTENING_NOW_PLAYING), cập nhật lại danh sách attempts cho cả phòng
-        if (
-          this.state === GAME_STATES.SHOWDOWN_REVEAL ||
-          this.state === GAME_STATES.LISTENING_NOW_PLAYING
-        ) {
-          const updatedAttempts = this.ensureAllPlayerAttempts();
-          if (this.currentPayload) {
-            this.currentPayload.attempts = updatedAttempts;
-            this.currentPayload.roundWinner = updatedAttempts[0] || null;
-          }
-          this.io.to(this.roomId).emit('bot_audio_synced', {
-            roomId: this.roomId,
-            botSocketId,
-            botName: bot.userName,
-            uploadedBy: requesterSocketId,
-            audioUrl: resolvedUrl,
-            audioStreamUrl: streamUrl,
-            evaluation,
-            attempts: updatedAttempts
+        // Bảo vệ RAM Server & băng thông: chỉ lưu vào audioStore nếu kích thước <= MAX_BOT_AUDIO_UPLOAD_BYTES (~350KB)
+        if (buf.length > 0 && buf.length <= MAX_BOT_AUDIO_UPLOAD_BYTES) {
+          this.audioStore.set(botSocketId, {
+            buffer: buf,
+            mimeType: mimeType || 'audio/wav',
+            updatedAt: Date.now()
           });
-        }
+          const streamUrl = `/api/attempts/${encodeURIComponent(this.roomId)}/${encodeURIComponent(botSocketId)}?r=${this.currentRound}`;
+          const resolvedUrl = `${streamUrl}&t=${Date.now()}`;
 
-        return {
-          success: true,
-          botSocketId,
-          uploadedBy: requesterSocketId,
-          assignedGeneratorSocketId: assignedId || requesterSocketId,
-          audioUrl: resolvedUrl,
-          evaluation
-        };
+          // Chấm điểm thực tế trên Server cho bản sound của Bot vừa được Client gen và upload lên!
+          const evaluation = this.evaluateMimicAttempt(audioBase64, clientMetrics);
+          const oldRoundScore = bot.roundScore || 0;
+          bot.roundScore = evaluation.totalScore;
+          bot.totalScore = Math.max(0, bot.totalScore - oldRoundScore) + evaluation.totalScore;
+
+          if (bot.currentAttempt) {
+            bot.currentAttempt.audioUrl = resolvedUrl;
+            bot.currentAttempt.audioStreamUrl = streamUrl;
+            bot.currentAttempt.mimeType = mimeType || 'audio/wav';
+            bot.currentAttempt.botAudioUploaded = true;
+            bot.currentAttempt.evaluation = evaluation;
+            bot.currentAttempt.submittedAt = Date.now();
+          }
+
+          console.log(
+            `[MimicGame:${this.roomId}] 🤖🎯 Bot ${bot.userName} (${botSocketId}) đã nhận audio từ Client ${requester.userName} & chấm điểm trên Server: ${evaluation.totalScore}đ (${evaluation.grade})`
+          );
+
+          // Nếu đang ở pha nghe lại (SHOWDOWN_REVEAL / LISTENING_NOW_PLAYING), cập nhật lại danh sách attempts cho cả phòng
+          if (
+            this.state === GAME_STATES.SHOWDOWN_REVEAL ||
+            this.state === GAME_STATES.LISTENING_NOW_PLAYING
+          ) {
+            const updatedAttempts = this.ensureAllPlayerAttempts();
+            if (this.currentPayload) {
+              this.currentPayload.attempts = updatedAttempts;
+              this.currentPayload.roundWinner = updatedAttempts[0] || null;
+            }
+            this.io.to(this.roomId).emit('bot_audio_synced', {
+              roomId: this.roomId,
+              botSocketId,
+              botName: bot.userName,
+              uploadedBy: requesterSocketId,
+              audioUrl: resolvedUrl,
+              audioStreamUrl: streamUrl,
+              evaluation,
+              attempts: updatedAttempts
+            });
+          }
+
+          return {
+            success: true,
+            botSocketId,
+            uploadedBy: requesterSocketId,
+            assignedGeneratorSocketId: assignedId || requesterSocketId,
+            generationMode: bot.currentAttempt?.generationMode || 'CLIENT_UPLOAD',
+            audioUrl: resolvedUrl,
+            evaluation
+          };
+        }
       } catch {
         // ignore invalid base64
       }
     }
 
-    // Trường hợp Client chỉ gửi metrics của Bot lên để chấm điểm lại mà không gửi kèm audioBase64
+    // Trường hợp Client máy yếu / mạng chậm chỉ gửi metrics nhẹ (< 200 bytes) mà không gửi kèm audioBase64
     if (clientMetrics && typeof clientMetrics === 'object') {
       const evaluation = this.evaluateMimicAttempt('__BOT_CLIENT_DSP__', clientMetrics);
       const oldRoundScore = bot.roundScore || 0;
@@ -985,6 +1095,7 @@ export class MimicGameSession {
       botSocketId,
       uploadedBy: requesterSocketId,
       assignedGeneratorSocketId: assignedId || requesterSocketId,
+      generationMode: bot.currentAttempt?.generationMode || 'LIVE_PLAYBACK_DSP',
       audioUrl: bot.currentAttempt?.audioUrl || undefined,
       evaluation: bot.currentAttempt?.evaluation
     };
@@ -1138,6 +1249,10 @@ export class MimicGameSession {
       botSpeed: (p.currentAttempt && p.currentAttempt.botSpeed) || null,
       botAudioEffects: (p.currentAttempt && p.currentAttempt.botAudioEffects) || null,
       assignedGeneratorSocketId: (p.currentAttempt && p.currentAttempt.assignedGeneratorSocketId) || null,
+      generationMode:
+        (p.currentAttempt && p.currentAttempt.generationMode) ||
+        (p.isBot ? 'LIVE_PLAYBACK_DSP' : undefined),
+      requiresClientUpload: Boolean(p.currentAttempt && p.currentAttempt.requiresClientUpload),
       evaluation: p.currentAttempt ? p.currentAttempt.evaluation : null
     })).sort((a, b) => b.roundScore - a.roundScore);
   }
@@ -1154,6 +1269,7 @@ export class MimicGameSession {
         phaseStep: '5.3',
         duration: uploadDuration,
         botAssignments,
+        maxBotsPerClient: MAX_BOTS_PER_CLIENT_PER_ROUND,
         message: GameMessageCode.GAME_MSG_UPLOADING_SOUND,
         messageCode: GameMessageCode.GAME_MSG_UPLOADING_SOUND,
         messageParams: { duration: uploadDuration }

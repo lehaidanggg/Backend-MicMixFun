@@ -397,8 +397,8 @@ test('MimicGameSession — AI Bot Lifecycle & Difficulty Scoring Matrix (EASY / 
   game.destroy();
 });
 
-test('MimicGameSession — Multi-Human + Bot Round-Robin Generator Assignment & Failover', () => {
-  const { io } = createMockIo();
+test('MimicGameSession — Multi-Human + Bot Quota 1:1, Live DSP Fallback & Pre-Recording Staggered Queue', () => {
+  const { io, emitted } = createMockIo();
   const game = new MimicGameSession('ROOM_MULTI_BOTS', io);
   try {
     game.hostId = 's_h1';
@@ -406,41 +406,58 @@ test('MimicGameSession — Multi-Human + Bot Round-Robin Generator Assignment & 
     game.addPlayer('s_h2', 'Human 2', '🐶', 'PLAYER', 'u_h2', true, false, null);
     game.addPlayer('bot_1', 'Bot 1', '🤖', 'PLAYER', 'bot_1', false, true, 'NORMAL');
     game.addPlayer('bot_2', 'Bot 2', '🐱', 'PLAYER', 'bot_2', false, true, 'HARD');
+    game.addPlayer('bot_3', 'Bot 3', '🦊', 'PLAYER', 'bot_3', false, true, 'EASY');
 
-    // Round 1: s_h1 gets bot_1, s_h2 gets bot_2
-    game.currentRound = 1;
-    game.startUserRecordingState(5);
+    // 1. Pre-Recording Staggered Queue: startGame() transitions to 5.0 THEME_SELECTION and already includes targetSound & botAssignments!
+    assert.equal(game.startGame({ requireAllReady: false }), true);
+    assert.equal(game.state, GAME_STATES.THEME_SELECTION);
+    const themeEvt = emitted.find(
+      e => e.event === 'game_state_changed' && e.payload.state === GAME_STATES.THEME_SELECTION
+    );
+    assert.ok(themeEvt?.payload.payload.targetSound, '5.0 THEME_SELECTION must include targetSound for early preloading');
+    assert.equal(themeEvt?.payload.payload.botAssignments?.length, 3, '5.0 THEME_SELECTION must include botAssignments');
+
+    // 2. Quota 1:1 (2 Humans + 3 Bots): s_h1 gets bot_1 (CLIENT_UPLOAD), s_h2 gets bot_2 (CLIENT_UPLOAD), bot_3 exceeds 1:1 quota -> LIVE_PLAYBACK_DSP!
     const assignmentsR1 = game.getBotGenerationAssignments();
-    assert.equal(assignmentsR1.length, 2);
+    assert.equal(assignmentsR1.length, 3);
     assert.equal(assignmentsR1[0].botSocketId, 'bot_1');
     assert.equal(assignmentsR1[0].assignedGeneratorSocketId, 's_h1');
+    assert.equal(assignmentsR1[0].generationMode, 'CLIENT_UPLOAD');
+    assert.equal(assignmentsR1[0].requiresClientUpload, true);
+
     assert.equal(assignmentsR1[1].botSocketId, 'bot_2');
     assert.equal(assignmentsR1[1].assignedGeneratorSocketId, 's_h2');
+    assert.equal(assignmentsR1[1].generationMode, 'CLIENT_UPLOAD');
+    assert.equal(assignmentsR1[1].requiresClientUpload, true);
 
-    // If s_h1 disconnects mid-round, bot_1 automatically fails over to s_h2
-    game.removePlayer('s_h1');
-    const assignmentsFailover = game.getBotGenerationAssignments();
-    assert.equal(assignmentsFailover[0].assignedGeneratorSocketId, 's_h2');
-    assert.equal(assignmentsFailover[1].assignedGeneratorSocketId, 's_h2');
+    assert.equal(assignmentsR1[2].botSocketId, 'bot_3');
+    assert.equal(assignmentsR1[2].assignedGeneratorSocketId, null);
+    assert.equal(assignmentsR1[2].generationMode, 'LIVE_PLAYBACK_DSP');
+    assert.equal(assignmentsR1[2].requiresClientUpload, false);
 
-    // Client uploads generated Bot sound via submitBotAudio -> Server evaluates and updates Bot score!
+    // 3. Early upload during 5.0 THEME_SELECTION (before USER_RECORDING) is accepted & scored on Server!
     const sampleAudio = 'data:audio/wav;base64,' + crypto.randomBytes(600).toString('base64');
-    const uploadRes = game.submitBotAudio('s_h2', 'bot_1', sampleAudio, 'audio/wav', {
+    const earlyUploadRes = game.submitBotAudio('s_h1', 'bot_1', sampleAudio, 'audio/wav', {
       melodyScore: 94,
       rhythmScore: 90,
       attackScore: 92,
       activeRatio: 0.85
     });
-    assert.equal(uploadRes.success, true);
-    assert.equal(uploadRes.botSocketId, 'bot_1');
+    assert.equal(earlyUploadRes.success, true);
+    assert.equal(earlyUploadRes.botSocketId, 'bot_1');
     assert.ok(game.getAttemptAudio('bot_1')?.buffer);
-    assert.ok(uploadRes.evaluation, 'submitBotAudio must return Server evaluation of Bot audio');
-    // 94 * 0.5 + 90 * 0.3 + 92 * 0.2 = 47 + 27 + 18.4 = 92.4 -> 92 (Grade S)
-    assert.equal(uploadRes.evaluation?.totalScore, 92);
-    assert.equal(uploadRes.evaluation?.grade, 'S');
+    assert.equal(earlyUploadRes.evaluation?.totalScore, 92);
+    assert.equal(earlyUploadRes.evaluation?.grade, 'S');
     assert.equal(game.players.get('bot_1')?.roundScore, 92);
-    assert.equal(game.players.get('bot_1')?.totalScore, 92);
     assert.equal(game.players.get('bot_1')?.currentAttempt?.botAudioUploaded, true);
+
+    // 4. If s_h1 disconnects mid-round, s_h2 already has 1 Bot (bot_2), so bot_1 switches to LIVE_PLAYBACK_DSP instead of overloading s_h2!
+    game.removePlayer('s_h1');
+    const assignmentsAfterLeave = game.getBotGenerationAssignments();
+    assert.equal(assignmentsAfterLeave[0].assignedGeneratorSocketId, null);
+    assert.equal(assignmentsAfterLeave[0].generationMode, 'LIVE_PLAYBACK_DSP');
+    assert.equal(assignmentsAfterLeave[1].assignedGeneratorSocketId, 's_h2');
+    assert.equal(assignmentsAfterLeave[1].generationMode, 'CLIENT_UPLOAD');
   } finally {
     game.destroy();
   }

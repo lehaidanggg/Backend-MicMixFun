@@ -97,11 +97,15 @@ export type BotDifficulty = 'EASY' | 'NORMAL' | 'HARD';
 
 export type BotNoiseType = 'clean_mic' | 'room_ambience' | 'mic_static_and_breath';
 
+export type BotGenerationMode = 'CLIENT_UPLOAD' | 'LIVE_PLAYBACK_DSP';
+
 export interface BotAudioEffects {
   difficulty: BotDifficulty;
   baseSoundUrl: string;
   botSeed?: number;
   assignedGeneratorSocketId?: string | null;
+  generationMode?: BotGenerationMode;
+  requiresClientUpload?: boolean;
   pitch: number;
   pitchSemitones: number;
   speed: number;
@@ -131,6 +135,8 @@ export interface PlayerAttempt {
   botAudioEffects?: BotAudioEffects | null;
   botAudioUploaded?: boolean;
   assignedGeneratorSocketId?: string | null;
+  generationMode?: BotGenerationMode;
+  requiresClientUpload?: boolean;
   evaluation: EvaluationResult;
   submittedAt?: number;
 }

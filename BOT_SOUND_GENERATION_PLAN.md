@@ -337,58 +337,57 @@ fun playBotAttemptAndroid(
 
 ---
 
-## 6. 👥 Bài Toán Có Nhiều Người Thật + Bot Trong Phòng (`2, 3... User + Bot`) — Chia User Nào Gen Sound Cho Bot?
+## 6. 🛡️ Cơ Chế Giới Hạn Chống Quá Tải Client (`Quota 1:1` + `Pre-Recording Staggered Queue` + `Hybrid Fallback`)
 
-Khi phòng có **nhiều hơn 1 người thật** ghép chung với Bot (ví dụ: `2 người thật + 2 Bot`, hoặc `3 người thật + 1 Bot`), Server đã hỗ trợ sẵn **cả 2 chế độ vận hành** để đội Client tuỳ chọn:
+Để đảm bảo không bao giờ xảy ra tình trạng 1 máy điện thoại phải render & upload quá nhiều Bot cùng lúc (ví dụ phòng `1 người thật + 3 Bot` hoặc `2 người thật + 3 Bot`), Server áp dụng **4 lớp giới hạn bảo vệ Client**:
 
----
+### 1. Giới hạn cứng `MAX_BOTS_PER_CLIENT_PER_ROUND = 1` (Quota 1:1)
+- **Mỗi máy Client người thật chỉ phải render & upload tối đa ĐÚNG 1 BOT mỗi vòng** (`generationMode = "CLIENT_UPLOAD"`, `requiresClientUpload = true`).
+- Nếu số lượng Bot trong phòng **nhiều hơn số người chơi thật** (ví dụ: `1 người thật + 3 Bot` ở Quick Match, hoặc `2 người thật + 3 Bot`), các Bot vượt quá hạn mức `1:1` sẽ tự động chuyển sang chế độ **`generationMode = "LIVE_PLAYBACK_DSP"`** (`assignedGeneratorSocketId = null`, `requiresClientUpload = false`):
+  - Client **KHÔNG CẦN** render hay upload file WAV cho các Bot `LIVE_PLAYBACK_DSP`.
+  - Khi tới màn `5.5 SHOWDOWN_REVEAL`, nếu người chơi bấm nghe con Bot đó, Audio Player (`ExoPlayer` / `AVAudioEngine`) chỉ việc áp trực tiếp `pitch` + `speed` + `EQ` lên file `targetSound` đã cache trong máy (tốn **0ms render**, **0KB upload**).
 
-### ✅ Chế độ 1A (Khuyên dùng — 0 Upload, 0 Băng thông): Phát Local Tất Định Trên Từng Máy (`Deterministic Local Playback`)
-
-> **Câu hỏi:** Nếu có 2–3 người thật trong phòng, có cần 1 máy đứng ra "render file rồi gửi cho máy kia" không?
-> **Trả lời:** **KHÔNG CẦN!** Vì ở pha `PLAYING_SAMPLE` (Bước 5.1), **tất cả các máy người thật trong phòng đều đã tải sẵn cùng 1 file `targetSound` gốc** về máy mình.
-
-1. Server là nơi **duy nhất** sinh ra bộ thông số `botAudioEffects` kèm hạt giống cố định `botSeed` cho từng con Bot và gửi **cùng một bộ thông số giống hệt 100%** xuống cho tất cả người chơi trong phòng.
-2. Khi tới lượt phát âm thanh của `Bot 1` ở pha `LISTENING_NOW_PLAYING`:
-   - Máy của **User A** lấy `targetSound` sẵn trong máy A + áp `botAudioEffects` của `Bot 1` $\rightarrow$ phát ra loa máy A.
-   - Máy của **User B** lấy `targetSound` sẵn trong máy B + áp cùng `botAudioEffects` của `Bot 1` $\rightarrow$ phát ra loa máy B.
-3. **Kết quả:**
-   - Cả User A và User B đều nghe thấy tiếng `Bot 1` **giống hệt nhau 100%** (cùng `pitch`, cùng `speed`, cùng `startDelayMs`, cùng `bandpassHz`, cùng `botSeed`).
-   - **Không có bất kỳ máy người chơi nào bị gánh nặng phải upload hộ Bot**, kể cả khi 1 người chơi rớt mạng giữa chừng thì những người còn lại vẫn nghe tiếng Bot bình thường!
-
----
-
-### 🔄 Chế độ 1B (Tuỳ chọn — Chia Tải Round-Robin): Phân Công User Render & Upload File Cho Bot (`assignedGeneratorSocketId`)
-
-Trong trường hợp đội Client muốn **đóng gói (bake) âm thanh của Bot thành 1 file binary duy nhất** rồi đẩy lên Server để mọi người stream qua `/api/attempts/:roomId/:botSocketId`, Server đã tự động **chia đều (Round-Robin xoay vòng mỗi hiệp)** số lượng Bot cho các người chơi thật đang kết nối (`!isBot && !disconnectedAt`):
-
-#### Công thức chia tải tự động trên Server (`MimicGameSession.ts`):
-$$\text{assignedHuman} = \text{activeHumans}\big[(\text{botIndex} + \text{currentRound} - 1) \bmod \text{activeHumans.length}\big]$$
-
-| Cấu hình phòng (Đủ 4 người) | Cách Server phân công (`assignedGeneratorSocketId`) |
+| Cấu hình phòng | Phân bổ trên Server (`MAX_BOTS_PER_CLIENT_PER_ROUND = 1`) |
 | :--- | :--- |
-| **1 Người thật (`U1`) + 3 Bot (`B1, B2, B3`)** | `U1` phụ trách cả `B1, B2, B3`. |
-| **2 Người thật (`U1, U2`) + 2 Bot (`B1, B2`)** | **Chia đều 1:1** — Hiệp 1: `U1` gen `B1`, `U2` gen `B2`. Sang Hiệp 2 xoay vòng: `U2` gen `B1`, `U1` gen `B2`. |
-| **3 Người thật (`U1, U2, U3`) + 1 Bot (`B1`)** | **Xoay vòng từng hiệp** — Hiệp 1: `U1` gen `B1`; Hiệp 2: `U2` gen `B1`; Hiệp 3: `U3` gen `B1`. |
-| **Người được phân công bị rớt mạng (`disconnect`)** | Ngay khi phát hiện user rớt mạng, hàm `getBotGenerationAssignments()` trên Server **tự động chuyển giao (`re-assign`)** con Bot đó sang cho người thật còn lại đang online! |
+| **1 Người thật (`U1`) + 3 Bot (`B1, B2, B3`)** | **Hiệp 1:** `U1` chỉ gen **1 Bot (`B1`)** (`CLIENT_UPLOAD`); còn **`B2, B3`** tự chạy **`LIVE_PLAYBACK_DSP`** (0 upload).<br>**Hiệp 2:** Xoay vòng `U1` gen **`B2`**, còn `B1, B3` chạy `LIVE_PLAYBACK_DSP`. |
+| **2 Người thật (`U1, U2`) + 3 Bot (`B1, B2, B3`)** | **Hiệp 1:** `U1` gen **`B1`** (1 Bot), `U2` gen **`B2`** (1 Bot), còn **`B3`** chạy **`LIVE_PLAYBACK_DSP`** (0 upload). Không máy nào phải gánh 2 Bot! |
+| **2 Người thật (`U1, U2`) + 2 Bot (`B1, B2`)** | **Chia đều 1:1** — Hiệp 1: `U1` gen `B1`, `U2` gen `B2`. Hiệp 2 đảo lượt: `U2` gen `B1`, `U1` gen `B2`. |
+| **1 Người thật thoát giữa chừng (`disconnect`)** | Nếu người ở lại (`U2`) đã có 1 Bot rồi, con Bot của người vừa thoát (`U1`) sẽ **tự hạ cấp sang `LIVE_PLAYBACK_DSP`** chứ **tuyệt đối không dồn sang bắt `U2` gánh 2 Bot**! |
 
-#### Dữ liệu phân công Server gửi xuống ở `USER_RECORDING` & `UPLOADING_SOUND`:
-Trong payload của `game_state_changed` tại pha `USER_RECORDING` (Step 5.2) và `UPLOADING_SOUND` (Step 5.3), Server gửi kèm mảng `botAssignments`:
+### 2. Đẩy sớm `targetSound` & `botAssignments` ngay từ Step `5.0 THEME_SELECTION` (`Pre-Recording Staggered Queue`)
+- Thay vì đợi tới lúc mở Mic thu âm (`5.2 USER_RECORDING`) mới gửi thông số Bot, Server gửi sẵn `targetSound` và `botAssignments` ngay từ:
+  - **Step `5.0 THEME_SELECTION`** (`3.5s`)
+  - **Step `5.1 PLAYING_SAMPLE`** (`4.0s`)
+  - **Step `5.1b PREPARE_RECORDING`** (`3.0s`)
+- Nhờ đó, Client có **trọn vẹn ~10.5 giây rảnh rỗi trước khi mở Mic** để tải `targetSound`, chạy background thread render đúng **1 con Bot** được giao và gọi `game_submit_bot_audio` lên Server trước cả khi người chơi bắt đầu thu âm!
+
+### 3. Giới hạn tổng số Bot trong phòng & Dung lượng gói tin
+- **`MAX_BOTS_PER_ROOM = 3`**: Giới hạn tối đa 3 AI Bot trong 1 phòng (chặn spam thêm Bot gây quá tải). Nếu gọi `add_bot` vượt quá 3 Bot, Server trả về mã lỗi `BOT_LIMIT_EXCEEDED`.
+- **`MAX_BOT_AUDIO_UPLOAD_BYTES = 350KB`**: Trần dung lượng tối đa cho 1 file audio Bot upload lên Server (khuyến nghị `16kHz Mono 16-bit PCM WAV`).
+- **Chế độ siêu nhẹ cho máy yếu (`Metrics-Only Upload`)**: Nếu thiết bị người chơi quá yếu hoặc mạng 3G chậm, Client chỉ cần gửi `metrics` nhẹ (`< 200 bytes`, không cần đính kèm `audioData`), hoặc bỏ qua luôn — Server tự động fallback về điểm số & stream gốc + DSP recipe của Server mà không bao giờ làm kẹt vòng chơi.
+
+#### Cấu trúc `botAssignments` Server gửi xuống từ Step `5.0 THEME_SELECTION` -> `5.3 UPLOADING_SOUND`:
 ```json
 {
-  "state": "USER_RECORDING",
-  "round": 1,
-  "duration": 4,
+  "state": "THEME_SELECTION",
+  "phaseStep": "5.0",
+  "maxBotsPerClient": 1,
   "botAssignments": [
     {
-      "botSocketId": "bot_room1_1",
-      "botName": "Bot Mèo Méo",
+      "botSocketId": "bot_1a2b3",
+      "botName": "Bot Alpha",
+      "botDifficulty": "NORMAL",
       "assignedGeneratorSocketId": "socket_human_A",
+      "assignedGeneratorUserName": "Player_A",
+      "generationMode": "CLIENT_UPLOAD",
+      "requiresClientUpload": true,
       "botAudioEffects": {
         "difficulty": "NORMAL",
         "baseSoundUrl": "https://pub-xxx.r2.dev/animals/cat-two.mp3",
         "botSeed": 100042,
         "assignedGeneratorSocketId": "socket_human_A",
+        "generationMode": "CLIENT_UPLOAD",
+        "requiresClientUpload": true,
         "pitch": 1.06,
         "pitchSemitones": 1.01,
         "speed": 1.05,
@@ -397,44 +396,35 @@ Trong payload của `game_state_changed` tại pha `USER_RECORDING` (Step 5.2) v
       }
     },
     {
-      "botSocketId": "bot_room1_2",
-      "botName": "Bot Vịt Vàng",
-      "assignedGeneratorSocketId": "socket_human_B",
-      "botAudioEffects": { "..." : "..." }
+      "botSocketId": "bot_4c5d6",
+      "botName": "Bot Meow",
+      "botDifficulty": "EASY",
+      "assignedGeneratorSocketId": null,
+      "assignedGeneratorUserName": null,
+      "generationMode": "LIVE_PLAYBACK_DSP",
+      "requiresClientUpload": false,
+      "botAudioEffects": {
+        "difficulty": "EASY",
+        "baseSoundUrl": "https://pub-xxx.r2.dev/animals/cat-two.mp3",
+        "assignedGeneratorSocketId": null,
+        "generationMode": "LIVE_PLAYBACK_DSP",
+        "requiresClientUpload": false,
+        "pitch": 0.86,
+        "speed": 1.14
+      }
     }
   ]
 }
 ```
 
-#### Cách Client nộp file đã render hộ Bot lên Server (Nếu dùng Chế độ 1B):
-1. Mỗi Client kiểm tra trong `payload.botAssignments` những phần tử nào có `assignedGeneratorSocketId === socket.id` của chính mình.
-2. Client render buffer âm thanh cho con Bot được phân công rồi emit sự kiện **`game_submit_bot_audio`**:
-   ```javascript
-   socket.emit("game_submit_bot_audio", {
-     roomId: currentRoomId,
-     botSocketId: assignment.botSocketId,
-     audioData: "data:audio/wav;base64,...",
-     mimeType: "audio/wav"
-   }, (res) => {
-     console.log("Đã nộp audio hộ Bot:", res);
-   });
-   ```
-3. Khi các máy gọi `GET /api/attempts/:roomId/:botSocketId`:
-   - Nếu `assignedGeneratorSocketId` đã nộp file qua `game_submit_bot_audio`, Server **stream trực tiếp file binary đó** cho cả phòng.
-   - Nếu Client dùng **Chế độ 1A** (không gọi `game_submit_bot_audio`) hoặc người được phân công mất mạng chưa kịp nộp, Server tự động fallback về `botAudioEffects` / `302 Redirect` nên **không bao giờ bị lỗi mất tiếng Bot**.
-
 ---
 
 ## 7. ✅ Checklist Nghiệm Thu Dành Cho Đội Client (QA Checklist)
 
-- [ ] **Không tải lại file âm thanh mới từ Server cho Bot:** Khi `attempt.isBot === true`, Client dùng lại luôn `targetSound` (hoặc `attempt.botAudioEffects.baseSoundUrl`) đã nằm trong bộ nhớ cache từ pha `PLAYING_SAMPLE`.
-- [ ] **Đồng bộ 100% khi có nhiều người thật (`2, 3 User + Bot`):**
-  - Ở **Chế độ 1A (Khuyên dùng)**: Mọi máy người thật cùng áp `attempt.botAudioEffects` (kèm `botSeed`) lên `targetSound` tại máy mình khi phát lại $\rightarrow$ Không máy nào phải tốn băng thông upload mà mọi người vẫn nghe giống hệt nhau.
-  - Ở **Chế độ 1B (Tuỳ chọn)**: Chỉ máy nào có `socket.id === assignedGeneratorSocketId` trong `payload.botAssignments` mới render và gửi `game_submit_bot_audio` cho con Bot được giao (chia đều 1:1 hoặc xoay vòng mỗi hiệp).
-- [ ] **3 Bot trong cùng 1 phòng nghe khác nhau rõ rệt:** Nhờ mỗi Bot có `pitch`, `speed`, `startDelayMs`, `bandpassHz`, `botSeed` riêng trong `attempt.botAudioEffects`.
-- [ ] **Bot `EASY` / `NORMAL` / `HARD` thể hiện đúng trình độ:**
-  - `EASY`: Vào nhịp trễ (`~250ms`), lệch tông rõ nhưng vẫn là giọng mẫu gốc, có nhịp ngập ngừng nhẹ.
-  - `NORMAL`: Lệch tông & nhịp vừa phải, màu âm micro điện thoại ấm áp.
-  - `HARD`: Vào nhịp nhanh (`~25ms`), rất sát âm thanh gốc.
-- [ ] **Fallback an toàn:** Nếu một Client cũ vô tình gọi `GET /api/attempts/:roomId/:botSocketId`, Server sẽ trả về buffer đã upload (nếu dùng 1B) hoặc tự động trả về `HTTP 302 Redirect` trỏ thẳng về `baseSoundUrl` trên Cloudflare R2 CDN.
+- [ ] **Mỗi máy chỉ lọc và gen tối đa 1 Bot (`requiresClientUpload === true` && `assignedGeneratorSocketId === mySocketId`)**: Bỏ qua không render file cho các Bot có `generationMode === "LIVE_PLAYBACK_DSP"`.
+- [ ] **Render sớm ở Step `5.0 / 5.1 / 5.1b` (Trước khi mở Mic thu âm)**: Ngay khi nhận `botAssignments` ở `THEME_SELECTION` hoặc `PLAYING_SAMPLE`, chạy background job render 1 con Bot được giao và emit `game_submit_bot_audio` luôn để lúc vào `USER_RECORDING` máy hoàn toàn rảnh cho Microphone của người chơi.
+- [ ] **Phát lại mượt mà ở màn `5.5 SHOWDOWN_REVEAL`**:
+  - Nếu `attempt.botAudioUploaded === true`: Phát trực tiếp từ `attempt.audioUrl` (`/api/attempts/:roomId/:botSocketId`).
+  - Nếu `attempt.botAudioUploaded === false` (`LIVE_PLAYBACK_DSP`): Lấy `targetSound` đã cache + gắn `PlaybackParameters(speed, pitch)` trực tiếp lúc người chơi bấm Play.
+
 

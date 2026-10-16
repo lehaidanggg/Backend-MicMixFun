@@ -5,6 +5,9 @@ export const SOUNDS_DIR: string = path.join(SERVER_ROOT, 'sounds');
 
 export const PORT: number = Number(process.env.PORT) || 3000;
 export const MAX_MEMBERS_PER_ROOM = 12;
+export const MAX_BOTS_PER_ROOM = 3; // Giới hạn tối đa 3 AI Bot trong 1 phòng
+export const MAX_BOTS_PER_CLIENT_PER_ROUND = 1; // Quota 1:1 — Mỗi máy Client chỉ phải render & upload tối đa 1 Bot/vòng
+export const MAX_BOT_AUDIO_UPLOAD_BYTES = 350 * 1024; // Trần dung lượng tối đa 1 file audio Bot upload (~350KB)
 export const DEFAULT_MIN_PLAYERS_WITH_BOTS = 4; // Mặc định ghép thêm Bot cho đủ 4 người chơi (1 người + 3 Bot)
 export const RACE_1V1_PLAYERS = 2; // Chế độ 1vs1 Race luôn cố định 2 người chơi (1 vs 1)
 export const DEFAULT_MATCHMAKING_BOT_COUNT = 3; // Mặc định thêm 3 Bot khi tìm trận không có người chơi khác

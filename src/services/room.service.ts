@@ -3,6 +3,7 @@ import {
   ROOM_CLEANUP_DELAY_MS,
   CHALLENGE_TTL_MS,
   MAX_MEMBERS_PER_ROOM,
+  MAX_BOTS_PER_ROOM,
   DEFAULT_MATCHMAKING_WAIT_MS,
   MATCHMAKING_EXTEND_MS,
   MATCHMAKING_MAX_WAIT_CAP_MS,
@@ -95,6 +96,16 @@ export function addBotToRoom(
       code: ErrorCode.ROOM_FULL,
       message: ErrorCode.ROOM_FULL,
       messageParams: { maxMembers: MAX_MEMBERS_PER_ROOM }
+    };
+  }
+
+  const currentBotCount = Array.from(room.members.values()).filter(m => isBotMember(m)).length;
+  if (currentBotCount >= MAX_BOTS_PER_ROOM) {
+    return {
+      success: false,
+      code: ErrorCode.BOT_LIMIT_EXCEEDED,
+      message: ErrorCode.BOT_LIMIT_EXCEEDED,
+      messageParams: { maxBots: MAX_BOTS_PER_ROOM }
     };
   }
 

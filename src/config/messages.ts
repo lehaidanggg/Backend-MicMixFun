@@ -45,7 +45,8 @@ export enum ErrorCode {
   // AI Bot Management
   BOT_HOST_ONLY_MANAGE = 'BOT_HOST_ONLY_MANAGE',
   BOT_CANNOT_MANAGE_IN_PROGRESS = 'BOT_CANNOT_MANAGE_IN_PROGRESS',
-  BOT_NOT_FOUND = 'BOT_NOT_FOUND'
+  BOT_NOT_FOUND = 'BOT_NOT_FOUND',
+  BOT_LIMIT_EXCEEDED = 'BOT_LIMIT_EXCEEDED'
 }
 
 export enum SystemMessageCode {
@@ -342,6 +343,13 @@ export const ERROR_CODE_DESCRIPTIONS: Record<ErrorCode, EnumDocItem> = {
     vi: 'Không tìm thấy Bot AI trong phòng!',
     en: 'AI Bot not found in the room.',
     context: 'Socket event remove_bot khi phòng không có Bot nào hoặc botSocketId không tồn tại.'
+  },
+  [ErrorCode.BOT_LIMIT_EXCEEDED]: {
+    code: ErrorCode.BOT_LIMIT_EXCEEDED,
+    vi: 'Phòng đã đạt giới hạn tối đa {maxBots} Bot AI!',
+    en: 'Room has reached the maximum limit of {maxBots} AI Bots.',
+    params: ['maxBots'],
+    context: 'Socket event add_bot khi số lượng Bot trong phòng đã đạt trần MAX_BOTS_PER_ROOM.'
   }
 };
 
