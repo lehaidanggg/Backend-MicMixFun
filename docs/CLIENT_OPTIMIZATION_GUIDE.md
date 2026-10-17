@@ -120,30 +120,26 @@ Thay vì bắt Server phải giải mã (decode) và chạy biến đổi Fourie
 
 ---
 
-## 5. 🔄 Quản Lý Kết Nối, `userId`, Giải Tán Phòng Tự Động & Tránh Rò Rỉ Socket
+## 5. 🔄 Quản Lý Kết Nối, Bỏ Cơ Chế Reconnect ("Đã Out Là Out Hẳn") & Giải Tán Phòng Tự Động
 
-1. **Định danh cố định `userId`**:
-   * Khi khởi chạy lần đầu, Client tự sinh 1 mã `userId` (ví dụ `UUID.randomUUID()`) và lưu vào `localStorage` (Web) hoặc `SharedPreferences` (Android).
-   * Luôn gửi kèm `userId` trong payload của `join_room` / `quick_match` / `race_1v1`:
-     ```json
-     {
-       "roomId": "MIMIC99",
-       "userName": "Alex",
-       "avatar": "🦊",
-       "userId": "u_9f8a7b6c-1234"
-     }
-     ```
-   * Nhờ `userId`, nếu người chơi bị rớt mạng 3G/4G trong vài giây rồi tự kết nối lại, Server sẽ tự động khôi phục toàn bộ `totalScore`, `roundScore` và trạng thái bài thi mà không tạo ra người chơi rác trong phòng.
+1. **Bỏ hoàn toàn cơ chế tự động Reconnect (Đã Out là Out hẳn)**:
+   * Khi người chơi thoát giữa trận (`leave_room`, `cancel_match`, ngắt kết nối hoặc bấm mở `create_room`), người chơi bị xóa vĩnh viễn khỏi phòng cũ (`restoredSession: false, totalScore: 0`).
+   * **Client BẮT BUỘC xóa ngay `currentRoomId = null` khi rời phòng** để khi mở sang màn hình `create_room` không gửi nhầm `roomId` của phòng `quick_match` / `race_1v1` trước đó.
+   * Phòng `QUICK_MATCH` và `RACE_1V1` **tuyệt đối không cho phép `join_room`** dưới mọi hình thức (`ROOM_NOT_FOUND`). Chỉ phòng `CUSTOM_ROOM` mới cho phép vào phòng khi người dùng chủ động nhập lại mã Code phòng qua `join_room`.
 
-2. **Xử lý khi phòng `QUICK_MATCH` / `RACE_1V1` giải tán ngay ở `5.10 GAME_OVER` (`roomDisbanded: true`)**:
+2. **Xử lý Popup Find Match + Số người đã Accept (`match_found` / `match_accept_updated` / `accept_match`)**:
+   * Khi tìm đủ `4/4` người ở `QUICK_MATCH` hoặc `2/2` người ở `RACE_1V1` (gồm cả người thật hoặc người thật + AI Bot khi hết giờ tìm trận), Server phát `match_found` và `match_accept_updated` với `state: "MATCH_FOUND"`, `showMatchFoundPopup: true`, `acceptedCount`, `totalPlayers`, `members`.
+   * Tất cả AI Bot đã được tính là Accept sẵn (`isAccepted: true`). Client hiển thị **Popup Find Match** kèm tiến độ `acceptedCount / totalPlayers` (ví dụ `3/4`) và gọi `socket.emit('accept_match', { roomId })` khi người chơi bấm nút Accept. Khi đủ `100%` người chơi Accept (hoặc hết `5s` đếm ngược), Server phát `match_all_accepted` và chuyển sang Step `5.0 THEME_SELECTION`.
+
+3. **Xử lý khi phòng `QUICK_MATCH` / `RACE_1V1` giải tán ngay ở `5.10 GAME_OVER` (`roomDisbanded: true`)**:
    * Đối với 2 chế độ tìm trận tự động (`QUICK_MATCH` 4 người và `RACE_1V1` 2 người), ngay khi Server phát sự kiện `5.10 GAME_OVER`, phòng chơi đã được **xóa sổ ngay lập tức trên Server (`roomDisbanded: true`, `autoRestart: false`, `duration: 0`)** và người chơi trở về trạng thái **Online** (ngoài phòng).
    * Client vẫn hiển thị bảng tổng kết Podium từ dữ liệu trong gói `GAME_OVER` vừa nhận, nhưng **không gọi các API của phòng cũ nữa**. Khi người dùng bấm *"Chơi Tiếp / Tìm Trận Mới"*, Client gọi lại `quick_match` hoặc `race_1v1`.
 
-3. **Chỉ duy trì 1 kết nối Socket (Singleton Socket Instance)**:
+4. **Chỉ duy trì 1 kết nối Socket (Singleton Socket Instance)**:
    * Trên Android, khởi tạo Socket.IO bên trong `Singleton Repository` hoặc `Service`, **không khởi tạo lại `IO.socket()` trong `Activity.onCreate()` hay `Fragment`** mỗi khi xoay màn hình.
-   * Khi người dùng thoát hẳn khỏi màn hình chơi game, gọi `socket.emit('leave_room')` trước khi `socket.disconnect()` để Server giải phóng RAM của phòng ngay lập tức thay vì phải giữ trạng thái chờ timeout.
+   * Khi người dùng thoát hẳn khỏi màn hình chơi game, gọi `socket.emit('leave_room')` để Server giải phóng RAM của phòng ngay lập tức (`0ms`).
 
-4. **Ràng buộc dữ liệu đầu vào ngay tại UI (Client-side Validation)**:
+5. **Ràng buộc dữ liệu đầu vào ngay tại UI (Client-side Validation)**:
    * Giới hạn ô nhập `userName` tối đa **20 ký tự**, `roomId` tối đa **16 ký tự**, tin nhắn chat tối đa **500 ký tự** trước khi emit lên Server.
 
 ---

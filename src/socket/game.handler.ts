@@ -320,15 +320,31 @@ export function registerGameHandlers(
   socket.on('confirm_showdown_skip', handleConfirmShowdownSkip);
   socket.on('finish_round', handleConfirmShowdownSkip);
 
-  // 8. LẤY SNAPSHOT STATE HIỆN TẠI (get_game_state)
+  // 8. LẤY SNAPSHOT STATE HIỆN TẠI (get_game_state) — Chỉ trả về state nếu socket thực sự đang là thành viên trong phòng đó
   socket.on(
     'get_game_state',
     ({ roomId }: Record<string, any> = {}, callback?: (res: Record<string, unknown> | null) => void) => {
-      const targetRoom = String(roomId || sessionState.currentRoomId || '').toUpperCase();
-      const game = gameSessions.get(targetRoom);
+      const requestedRoomId = String(roomId || sessionState.currentRoomId || '').trim().toUpperCase();
+      let activeRoom = requestedRoomId ? rooms.get(requestedRoomId) : undefined;
+      let resolvedRoomId = requestedRoomId;
+
+      if (!activeRoom || !activeRoom.members.has(socket.id)) {
+        const currentId = String(sessionState.currentRoomId || '').trim().toUpperCase();
+        const fallbackRoom = currentId ? rooms.get(currentId) : undefined;
+        if (fallbackRoom && fallbackRoom.members.has(socket.id)) {
+          activeRoom = fallbackRoom;
+          resolvedRoomId = currentId;
+        } else {
+          if (callback) callback(null);
+          return;
+        }
+      }
+
+      const game = gameSessions.get(resolvedRoomId);
       if (callback) {
         callback(game ? game.getStateSnapshot() : null);
       }
     }
   );
 }
+

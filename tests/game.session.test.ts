@@ -19,7 +19,7 @@ function createMockIo() {
   return { io, emitted };
 }
 
-test('MimicGameSession — Matrix Test: addPlayer & Session Reconnection Restore', () => {
+test('MimicGameSession — Matrix Test: addPlayer & Permanent Leave (No Session Reconnection Restore)', () => {
   const { io } = createMockIo();
   const game = new MimicGameSession('ROOM_TEST', io);
 
@@ -33,15 +33,15 @@ test('MimicGameSession — Matrix Test: addPlayer & Session Reconnection Restore
   assert.deepEqual(r2, { restored: false, totalScore: 0 });
   assert.equal(game.players.get('sock_p1')?.isReady, false);
 
-  // 3. Give Player1 88 points, then disconnect Player1
+  // 3. Give Player1 88 points, then removePlayer -> permanently removed (not stored in disconnectedPlayers)
   game.players.get('sock_p1')!.totalScore = 88;
   game.removePlayer('sock_p1');
-  assert.equal(game.disconnectedPlayers.has('u_p1'), true);
+  assert.equal(game.disconnectedPlayers.has('u_p1'), false);
 
-  // 4. Reconnect Player1 WITH authentication within 120s -> restores 88 points
+  // 4. Re-adding Player1 starts fresh with 0 points (restored: false)
   const r3 = game.addPlayer('sock_p1_new', 'Player1', '🦊', 'PLAYER', 'u_p1', true);
-  assert.deepEqual(r3, { restored: true, totalScore: 88 });
-  assert.equal(game.players.get('sock_p1_new')?.totalScore, 88);
+  assert.deepEqual(r3, { restored: false, totalScore: 0 });
+  assert.equal(game.players.get('sock_p1_new')?.totalScore, 0);
 
   // 5. Add Player mid-round (during USER_RECORDING) -> joinedMidRound = true
   game.state = GAME_STATES.USER_RECORDING;

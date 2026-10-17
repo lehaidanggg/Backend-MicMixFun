@@ -175,6 +175,7 @@ export interface RoomMember {
   avatar: string;
   role?: UserRole;
   isReady?: boolean;
+  isAccepted?: boolean;
   isBot?: boolean;
   botDifficulty?: BotDifficulty | null;
   isAuthenticated?: boolean;
@@ -211,6 +212,12 @@ export interface RoomData {
   matchmakingStartedAt?: number | null;
   matchmakingEndsAt?: number | null;
   matchmakingWaitMs?: number | null;
+  acceptedSocketIds?: Set<string>;
+  matchAcceptTimer?: ReturnType<typeof setTimeout> | null;
+  matchAcceptTickTimer?: ReturnType<typeof setInterval> | null;
+  matchAcceptStartedAt?: number | null;
+  matchAcceptEndsAt?: number | null;
+  matchAcceptWaitMs?: number | null;
 }
 
 export interface MatchmakingQueueEntry {
@@ -225,6 +232,8 @@ export interface MatchmakingQueueEntry {
   botDifficulty?: BotDifficulty;
   autoStart: boolean;
   waitMs: number;
+  acceptWaitMs?: number;
+  requireAccept?: boolean;
   joinedQueueAt: number;
   endsAt?: number;
   maxCapEndsAt?: number;

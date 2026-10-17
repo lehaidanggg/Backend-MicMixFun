@@ -8,6 +8,7 @@ import {
   DEFAULT_MATCHMAKING_WAIT_MS,
   MATCHMAKING_EXTEND_MS,
   MATCHMAKING_MAX_WAIT_CAP_MS,
+  DEFAULT_MATCH_ACCEPT_WAIT_MS,
   DEFAULT_MIN_PLAYERS_WITH_BOTS,
   RACE_1V1_PLAYERS,
   MAX_CHAT_HISTORY_SIZE
@@ -335,6 +336,21 @@ export function fillRoomWithBots(
   };
 }
 
+export function clearRoomMatchAcceptTimers(room?: RoomData | null): void {
+  if (!room) return;
+  if (room.matchAcceptTimer) {
+    clearTimeout(room.matchAcceptTimer);
+    room.matchAcceptTimer = null;
+  }
+  if (room.matchAcceptTickTimer) {
+    clearInterval(room.matchAcceptTickTimer);
+    room.matchAcceptTickTimer = null;
+  }
+  room.matchAcceptStartedAt = null;
+  room.matchAcceptEndsAt = null;
+  room.matchAcceptWaitMs = null;
+}
+
 export function clearRoomMatchmakingTimers(room?: RoomData | null): void {
   if (!room) return;
   if (room.matchmakingTimer) {
@@ -348,26 +364,272 @@ export function clearRoomMatchmakingTimers(room?: RoomData | null): void {
   room.matchmakingStartedAt = null;
   room.matchmakingEndsAt = null;
   room.matchmakingWaitMs = null;
+  clearRoomMatchAcceptTimers(room);
 }
 
 /**
- * Hoàn tất tìm trận của phòng: điền thêm AI Bot nếu chưa đủ targetPlayers rồi bắt đầu trận đấu
+ * Xây dựng payload chuẩn cho Popup Find Match + Tiến độ Accept (match_found / match_accept_updated / match_accept_tick)
+ */
+export function buildMatchAcceptPayload(
+  room: RoomData,
+  extra: Record<string, unknown> = {}
+): Record<string, unknown> {
+  const mode: GameModeType = room.mode || 'QUICK_MATCH';
+  const targetPlayers =
+    room.targetPlayers || (mode === 'RACE_1V1' ? RACE_1V1_PLAYERS : DEFAULT_MIN_PLAYERS_WITH_BOTS);
+  const totalPlayers = room.members.size || targetPlayers;
+  const acceptedSet = room.acceptedSocketIds || new Set<string>();
+  const acceptedSocketIds = Array.from(acceptedSet);
+  const acceptedCount = acceptedSocketIds.length;
+  const allAccepted = totalPlayers > 0 && acceptedCount >= totalPlayers;
+
+  const now = Date.now();
+  const remainingMs = room.matchAcceptEndsAt ? Math.max(0, room.matchAcceptEndsAt - now) : 0;
+  const timeRemaining = Math.ceil(remainingMs / 1000);
+  const totalAcceptMs = room.matchAcceptWaitMs || DEFAULT_MATCH_ACCEPT_WAIT_MS;
+  const acceptDurationSeconds = Math.max(1, Math.ceil(totalAcceptMs / 1000));
+  const membersList = getRoomMembersArray(room);
+  const game = gameSessions.get(room.id);
+
+  const roomSnapshot = {
+    id: room.id,
+    name: room.name,
+    hostId: room.hostId,
+    mode,
+    targetPlayers,
+    totalPlayers,
+    acceptedCount,
+    acceptedSocketIds,
+    allAccepted,
+    members: membersList,
+    messages: room.messages.slice(-MAX_CHAT_HISTORY_SIZE)
+  };
+
+  return {
+    success: true,
+    searching: false,
+    state: 'MATCH_FOUND',
+    showMatchFoundPopup: true,
+    requireAccept: !allAccepted,
+    roomId: room.id,
+    mode,
+    currentPlayers: totalPlayers,
+    targetPlayers,
+    totalPlayers,
+    acceptedCount,
+    acceptedSocketIds,
+    allAccepted,
+    acceptDurationSeconds,
+    timeRemaining,
+    remainingMs,
+    members: membersList,
+    room: roomSnapshot,
+    gameState: game ? game.getStateSnapshot() : null,
+    timestamp: now,
+    ...extra
+  };
+}
+
+/**
+ * Khi 100% người chơi trong phòng đã Accept (hoặc hết giờ chờ trên Popup Find Match tự động Accept):
+ * Chốt 100% Accepted, phát sự kiện cập nhật cuối cùng và bắt đầu ngay Step 5.0 THEME_SELECTION
+ */
+export function completeMatchAcceptAndStartGame(
+  roomId: string,
+  options: { autoStart?: boolean } = {}
+): boolean {
+  const targetId = String(roomId || '').trim().toUpperCase();
+  const room = rooms.get(targetId);
+  if (!room) return false;
+
+  clearRoomMatchAcceptTimers(room);
+
+  if (countHumanMembers(room) === 0) {
+    destroyRoomData(targetId, RoomCloseReasonCode.ALL_MEMBERS_LEFT);
+    return false;
+  }
+
+  if (!room.acceptedSocketIds) {
+    room.acceptedSocketIds = new Set<string>();
+  }
+  for (const m of room.members.values()) {
+    m.isAccepted = true;
+    m.isReady = true;
+    room.acceptedSocketIds.add(m.socketId);
+  }
+
+  const mode: GameModeType = room.mode || 'QUICK_MATCH';
+  const targetPlayers =
+    room.targetPlayers || (mode === 'RACE_1V1' ? RACE_1V1_PLAYERS : DEFAULT_MIN_PLAYERS_WITH_BOTS);
+
+  let game = gameSessions.get(targetId);
+  if (!game && ioInstance) {
+    game = new MimicGameSession(targetId, ioInstance, { gameMode: mode, targetPlayers });
+    game.hostId = room.hostId;
+    game.onGameOverRematchReady = (rId) => reopenRoomForMatchmaking(rId);
+    gameSessions.set(targetId, game);
+  }
+
+  if (game) {
+    for (const m of room.members.values()) {
+      game.setPlayerReady(m.socketId, true);
+    }
+  }
+
+  const shouldStart = options.autoStart !== false;
+  let started = false;
+
+  if (ioInstance) {
+    const finalAcceptPayload = buildMatchAcceptPayload(room, {
+      allAccepted: true,
+      requireAccept: false,
+      autoStarted: shouldStart,
+      timeRemaining: 0,
+      remainingMs: 0
+    });
+    ioInstance.to(targetId).emit('match_accept_updated', finalAcceptPayload);
+    ioInstance.to(targetId).emit('match_all_accepted', finalAcceptPayload);
+  }
+
+  if (game && shouldStart && game.state === 'IDLE') {
+    game.gameMode = mode;
+    game.targetPlayers = targetPlayers;
+    game.onGameOverRematchReady = (rId) => reopenRoomForMatchmaking(rId);
+    started = game.startGame({ requireAllReady: false });
+  }
+
+  return started;
+}
+
+/**
+ * Người chơi bấm nút "ACCEPT" trên Popup Find Match (`accept_match` / `confirm_match_accept` / `match_accept`)
+ */
+export function acceptMatchForSocket(
+  roomId: string,
+  socketId: string
+): {
+  success: boolean;
+  code?: ErrorCode;
+  message?: ErrorCode;
+  roomId?: string;
+  acceptedCount?: number;
+  totalPlayers?: number;
+  targetPlayers?: number;
+  acceptedSocketIds?: string[];
+  allAccepted?: boolean;
+  autoStarted?: boolean;
+  members?: RoomMember[];
+} {
+  const targetId = String(roomId || '').trim().toUpperCase();
+  const room = rooms.get(targetId);
+  if (!room) {
+    return {
+      success: false,
+      code: ErrorCode.ROOM_NOT_FOUND,
+      message: ErrorCode.ROOM_NOT_FOUND
+    };
+  }
+
+  const member = room.members.get(socketId);
+  if (!member) {
+    return {
+      success: false,
+      code: ErrorCode.PLAYER_NOT_IN_ROOM,
+      message: ErrorCode.PLAYER_NOT_IN_ROOM
+    };
+  }
+
+  room.lastActivityAt = Date.now();
+  if (!room.acceptedSocketIds) {
+    room.acceptedSocketIds = new Set<string>();
+    for (const m of room.members.values()) {
+      if (isBotMember(m) || m.isAccepted) {
+        room.acceptedSocketIds.add(m.socketId);
+      }
+    }
+  }
+
+  room.acceptedSocketIds.add(socketId);
+  member.isAccepted = true;
+  member.isReady = true;
+
+  const game = gameSessions.get(targetId);
+  if (game) {
+    game.setPlayerReady(socketId, true);
+  }
+
+  const totalPlayers = room.members.size;
+  const acceptedCount = room.acceptedSocketIds.size;
+  const allAccepted = totalPlayers > 0 && acceptedCount >= totalPlayers;
+  const targetPlayers =
+    room.targetPlayers || (room.mode === 'RACE_1V1' ? RACE_1V1_PLAYERS : DEFAULT_MIN_PLAYERS_WITH_BOTS);
+
+  if (ioInstance) {
+    const updatePayload = buildMatchAcceptPayload(room, {
+      socketId,
+      userName: member.userName,
+      allAccepted
+    });
+    ioInstance.to(targetId).emit('match_accept_updated', updatePayload);
+    ioInstance.to(targetId).emit('match_found', updatePayload);
+  }
+
+  let autoStarted = false;
+  if (allAccepted && (!game || game.state === 'IDLE')) {
+    autoStarted = completeMatchAcceptAndStartGame(targetId, { autoStart: true });
+  }
+
+  return {
+    success: true,
+    roomId: targetId,
+    acceptedCount,
+    totalPlayers,
+    targetPlayers,
+    acceptedSocketIds: Array.from(room.acceptedSocketIds),
+    allAccepted,
+    autoStarted,
+    members: getRoomMembersArray(room)
+  };
+}
+
+/**
+ * Hoàn tất tìm người của phòng:
+ * 1. Điền thêm AI Bot nếu chưa đủ targetPlayers (4/4 ở QUICK_MATCH hoặc 2/2 ở RACE_1V1).
+ * 2. Khởi tạo trạng thái Popup Find Match (`state: "MATCH_FOUND"`): AI Bot tự động Accept sẵn (`isAccepted = true`).
+ * 3. Broadcast thông tin đã tìm được game (`match_found` & `match_accept_updated`) kèm `acceptedCount / totalPlayers` cho toàn bộ player trong phòng để hiển thị Popup Find Match.
+ * 4. Khi 100% player đã bấm Accept (hoặc hết thời gian chờ `acceptWaitMs` tự động Accept), chuyển vào Step 5.0 `THEME_SELECTION`.
  */
 export function finalizeRoomMatchmakingAndStart(
   roomId: string,
-  options: { autoStart?: boolean; difficulty?: BotDifficulty } = {}
-): void {
+  options: {
+    autoStart?: boolean;
+    difficulty?: BotDifficulty;
+    acceptWaitMs?: number;
+    requireAccept?: boolean;
+  } = {}
+): {
+  botsAdded: number;
+  autoStarted: boolean;
+  acceptedCount: number;
+  totalPlayers: number;
+  allAccepted: boolean;
+} {
   const targetId = String(roomId || '').trim().toUpperCase();
   const room = rooms.get(targetId);
-  if (!room) return;
+  if (!room) {
+    return { botsAdded: 0, autoStarted: false, acceptedCount: 0, totalPlayers: 0, allAccepted: false };
+  }
 
   clearRoomMatchmakingTimers(room);
 
-  const humanMembers = Array.from(room.members.values()).filter(m => !isBotMember(m));
-  if (humanMembers.length === 0) return;
+  const humanCount = countHumanMembers(room);
+  if (humanCount === 0) {
+    return { botsAdded: 0, autoStarted: false, acceptedCount: 0, totalPlayers: 0, allAccepted: false };
+  }
 
   const mode: GameModeType = room.mode || 'QUICK_MATCH';
-  const targetPlayers = room.targetPlayers || (mode === 'RACE_1V1' ? RACE_1V1_PLAYERS : DEFAULT_MIN_PLAYERS_WITH_BOTS);
+  const targetPlayers =
+    room.targetPlayers || (mode === 'RACE_1V1' ? RACE_1V1_PLAYERS : DEFAULT_MIN_PLAYERS_WITH_BOTS);
 
   let game = gameSessions.get(targetId);
   if (!game && ioInstance) {
@@ -386,38 +648,109 @@ export function finalizeRoomMatchmakingAndStart(
     botsAdded = filled.botsAdded;
   }
 
-  let autoStarted = false;
-  if (game && options.autoStart !== false) {
-    game.gameMode = mode;
-    game.targetPlayers = targetPlayers;
-    game.onGameOverRematchReady = (rId) => reopenRoomForMatchmaking(rId);
-    autoStarted = game.startGame({ requireAllReady: false });
+  // Khởi tạo tập acceptedSocketIds: AI Bot luôn được đánh dấu đã Accept sẵn (isAccepted = true)
+  room.acceptedSocketIds = new Set<string>();
+  const shouldRequireHumanClick =
+    options.requireAccept !== false &&
+    options.autoStart !== false &&
+    (typeof options.acceptWaitMs === 'number' ? options.acceptWaitMs > 0 : true);
+
+  for (const m of room.members.values()) {
+    if (isBotMember(m) || !shouldRequireHumanClick) {
+      m.isAccepted = true;
+      m.isReady = true;
+      room.acceptedSocketIds.add(m.socketId);
+      if (game) game.setPlayerReady(m.socketId, true);
+    } else {
+      m.isAccepted = false;
+      m.isReady = false;
+      if (game) game.setPlayerReady(m.socketId, false);
+    }
   }
 
-  if (ioInstance && game) {
-    const roomSnapshot = {
-      id: room.id,
-      name: room.name,
-      hostId: room.hostId,
-      mode,
-      targetPlayers,
-      members: getRoomMembersArray(room),
-      messages: room.messages.slice(-MAX_CHAT_HISTORY_SIZE)
-    };
-    ioInstance.to(targetId).emit('match_found', {
-      success: true,
-      searching: false,
-      mode,
-      targetPlayers,
-      matchedWithHumans: humanMembers.length > 1,
+  const totalPlayers = room.members.size;
+  const acceptedCount = room.acceptedSocketIds.size;
+  const allAccepted = totalPlayers > 0 && acceptedCount >= totalPlayers;
+
+  const resolvedAcceptWaitMs = shouldRequireHumanClick
+    ? typeof options.acceptWaitMs === 'number' && options.acceptWaitMs > 0
+      ? options.acceptWaitMs
+      : DEFAULT_MATCH_ACCEPT_WAIT_MS
+    : 0;
+
+  let autoStarted = false;
+
+  if (!shouldRequireHumanClick || allAccepted || resolvedAcceptWaitMs <= 0) {
+    if (game && options.autoStart !== false) {
+      game.gameMode = mode;
+      game.targetPlayers = targetPlayers;
+      game.onGameOverRematchReady = (rId) => reopenRoomForMatchmaking(rId);
+      autoStarted = game.startGame({ requireAllReady: false });
+    }
+    if (ioInstance) {
+      const payload = buildMatchAcceptPayload(room, {
+        matchedWithHumans: humanCount > 1,
+        timedOutToBots: botsAdded > 0,
+        botsAdded,
+        autoStarted,
+        allAccepted: true,
+        requireAccept: false,
+        timeRemaining: 0,
+        remainingMs: 0
+      });
+      ioInstance.to(targetId).emit('match_found', payload);
+      ioInstance.to(targetId).emit('matchmaking_found', payload);
+      ioInstance.to(targetId).emit('match_accept_updated', payload);
+    }
+    return { botsAdded, autoStarted, acceptedCount: totalPlayers, totalPlayers, allAccepted: true };
+  }
+
+  // Bật đồng hồ hiển thị Popup Find Match + chờ người chơi bấm Accept (mặc định 5s, hết 5s tự động Accept & vào Step 5.0)
+  const now = Date.now();
+  room.matchAcceptStartedAt = now;
+  room.matchAcceptWaitMs = resolvedAcceptWaitMs;
+  room.matchAcceptEndsAt = now + resolvedAcceptWaitMs;
+
+  if (ioInstance) {
+    const popupPayload = buildMatchAcceptPayload(room, {
+      matchedWithHumans: humanCount > 1,
       timedOutToBots: botsAdded > 0,
       botsAdded,
-      autoStarted,
-      roomId: room.id,
-      room: roomSnapshot,
-      gameState: game.getStateSnapshot()
+      autoStarted: false
     });
+    ioInstance.to(targetId).emit('match_found', popupPayload);
+    ioInstance.to(targetId).emit('matchmaking_found', popupPayload);
+    ioInstance.to(targetId).emit('match_accept_updated', popupPayload);
   }
+
+  const emitAcceptTick = () => {
+    if (!room.matchAcceptEndsAt || !room.matchAcceptStartedAt || !ioInstance) return;
+    const tickPayload = buildMatchAcceptPayload(room, {
+      matchedWithHumans: countHumanMembers(room) > 1,
+      timedOutToBots: botsAdded > 0,
+      botsAdded,
+      autoStarted: false
+    });
+    ioInstance.to(targetId).emit('match_accept_tick', tickPayload);
+    ioInstance.to(targetId).emit('matchmaking_tick', tickPayload);
+  };
+
+  if (resolvedAcceptWaitMs >= 1000) {
+    room.matchAcceptTickTimer = setInterval(emitAcceptTick, 1000);
+    if (typeof room.matchAcceptTickTimer.unref === 'function') {
+      room.matchAcceptTickTimer.unref();
+    }
+  }
+
+  room.matchAcceptTimer = setTimeout(() => {
+    completeMatchAcceptAndStartGame(targetId, { autoStart: options.autoStart !== false });
+  }, resolvedAcceptWaitMs);
+
+  if (typeof room.matchAcceptTimer.unref === 'function') {
+    room.matchAcceptTimer.unref();
+  }
+
+  return { botsAdded, autoStarted: false, acceptedCount, totalPlayers, allAccepted: false };
 }
 
 /**
@@ -428,6 +761,8 @@ export function startRoomMatchmakingCountdown(
   roomId: string,
   options: {
     waitMs?: number;
+    acceptWaitMs?: number;
+    requireAccept?: boolean;
     mode?: GameModeType;
     targetPlayers?: number;
     autoStart?: boolean;
@@ -446,16 +781,26 @@ export function startRoomMatchmakingCountdown(
   room.mode = mode;
   room.targetPlayers = targetPlayers;
 
-  const humanCount = Array.from(room.members.values()).filter(m => !isBotMember(m)).length;
+  const humanCount = countHumanMembers(room);
   if (humanCount >= targetPlayers) {
-    finalizeRoomMatchmakingAndStart(targetId, { autoStart: options.autoStart, difficulty: options.difficulty });
+    finalizeRoomMatchmakingAndStart(targetId, {
+      autoStart: options.autoStart,
+      difficulty: options.difficulty,
+      acceptWaitMs: options.acceptWaitMs,
+      requireAccept: options.requireAccept
+    });
     return;
   }
 
   const initialWaitMs =
     typeof options.waitMs === 'number' && options.waitMs >= 0 ? options.waitMs : DEFAULT_MATCHMAKING_WAIT_MS;
   if (initialWaitMs <= 0) {
-    finalizeRoomMatchmakingAndStart(targetId, { autoStart: options.autoStart, difficulty: options.difficulty });
+    finalizeRoomMatchmakingAndStart(targetId, {
+      autoStart: options.autoStart,
+      difficulty: options.difficulty,
+      acceptWaitMs: options.acceptWaitMs,
+      requireAccept: options.requireAccept
+    });
     return;
   }
 
@@ -498,7 +843,7 @@ export function startRoomMatchmakingCountdown(
     const totalMs = Math.max(1000, room.matchmakingEndsAt - room.matchmakingStartedAt);
     const totalSec = Math.ceil(totalMs / 1000);
     const elapsedSeconds = Math.max(0, totalSec - timeRemaining);
-    const currentHumans = Array.from(room.members.values()).filter(m => !isBotMember(m)).length;
+    const currentHumans = countHumanMembers(room);
 
     ioInstance.to(targetId).emit('matchmaking_tick', {
       searching: true,
@@ -530,7 +875,12 @@ export function startRoomMatchmakingCountdown(
     }
     const delayMs = Math.max(0, (room.matchmakingEndsAt || Date.now()) - Date.now());
     room.matchmakingTimer = setTimeout(() => {
-      finalizeRoomMatchmakingAndStart(targetId, { autoStart: options.autoStart, difficulty: options.difficulty });
+      finalizeRoomMatchmakingAndStart(targetId, {
+        autoStart: options.autoStart,
+        difficulty: options.difficulty,
+        acceptWaitMs: options.acceptWaitMs,
+        requireAccept: options.requireAccept
+      });
     }, delayMs);
     if (typeof room.matchmakingTimer.unref === 'function') {
       room.matchmakingTimer.unref();
@@ -549,27 +899,40 @@ export function startRoomMatchmakingCountdown(
 
 /**
  * Cộng giờ mềm (Dynamic Queue Extension) khi có thêm người chơi thật mới vào phòng đang tìm trận:
- * - Nếu đã đủ targetPlayers (4 người ở Quick Match, 2 người ở 1vs1 Race) -> Bắt đầu ngay lập tức!
+ * - Nếu đã đủ targetPlayers (4 người ở Quick Match, 2 người ở 1vs1 Race) -> Chuyển ngay sang Popup Find Match (MATCH_FOUND)!
  * - Nếu chưa đủ và đồng hồ còn < 5s (MATCHMAKING_EXTEND_MS) -> Đẩy đồng hồ lên 5s (nhưng tổng thời gian chờ không quá 16s MATCHMAKING_MAX_WAIT_CAP_MS).
  */
-export function extendRoomMatchmakingOnPlayerJoin(roomId: string): {
+export function extendRoomMatchmakingOnPlayerJoin(
+  roomId: string,
+  options: { acceptWaitMs?: number; requireAccept?: boolean; autoStart?: boolean } = {}
+): {
   extended: boolean;
   startedImmediately: boolean;
+  matchFound: boolean;
   remainingMs: number;
 } {
   const targetId = String(roomId || '').trim().toUpperCase();
   const room = rooms.get(targetId);
   if (!room || !room.matchmakingEndsAt || !room.matchmakingStartedAt) {
-    return { extended: false, startedImmediately: false, remainingMs: 0 };
+    return { extended: false, startedImmediately: false, matchFound: false, remainingMs: 0 };
   }
 
   const mode: GameModeType = room.mode || 'QUICK_MATCH';
   const targetPlayers = room.targetPlayers || (mode === 'RACE_1V1' ? RACE_1V1_PLAYERS : DEFAULT_MIN_PLAYERS_WITH_BOTS);
-  const humanCount = Array.from(room.members.values()).filter(m => !isBotMember(m)).length;
+  const humanCount = countHumanMembers(room);
 
   if (humanCount >= targetPlayers) {
-    finalizeRoomMatchmakingAndStart(targetId, { autoStart: true });
-    return { extended: false, startedImmediately: true, remainingMs: 0 };
+    const fin = finalizeRoomMatchmakingAndStart(targetId, {
+      autoStart: options.autoStart !== false,
+      acceptWaitMs: options.acceptWaitMs,
+      requireAccept: options.requireAccept
+    });
+    return {
+      extended: false,
+      startedImmediately: fin.autoStarted,
+      matchFound: true,
+      remainingMs: 0
+    };
   }
 
   const now = Date.now();
@@ -589,7 +952,11 @@ export function extendRoomMatchmakingOnPlayerJoin(roomId: string): {
       }
       const newDelay = Math.max(0, room.matchmakingEndsAt - now);
       room.matchmakingTimer = setTimeout(() => {
-        finalizeRoomMatchmakingAndStart(targetId, { autoStart: true });
+        finalizeRoomMatchmakingAndStart(targetId, {
+          autoStart: options.autoStart !== false,
+          acceptWaitMs: options.acceptWaitMs,
+          requireAccept: options.requireAccept
+        });
       }, newDelay);
       if (typeof room.matchmakingTimer.unref === 'function') {
         room.matchmakingTimer.unref();
@@ -629,7 +996,7 @@ export function extendRoomMatchmakingOnPlayerJoin(roomId: string): {
     ioInstance.to(targetId).emit('matchmaking_player_joined', tickPayload);
   }
 
-  return { extended, startedImmediately: false, remainingMs: finalRemainingMs };
+  return { extended, startedImmediately: false, matchFound: false, remainingMs: finalRemainingMs };
 }
 
 /**
@@ -691,10 +1058,13 @@ export function drainMatchmakingQueueIntoRoom(roomId: string): number {
       members: membersList,
       messages: room.messages.slice(-MAX_CHAT_HISTORY_SIZE)
     };
+    const isNowFull = room.members.size >= targetPlayers;
     const payload = {
       success: true,
-      searching: room.members.size < targetPlayers,
+      searching: !isNowFull,
+      state: isNowFull ? 'MATCH_FOUND' : 'FINDING_MATCH',
       mode,
+      currentPlayers: room.members.size,
       targetPlayers,
       matchedWithHumans: true,
       botsAdded: 0,
@@ -705,7 +1075,6 @@ export function drainMatchmakingQueueIntoRoom(roomId: string): number {
       gameState: game ? game.getStateSnapshot() : null
     };
     entry.socket.emit('joined_room_success', payload);
-    entry.socket.emit('match_found', payload);
     if (entry.onResolved) {
       const cb = entry.onResolved;
       entry.onResolved = undefined;
@@ -779,6 +1148,7 @@ export function reopenRoomForMatchmaking(roomId: string): void {
 /**
  * Tìm phòng đang chờ (IDLE) có người chơi thật và còn chỗ trống để ghép trận nhanh (Smart Matchmaking):
  * - Cách ly tuyệt đối phòng riêng (CUSTOM_ROOM) khỏi bể ghép ngẫu nhiên (QUICK_MATCH / RACE_1V1).
+ * - Không ghép vào phòng đã chốt đủ người đang hiển thị Popup Find Match (matchAcceptEndsAt != null).
  * - Sắp xếp ưu tiên Best-Fit + FIFO:
  *     1. Ưu tiên phòng có nhiều người thật nhất trước (3/4 > 2/4 > 1/4) để chốt đủ 4 người nhanh nhất.
  *     2. Nếu bằng số người thì ưu tiên phòng đã chờ lâu hơn trước (FIFO).
@@ -793,6 +1163,7 @@ export function findAvailableMatchmakingRoom(
     // Cách ly phòng riêng (CUSTOM_ROOM): chỉ ghép vào phòng có mode khớp chính xác với requestedMode
     const roomMode: GameModeType = room.mode || 'CUSTOM_ROOM';
     if (roomMode !== requestedMode) continue;
+    if (room.matchAcceptEndsAt) continue;
 
     const maxForRoom =
       room.targetPlayers ||
@@ -831,17 +1202,23 @@ export function findAvailableMatchmakingRoom(
  */
 export function getRoomMembersArray(room?: RoomData | null): RoomMember[] {
   if (!room || !room.members) return [];
-  return Array.from(room.members.values()).map(m => ({
-    socketId: m.socketId,
-    userId: m.userId || null,
-    userName: m.userName,
-    avatar: m.avatar,
-    role: m.socketId === room.hostId ? 'HOST' : (m.role || 'PLAYER'),
-    isReady: m.socketId === room.hostId || m.isBot ? true : (m.isReady || false),
-    isBot: Boolean(m.isBot),
-    botDifficulty: m.botDifficulty || null,
-    joinedAt: m.joinedAt
-  }));
+  const acceptedSet = room.acceptedSocketIds;
+  return Array.from(room.members.values()).map(m => {
+    const isBot = Boolean(m.isBot);
+    const isAccepted = acceptedSet ? acceptedSet.has(m.socketId) : (isBot || Boolean(m.isAccepted));
+    return {
+      socketId: m.socketId,
+      userId: m.userId || null,
+      userName: m.userName,
+      avatar: m.avatar,
+      role: m.socketId === room.hostId ? 'HOST' : (m.role || 'PLAYER'),
+      isReady: m.socketId === room.hostId || isBot ? true : Boolean(m.isReady),
+      isAccepted,
+      isBot,
+      botDifficulty: m.botDifficulty || null,
+      joinedAt: m.joinedAt
+    };
+  });
 }
 
 /**
@@ -896,6 +1273,9 @@ export function destroyRoomData(
       clearTimeout(room.cleanupTimer);
       room.cleanupTimer = null;
     }
+    if (room.acceptedSocketIds) {
+      room.acceptedSocketIds.clear();
+    }
     if (Array.isArray(room.messages)) {
       room.messages.length = 0;
     }
@@ -913,15 +1293,61 @@ export function destroyRoomData(
 }
 
 /**
- * Xử lý khi 1 socket rời khỏi phòng hiện tại (hỗ trợ Host Migration & Empty Room Cleanup)
+ * Đảm bảo 1 socket thoát sạch khỏi MỌI phòng đang tham gia (kể cả khi Client quên gọi leave_room trước khi mở Create Room / Join Room / Quick Match)
+ */
+export function leaveAllRoomsForSocket(
+  sock: Socket,
+  fallbackUser: Partial<RoomMember> = {},
+  exceptRoomId?: string
+): void {
+  const authSock = sock as AuthenticatedSocket;
+  const skipId = exceptRoomId ? String(exceptRoomId).trim().toUpperCase() : null;
+  const visited = new Set<string>();
+
+  if (authSock.sessionState && authSock.sessionState.currentRoomId) {
+    const activeRoomId = authSock.sessionState.currentRoomId;
+    if (activeRoomId !== skipId) {
+      visited.add(activeRoomId);
+      leaveCurrentRoom(sock, activeRoomId, fallbackUser);
+    }
+  }
+
+  for (const [rId, r] of Array.from(rooms.entries())) {
+    if (rId !== skipId && !visited.has(rId) && r.members.has(sock.id)) {
+      visited.add(rId);
+      leaveCurrentRoom(sock, rId, fallbackUser);
+    }
+  }
+
+  if (authSock.sessionState && (!skipId || authSock.sessionState.currentRoomId !== skipId)) {
+    authSock.sessionState.currentRoomId = null;
+    authSock.sessionState.isSearchingMatch = false;
+  }
+}
+
+/**
+ * Xử lý khi 1 socket rời khỏi phòng hiện tại:
+ * - Bỏ hoàn toàn cơ chế Reconnect: đã rời phòng là thoát hẳn khỏi phòng đó.
+ * - Nếu không còn người thật nào trong phòng -> Xóa sổ phòng ngay lập tức (0ms).
  */
 export function leaveCurrentRoom(sock: Socket, roomId: string, fallbackUser: Partial<RoomMember> = {}): void {
+  const authSock = sock as AuthenticatedSocket;
+  if (authSock.sessionState && authSock.sessionState.currentRoomId === roomId) {
+    authSock.sessionState.currentRoomId = null;
+  }
+
   const room = rooms.get(roomId);
-  if (!room) return;
+  if (!room) {
+    sock.leave(roomId);
+    return;
+  }
   const leavingMember = room.members.get(sock.id) || fallbackUser;
 
   sock.leave(roomId);
   room.members.delete(sock.id);
+  if (room.acceptedSocketIds) {
+    room.acceptedSocketIds.delete(sock.id);
+  }
 
   const game = gameSessions.get(roomId);
   if (game) {
@@ -933,33 +1359,9 @@ export function leaveCurrentRoom(sock: Socket, roomId: string, fallbackUser: Par
   // Kiểm tra số người chơi thật (không tính AI Bot) còn lại trong phòng
   const remainingHumans = Array.from(room.members.values()).filter(m => !isBotMember(m));
 
-  // Nếu không còn người chơi thật nào trong phòng: xóa toàn bộ Bot, audio buffer & chat, lên lịch hủy phòng
+  // Nếu không còn người chơi thật nào trong phòng: xóa toàn bộ dữ liệu phòng ngay lập tức (0ms, không giữ trạng thái chờ reconnect)
   if (remainingHumans.length === 0) {
-    clearRoomMatchmakingTimers(room);
-    for (const [botId] of room.members.entries()) {
-      room.members.delete(botId);
-      if (game) game.removePlayer(botId);
-    }
-    room.messages.length = 0;
-    if (game) {
-      game.stopTimer();
-      game.clearRoundAudioData();
-    }
-
-    // Với QUICK_MATCH và RACE_1V1 (hoặc khi có game session và không còn người chơi chờ reconnect) -> Hủy phòng ngay lập tức (0ms)!
-    const isMatchmakingMode = room.mode === 'QUICK_MATCH' || room.mode === 'RACE_1V1';
-    if (isMatchmakingMode || (game && game.disconnectedPlayers.size === 0)) {
-      destroyRoomData(roomId, RoomCloseReasonCode.ALL_MEMBERS_LEFT);
-      return;
-    }
-
-    if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
-    room.cleanupTimer = setTimeout(() => {
-      const checkRoom = rooms.get(roomId);
-      if (checkRoom && countHumanMembers(checkRoom) === 0) {
-        destroyRoomData(roomId, RoomCloseReasonCode.EMPTY_ROOM_TIMEOUT);
-      }
-    }, ROOM_CLEANUP_DELAY_MS);
+    destroyRoomData(roomId, RoomCloseReasonCode.ALL_MEMBERS_LEFT);
     return;
   }
 
@@ -982,6 +1384,31 @@ export function leaveCurrentRoom(sock: Socket, roomId: string, fallbackUser: Par
         newHostName: nextHost.userName
       };
       console.log(`[Room] 👑 Host Migration: ${nextHost.userName} (${room.hostId}) trở thành Chủ phòng mới!`);
+    }
+  }
+
+  // Nếu phòng đang ở màn Popup Find Match chờ Accept (matchAcceptEndsAt != null) mà có 1 người thoát:
+  // Tự động bù 1 AI Bot (isAccepted = true) vào ghế trống và cập nhật lại số người đã Accept cho phòng!
+  if (room.matchAcceptEndsAt && (room.mode === 'QUICK_MATCH' || room.mode === 'RACE_1V1')) {
+    const targetPlayers =
+      room.targetPlayers || (room.mode === 'RACE_1V1' ? RACE_1V1_PLAYERS : DEFAULT_MIN_PLAYERS_WITH_BOTS);
+    if (room.members.size < targetPlayers) {
+      const filled = fillRoomWithBots(roomId, { minPlayers: targetPlayers });
+      if (!room.acceptedSocketIds) room.acceptedSocketIds = new Set<string>();
+      for (const bot of filled.addedBots) {
+        bot.isAccepted = true;
+        bot.isReady = true;
+        room.acceptedSocketIds.add(bot.socketId);
+      }
+    }
+    if (ioInstance) {
+      const updatePayload = buildMatchAcceptPayload(room);
+      ioInstance.to(roomId).emit('match_accept_updated', updatePayload);
+      ioInstance.to(roomId).emit('match_found', updatePayload);
+    }
+    if (room.acceptedSocketIds && room.acceptedSocketIds.size >= room.members.size) {
+      completeMatchAcceptAndStartGame(roomId, { autoStart: true });
+      return;
     }
   }
 

@@ -49,6 +49,42 @@ test('Auth Service — Matrix Test: extractClientIp', () => {
     expected: string;
   }> = [
     { caseName: 'Null/undefined input', input: null, expected: '0.0.0.0' },
+    {
+      caseName: 'Socket handshake x-forwarded-for takes precedence over internal proxy address',
+      input: {
+        handshake: {
+          headers: { 'x-forwarded-for': '203.0.113.195, 100.64.0.2' },
+          address: '::ffff:100.64.0.2'
+        }
+      },
+      expected: '203.0.113.195'
+    },
+    {
+      caseName: 'Express req x-forwarded-for takes precedence over socket.remoteAddress',
+      input: {
+        headers: { 'x-forwarded-for': '::ffff:198.51.100.42, 10.0.0.1' },
+        socket: { remoteAddress: '::ffff:10.0.0.1' }
+      },
+      expected: '198.51.100.42'
+    },
+    {
+      caseName: 'Socket handshake cf-connecting-ip / x-real-ip header',
+      input: {
+        handshake: {
+          headers: { 'cf-connecting-ip': '198.51.100.88' },
+          address: '10.0.0.2'
+        }
+      },
+      expected: '198.51.100.88'
+    },
+    {
+      caseName: 'Express req.ip takes precedence over internal proxy req.socket.remoteAddress',
+      input: {
+        ip: '::ffff:172.16.0.9',
+        socket: { remoteAddress: '::ffff:10.0.0.5' }
+      },
+      expected: '172.16.0.9'
+    },
     { caseName: 'Socket handshake address', input: { handshake: { address: '203.0.113.10' } }, expected: '203.0.113.10' },
     { caseName: 'IPv6-mapped IPv4 in socket handshake', input: { handshake: { address: '::ffff:192.168.1.50' } }, expected: '192.168.1.50' },
     { caseName: 'Express req.socket.remoteAddress', input: { socket: { remoteAddress: '::ffff:10.0.0.5' } }, expected: '10.0.0.5' },

@@ -31,16 +31,48 @@ export function sanitizeUserName(rawName?: string | null, fallbackId: string | n
 }
 
 /**
- * Trích xuất địa chỉ IP chuẩn hóa của Client
+ * Trích xuất địa chỉ IP chuẩn hóa của Client (hỗ trợ Reverse Proxy / Load Balancer như Railway, Cloudflare, Nginx)
+ * - Ưu tiên đọc từ header `x-forwarded-for`, `cf-connecting-ip`, `x-real-ip` (trên cả HTTP Request lẫn Socket.IO Handshake)
+ * - Tiếp theo đọc `req.ip` (Express với `trust proxy = 1`)
+ * - Cuối cùng fallback về `handshake.address` hoặc `socket.remoteAddress`
  */
 export function extractClientIp(reqOrSocket: any): string {
   if (!reqOrSocket) return '0.0.0.0';
+
+  const headers =
+    (reqOrSocket.handshake && reqOrSocket.handshake.headers) ||
+    reqOrSocket.headers ||
+    null;
+
+  if (headers && typeof headers === 'object') {
+    const rawForwarded = headers['x-forwarded-for'] || headers['X-Forwarded-For'];
+    if (rawForwarded) {
+      const forwardedStr = Array.isArray(rawForwarded) ? rawForwarded[0] : String(rawForwarded);
+      const firstHop = forwardedStr.split(',')[0]?.trim();
+      if (firstHop) {
+        return firstHop.replace(/^::ffff:/, '');
+      }
+    }
+
+    const rawRealIp =
+      headers['cf-connecting-ip'] ||
+      headers['CF-Connecting-IP'] ||
+      headers['x-real-ip'] ||
+      headers['X-Real-IP'];
+    if (rawRealIp) {
+      const realIpStr = (Array.isArray(rawRealIp) ? rawRealIp[0] : String(rawRealIp)).trim();
+      if (realIpStr) {
+        return realIpStr.replace(/^::ffff:/, '');
+      }
+    }
+  }
+
   const rawIp =
+    reqOrSocket.ip ||
     (reqOrSocket.handshake && reqOrSocket.handshake.address) ||
     (reqOrSocket.socket && reqOrSocket.socket.remoteAddress) ||
-    reqOrSocket.ip ||
     '0.0.0.0';
-  return String(rawIp).replace(/^::ffff:/, '');
+  return String(rawIp).trim().replace(/^::ffff:/, '') || '0.0.0.0';
 }
 
 /**

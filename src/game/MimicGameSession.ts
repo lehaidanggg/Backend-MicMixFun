@@ -92,37 +92,10 @@ export class MimicGameSession {
     avatar: string,
     role: UserRole = 'PLAYER',
     userId: string | null = null,
-    isAuthenticated = false,
+    _isAuthenticated = false,
     isBot = false,
     botDifficulty: BotDifficulty | string | null = null
   ): { restored: boolean; totalScore: number } {
-    const savedState = (!isBot && userId && isAuthenticated) ? this.disconnectedPlayers.get(userId) : null;
-
-    if (savedState && userId && (Date.now() - savedState.disconnectedAt < 120000)) {
-      this.disconnectedPlayers.delete(userId);
-      this.players.set(socketId, {
-        socketId,
-        userId,
-        userName,
-        avatar: avatar || savedState.avatar || '🎧',
-        role,
-        isBot: false,
-        botDifficulty: null,
-        totalScore: savedState.totalScore || 0,
-        isReady: (
-          this.state === GAME_STATES.ROUND_RESULT ||
-          this.state === GAME_STATES.BREAK_TIME ||
-          this.state === GAME_STATES.GAME_OVER
-        )
-          ? false
-          : (role === 'HOST'),
-        roundScore: savedState.roundScore || 0,
-        currentAttempt: savedState.currentAttempt || null,
-        joinedMidRound: false
-      });
-      return { restored: true, totalScore: savedState.totalScore || 0 };
-    }
-
     if (!this.players.has(socketId)) {
       const isMidRound = !isBot && (
         this.state === GAME_STATES.USER_RECORDING ||
@@ -191,21 +164,8 @@ export class MimicGameSession {
 
   removePlayer(socketId: string): void {
     const leavingPlayer = this.players.get(socketId);
-    if (
-      leavingPlayer &&
-      !leavingPlayer.isBot &&
-      leavingPlayer.userId &&
-      this.gameMode === 'CUSTOM_ROOM' &&
-      (leavingPlayer.totalScore > 0 || leavingPlayer.currentAttempt)
-    ) {
-      const sanitizedAttempt = leavingPlayer.currentAttempt
-        ? { ...leavingPlayer.currentAttempt, audioUrl: null }
-        : null;
-      this.disconnectedPlayers.set(leavingPlayer.userId, {
-        ...leavingPlayer,
-        currentAttempt: sanitizedAttempt,
-        disconnectedAt: Date.now()
-      });
+    if (leavingPlayer && leavingPlayer.userId) {
+      this.disconnectedPlayers.delete(leavingPlayer.userId);
     }
 
     this.players.delete(socketId);

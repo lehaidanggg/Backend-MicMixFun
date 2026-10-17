@@ -292,7 +292,9 @@ test('Socket Handlers — Decision Matrix: Room, Media & Game Enum Error/Message
   hostSession.currentRoomId = null;
   playerSession.currentRoomId = null;
 
-  // 15. Quick Match / Find Match when no other IDLE user is found after timer expires -> opens room, adds 3 Bots, and autoStarts gameplay
+  // 15. Quick Match / Find Match when no other IDLE user is found after timer expires:
+  // Opens room, adds 3 Bots (pre-accepted 3/4), broadcasts Popup Find Match (showMatchFoundPopup: true, acceptedCount: 3, totalPlayers: 4),
+  // and starts gameplay once the human player accepts via accept_match!
   const timeoutRes: any = await new Promise(resolve => {
     hostMock.handlers.get('quick_match')!({ userName: 'QuickSoloPlayer', waitMs: 40 }, (r: any) => {
       resolve(r);
@@ -302,13 +304,48 @@ test('Socket Handlers — Decision Matrix: Room, Media & Game Enum Error/Message
   assert.equal(timeoutRes.matchedWithHumans, false);
   assert.equal(timeoutRes.timedOutToBots, true);
   assert.equal(timeoutRes.botsAdded, 3);
-  assert.equal(timeoutRes.autoStarted, true);
+  assert.equal(timeoutRes.state, 'MATCH_FOUND');
+  assert.equal(timeoutRes.showMatchFoundPopup, true);
+  assert.equal(timeoutRes.acceptedCount, 3);
+  assert.equal(timeoutRes.totalPlayers, 4);
+  assert.equal(timeoutRes.allAccepted, false);
+  assert.equal(timeoutRes.autoStarted, false);
   assert.equal(timeoutRes.room.members.length, 4);
 
-  destroyRoomData(timeoutRes.roomId);
+  let acceptSoloRes: any = null;
+  hostMock.handlers.get('accept_match')!({ roomId: timeoutRes.roomId }, (r: any) => {
+    acceptSoloRes = r;
+  });
+  assert.equal(acceptSoloRes?.success, true);
+  assert.equal(acceptSoloRes?.acceptedCount, 4);
+  assert.equal(acceptSoloRes?.totalPlayers, 4);
+  assert.equal(acceptSoloRes?.allAccepted, true);
+  assert.equal(acceptSoloRes?.autoStarted, true);
+  assert.equal(gameSessions.get(timeoutRes.roomId)?.state, 'THEME_SELECTION');
+
+  // 15b. User leaves Quick Match mid-game -> opens Create Room (even passing stale QM roomId) or tries join_room on QM room:
+  // Must NEVER reconnect back to the Quick Match room!
+  const staleQmRoomId = timeoutRes.roomId;
+  let joinQmAttempt: any = null;
+  await hostMock.handlers.get('join_room')!({ roomId: staleQmRoomId, userName: 'QuickSoloPlayer' }, (r: any) => {
+    joinQmAttempt = r;
+  });
+  assert.equal(joinQmAttempt?.success, false);
+  assert.equal(joinQmAttempt?.code, ErrorCode.ROOM_NOT_FOUND);
+  assert.equal(rooms.has(staleQmRoomId), false, 'QM room with 0 humans must be destroyed immediately');
+
+  // Even if another QM room is still alive with another player and user leaves mid-game then calls create_room with stale roomId:
+  let customAfterQmRes: any = null;
+  hostMock.handlers.get('create_room')!({ roomId: staleQmRoomId, userName: 'HostAfterQm' }, (r: any) => {
+    customAfterQmRes = r;
+  });
+  assert.equal(customAfterQmRes?.success, true);
+  assert.equal(customAfterQmRes?.mode, 'CUSTOM_ROOM');
+  assert.equal(customAfterQmRes?.room.mode, 'CUSTOM_ROOM');
+  destroyRoomData(customAfterQmRes.roomId);
   hostSession.currentRoomId = null;
 
-  // 16. Custom Room Isolation & Race 1v1 auto-start (2 humans -> autoStarted immediately)
+  // 16. Custom Room Isolation & Race 1v1 Popup Find Match + Accept (2 humans -> 0/2 -> 1/2 -> 2/2 accepted -> autoStarted)
   let customRoomRes: any = null;
   await hostMock.handlers.get('create_room')!({ userName: 'CustomHost' }, (r: any) => {
     customRoomRes = r;
@@ -329,9 +366,48 @@ test('Socket Handlers — Decision Matrix: Room, Media & Game Enum Error/Message
   assert.equal(r1v1P1?.success, true);
   assert.equal(r1v1P2?.success, true);
   assert.equal(r1v1P1?.roomId, r1v1P2?.roomId);
-  assert.equal(r1v1P1?.autoStarted, true);
-  assert.equal(r1v1P2?.autoStarted, true);
+  assert.equal(r1v1P1?.state, 'MATCH_FOUND');
+  assert.equal(r1v1P1?.showMatchFoundPopup, true);
+  assert.equal(r1v1P1?.acceptedCount, 0);
+  assert.equal(r1v1P1?.totalPlayers, 2);
   assert.equal(r1v1P2?.room.members.length, 2);
 
+  // Duelist1 clicks Accept -> 1/2 accepted
+  let accept1Res: any = null;
+  hostMock.handlers.get('accept_match')!({ roomId: r1v1P1.roomId }, (r: any) => {
+    accept1Res = r;
+  });
+  assert.equal(accept1Res?.success, true);
+  assert.equal(accept1Res?.acceptedCount, 1);
+  assert.equal(accept1Res?.totalPlayers, 2);
+  assert.equal(accept1Res?.allAccepted, false);
+  assert.equal(accept1Res?.autoStarted, false);
+
+  // Duelist2 clicks Accept -> 2/2 accepted -> autoStarted = true & transitions to THEME_SELECTION!
+  let accept2Res: any = null;
+  playerMock.handlers.get('accept_match')!({ roomId: r1v1P1.roomId }, (r: any) => {
+    accept2Res = r;
+  });
+  assert.equal(accept2Res?.success, true);
+  assert.equal(accept2Res?.acceptedCount, 2);
+  assert.equal(accept2Res?.totalPlayers, 2);
+  assert.equal(accept2Res?.allAccepted, true);
+  assert.equal(accept2Res?.autoStarted, true);
+  assert.equal(gameSessions.get(r1v1P1.roomId)?.state, 'THEME_SELECTION');
+
+  // If Duelist2 leaves mid-game and opens Create Room (without even calling leave_room first, or passing stale r1v1 roomId),
+  // Duelist2 is cleanly removed from r1v1 room and put into a brand new CUSTOM_ROOM!
+  let newCustomRes: any = null;
+  playerMock.handlers.get('create_room')!({ roomId: r1v1P1.roomId, userName: 'Duelist2Custom' }, (r: any) => {
+    newCustomRes = r;
+  });
+  assert.equal(newCustomRes?.success, true);
+  assert.notEqual(newCustomRes?.roomId, r1v1P1.roomId, 'Must ignore stale matchmaking roomId and generate fresh CUSTOM_ROOM');
+  assert.equal(newCustomRes?.mode, 'CUSTOM_ROOM');
+  assert.equal(playerSession.currentRoomId, newCustomRes.roomId);
+  assert.equal(Boolean(rooms.get(r1v1P1.roomId)?.members.has(playerMock.socket.id)), false);
+
+  destroyRoomData(newCustomRes.roomId);
   destroyRoomData(r1v1P1.roomId);
 });
+

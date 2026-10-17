@@ -22,18 +22,23 @@ import {
   rooms,
   gameSessions,
   matchmakingQueue,
+  setIoInstance,
   cancelMatchmakingForSocket,
   getRoomMembersArray,
   destroyRoomData,
   leaveCurrentRoom,
+  leaveAllRoomsForSocket,
   addBotToRoom,
   removeBotFromRoom,
-  fillRoomWithBots,
   findAvailableMatchmakingRoom,
   startRoomMatchmakingCountdown,
   extendRoomMatchmakingOnPlayerJoin,
   drainMatchmakingQueueIntoRoom,
   reopenRoomForMatchmaking,
+  finalizeRoomMatchmakingAndStart,
+  acceptMatchForSocket,
+  buildMatchAcceptPayload,
+  countHumanMembers,
   isBotMember
 } from '../services/room.service';
 import { AuthenticatedSocket, BotDifficulty, GameModeType, MatchmakingQueueEntry, RoomData, SocketSessionState } from '../types';
@@ -43,6 +48,7 @@ export function registerRoomHandlers(
   socket: AuthenticatedSocket,
   sessionState: SocketSessionState
 ): void {
+  setIoInstance(io);
   const { currentUser } = sessionState;
 
   // 0. XÁC THỰC USER QUA SOCKET (auth_guest & auth_firebase)
@@ -106,10 +112,39 @@ export function registerRoomHandlers(
     ) => {
       try {
         cancelMatchmakingForSocket(socket.id);
-        const generatedRoomId = String(roomId || Math.random().toString(36).substring(2, 8))
+
+        // Nếu socket còn kẹt ở bất kỳ phòng QUICK_MATCH / RACE_1V1 nào -> Rời khỏi các phòng đó ngay lập tức
+        const leftMatchmakingRoomIds: string[] = [];
+        for (const [rId, rData] of Array.from(rooms.entries())) {
+          if (
+            (rData.mode === 'QUICK_MATCH' || rData.mode === 'RACE_1V1') &&
+            (rData.members.has(socket.id) || sessionState.currentRoomId === rId)
+          ) {
+            leftMatchmakingRoomIds.push(rId);
+            leaveCurrentRoom(socket, rId, currentUser);
+          }
+        }
+
+        const rawRequestedId = String(roomId || '')
           .trim()
           .toUpperCase()
           .slice(0, 16);
+        const existingRequestedRoom = rawRequestedId ? rooms.get(rawRequestedId) : undefined;
+        const isStaleMatchmakingRoomId = Boolean(
+          rawRequestedId &&
+            (leftMatchmakingRoomIds.includes(rawRequestedId) ||
+              (existingRequestedRoom &&
+                (existingRequestedRoom.mode === 'QUICK_MATCH' || existingRequestedRoom.mode === 'RACE_1V1')))
+        );
+
+        let generatedRoomId =
+          rawRequestedId && !isStaleMatchmakingRoomId
+            ? rawRequestedId
+            : Math.random().toString(36).substring(2, 8).toUpperCase();
+        while (rooms.has(generatedRoomId) && (!rawRequestedId || isStaleMatchmakingRoomId)) {
+          generatedRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+        }
+
         const cleanUserName = sanitizeUserName(userName || currentUser.userName, socket.id);
         const cleanAvatar = avatar || currentUser.avatar || '🎧';
         const safeRoomName = String(roomName || cleanUserName).trim().slice(0, 40);
@@ -125,9 +160,8 @@ export function registerRoomHandlers(
           return;
         }
 
-        if (sessionState.currentRoomId && sessionState.currentRoomId !== generatedRoomId) {
-          leaveCurrentRoom(socket, sessionState.currentRoomId, currentUser);
-        }
+        // Rời khỏi mọi phòng cũ còn lại trước khi tạo CUSTOM_ROOM mới
+        leaveAllRoomsForSocket(socket, currentUser, generatedRoomId);
 
         const resolvedUserId =
           (socket.authSession && socket.authSession.uid) || currentUser.userId || generateSecureUserId();
@@ -148,12 +182,14 @@ export function registerRoomHandlers(
         rooms.set(generatedRoomId, newRoom);
 
         sessionState.currentRoomId = generatedRoomId;
+        sessionState.isSearchingMatch = false;
         currentUser.socketId = socket.id;
         currentUser.userId = resolvedUserId;
         currentUser.userName = cleanUserName;
         currentUser.avatar = cleanAvatar;
         currentUser.role = 'HOST';
         currentUser.isReady = true;
+        currentUser.isAccepted = true;
         currentUser.isAuthenticated = true;
         currentUser.joinedAt = Date.now();
 
@@ -206,7 +242,7 @@ export function registerRoomHandlers(
     }
   );
 
-  // 2. THAM GIA PHÒNG (join_room)
+  // 2. THAM GIA PHÒNG (join_room) — Chỉ cho phép vào phòng CUSTOM_ROOM qua mã code phòng (Bỏ hoàn toàn cơ chế tự reconnect vào phòng QUICK_MATCH / RACE_1V1)
   socket.on(
     'join_room',
     async (
@@ -258,16 +294,13 @@ export function registerRoomHandlers(
           resolvedProvider = verifiedToken.provider || 'guest';
         } else {
           const existingRoom = rooms.get(targetRoomId);
-          const existingGame = gameSessions.get(targetRoomId);
           const isSpoofingActiveMember = Boolean(
             existingRoom &&
               userId &&
               Array.from(existingRoom.members.values()).some(m => m.userId === userId && m.socketId !== socket.id)
           );
-          const savedPlayer = existingGame && userId ? existingGame.disconnectedPlayers.get(userId) : undefined;
-          const isSpoofingSavedPlayer = Boolean(savedPlayer && savedPlayer.requireToken);
 
-          if (userId && !isSpoofingActiveMember && !isSpoofingSavedPlayer) {
+          if (userId && !isSpoofingActiveMember) {
             resolvedUserId = String(userId).slice(0, 64);
             isAuthenticated = true;
           } else {
@@ -311,31 +344,24 @@ export function registerRoomHandlers(
 
         const room = rooms.get(targetRoomId)!;
         room.lastActivityAt = Date.now();
-        const existingGameForRoom = gameSessions.get(targetRoomId);
 
-        // Chặn người lạ bên ngoài tự ý gọi join_room vào phòng QUICK_MATCH hoặc RACE_1V1 (trừ khi là thành viên của phòng đó đang reconnect)
+        // Chặn tuyệt đối join_room vào phòng QUICK_MATCH hoặc RACE_1V1 (kể cả reconnect): đã out là out hẳn!
         if (room.mode === 'QUICK_MATCH' || room.mode === 'RACE_1V1') {
-          const isExistingOrReconnectingMember =
-            room.members.has(socket.id) ||
-            Boolean(
-              resolvedUserId &&
-                (Array.from(room.members.values()).some(m => m.userId === resolvedUserId) ||
-                  existingGameForRoom?.disconnectedPlayers.has(resolvedUserId))
-            );
-          if (!isExistingOrReconnectingMember) {
-            socket.emit('game_error', {
+          if (room.members.has(socket.id) || sessionState.currentRoomId === targetRoomId) {
+            leaveCurrentRoom(socket, targetRoomId, currentUser);
+          }
+          socket.emit('game_error', {
+            code: ErrorCode.ROOM_NOT_FOUND,
+            message: ErrorCode.ROOM_NOT_FOUND
+          });
+          if (callback) {
+            callback({
+              success: false,
               code: ErrorCode.ROOM_NOT_FOUND,
               message: ErrorCode.ROOM_NOT_FOUND
             });
-            if (callback) {
-              callback({
-                success: false,
-                code: ErrorCode.ROOM_NOT_FOUND,
-                message: ErrorCode.ROOM_NOT_FOUND
-              });
-            }
-            return;
           }
+          return;
         }
 
         const cleanName = sanitizeUserName(userName || (verifiedToken && verifiedToken.name), socket.id);
@@ -355,7 +381,7 @@ export function registerRoomHandlers(
           room.cleanupTimer = null;
         }
 
-        // Dọn dẹp ghost socket nếu cùng 1 userId đã xác thực kết nối lại trên socket mới
+        // Dọn dẹp ghost socket nếu cùng 1 userId đã xác thực kết nối lại trên socket mới vào CUSTOM_ROOM bằng code phòng
         if ((verifiedToken || fbDecoded) && resolvedUserId) {
           for (const [oldSockId, member] of room.members.entries()) {
             if (member.userId === resolvedUserId && oldSockId !== socket.id) {
@@ -381,17 +407,17 @@ export function registerRoomHandlers(
           return;
         }
 
+        // Rời khỏi mọi phòng khác trước khi join vào CUSTOM_ROOM mục tiêu
+        leaveAllRoomsForSocket(socket, currentUser, targetRoomId);
+
         if (!room.hostId || (room.members.size === 0 && !room.members.has(room.hostId))) {
           room.hostId = socket.id;
           room.hostUserId = resolvedUserId;
         }
 
-        if (sessionState.currentRoomId && sessionState.currentRoomId !== targetRoomId) {
-          leaveCurrentRoom(socket, sessionState.currentRoomId, currentUser);
-        }
-
         const isHost = room.hostId === socket.id;
         sessionState.currentRoomId = targetRoomId;
+        sessionState.isSearchingMatch = false;
         currentUser.socketId = socket.id;
         currentUser.userId = resolvedUserId;
         currentUser.firebaseUid = resolvedFbUid;
@@ -399,6 +425,7 @@ export function registerRoomHandlers(
         currentUser.avatar = cleanAvatar;
         currentUser.role = isHost ? 'HOST' : 'PLAYER';
         currentUser.isReady = isHost;
+        currentUser.isAccepted = isHost;
         currentUser.isAuthenticated = isAuthenticated;
         currentUser.joinedAt = Date.now();
 
@@ -424,7 +451,7 @@ export function registerRoomHandlers(
         );
 
         console.log(
-          `[Room] 👤 [${currentUser.role}] ${currentUser.userName} (${socket.id}, UID: ${currentUser.userId}) đã vào phòng: ${targetRoomId}${restoreInfo.restored ? ` [Khôi phục ${restoreInfo.totalScore}đ]` : ''}`
+          `[Room] 👤 [${currentUser.role}] ${currentUser.userName} (${socket.id}, UID: ${currentUser.userId}) đã vào phòng: ${targetRoomId}`
         );
 
         const joinSysCode =
@@ -449,6 +476,7 @@ export function registerRoomHandlers(
             id: room.id,
             name: room.name,
             hostId: room.hostId,
+            mode: room.mode || 'CUSTOM_ROOM',
             members: getRoomMembersArray(room),
             messages: room.messages.slice(-MAX_CHAT_HISTORY_SIZE)
           },
@@ -470,15 +498,13 @@ export function registerRoomHandlers(
     }
   );
 
-  // 3. RỜI PHÒNG (leave_room)
+  // 3. RỜI PHÒNG (leave_room) — Xóa dứt điểm khỏi mọi phòng đang tham gia (không lưu trạng thái reconnect)
   socket.on('leave_room', (_data: unknown, callback?: (res: Record<string, unknown>) => void) => {
-    if (sessionState.currentRoomId) {
-      leaveCurrentRoom(socket, sessionState.currentRoomId, currentUser);
-      sessionState.currentRoomId = null;
-      if (callback) callback({ success: true });
-    } else if (callback) {
-      callback({ success: true });
-    }
+    cancelMatchmakingForSocket(socket.id);
+    leaveAllRoomsForSocket(socket, currentUser);
+    sessionState.currentRoomId = null;
+    sessionState.isSearchingMatch = false;
+    if (callback) callback({ success: true });
   });
 
   // 4. ĐÓNG PHÒNG XÓA SẠCH DATA (close_room)
@@ -525,13 +551,39 @@ export function registerRoomHandlers(
     }
   );
 
-  // 5. ĐỔI TRẠNG THÁI SẴN SÀNG (player_ready_toggle)
+  // 5. ĐỔI TRẠNG THÁI SẴN SÀNG (player_ready_toggle) & XÁC NHẬN ACCEPT TRẬN ĐẤU (accept_match)
+  const handleAcceptMatch = (
+    { roomId }: Record<string, any> = {},
+    callback?: (res: Record<string, unknown>) => void
+  ): void => {
+    const targetRoom = String(roomId || sessionState.currentRoomId || '').trim().toUpperCase();
+    const res = acceptMatchForSocket(targetRoom, socket.id);
+    if (!res.success) {
+      socket.emit('game_error', {
+        code: res.code || ErrorCode.ROOM_NOT_FOUND,
+        message: res.message || ErrorCode.ROOM_NOT_FOUND
+      });
+    }
+    if (callback) callback(res);
+  };
+
+  socket.on('accept_match', handleAcceptMatch);
+  socket.on('confirm_match_accept', handleAcceptMatch);
+  socket.on('match_accept', handleAcceptMatch);
+
   socket.on(
     'player_ready_toggle',
     ({ roomId, isReady }: Record<string, any> = {}, callback?: (res: Record<string, unknown>) => void) => {
-      const targetRoom = String(roomId || sessionState.currentRoomId || '').toUpperCase();
+      const targetRoom = String(roomId || sessionState.currentRoomId || '').trim().toUpperCase();
       const room = rooms.get(targetRoom);
       if (!room) return;
+
+      // Nếu phòng đang ở giai đoạn Popup Find Match chờ Accept -> Gọi đồng thời acceptMatchForSocket
+      if (room.matchAcceptEndsAt && isReady !== false) {
+        const acceptRes = acceptMatchForSocket(targetRoom, socket.id);
+        if (callback) callback({ ...acceptRes, isReady: true });
+        return;
+      }
 
       const member = room.members.get(socket.id);
       if (member) {
@@ -540,6 +592,7 @@ export function registerRoomHandlers(
         } else {
           member.isReady = typeof isReady === 'boolean' ? isReady : !member.isReady;
         }
+        member.isAccepted = Boolean(member.isReady);
 
         const game = gameSessions.get(targetRoom);
         if (game) {
@@ -735,6 +788,7 @@ export function registerRoomHandlers(
   //     + QUICK_MATCH (4P, targetPlayers = 4, bù tối đa 3 Bot khi hết giờ).
   //     + RACE_1V1 (2P Solo 1v1, targetPlayers = 2, bù 1 Bot khi hết giờ).
   // - Khi ở Quick Match ghép được thêm người thật mới (2/4 hoặc 3/4) mà đồng hồ còn < 5s -> Cộng giờ mềm +5s (trần tối đa 16s) rồi hết giờ tự bù Bot.
+  // - Khi đủ 4/4 (hoặc 2/2) -> Bắn thông tin đã tìm được game (match_found & match_accept_updated) để show Popup Find Match + số người đã Accept (acceptedCount / totalPlayers).
   const createBotFallbackRoomAndStart = (entry: MatchmakingQueueEntry): Record<string, unknown> => {
     cancelMatchmakingForSocket(entry.socket.id);
 
@@ -747,6 +801,7 @@ export function registerRoomHandlers(
       id: newRoomId,
       name: entry.userName,
       createdAt: Date.now(),
+      lastActivityAt: Date.now(),
       hostId: entry.socket.id,
       hostUserId: entry.userId,
       mode: resolvedMode,
@@ -759,12 +814,14 @@ export function registerRoomHandlers(
 
     const userObj = entry.sessionState.currentUser;
     entry.sessionState.currentRoomId = room.id;
+    entry.sessionState.isSearchingMatch = false;
     userObj.socketId = entry.socket.id;
     userObj.userId = entry.userId;
     userObj.userName = entry.userName;
     userObj.avatar = entry.avatar;
     userObj.role = 'HOST';
-    userObj.isReady = true;
+    userObj.isReady = false;
+    userObj.isAccepted = false;
     userObj.isAuthenticated = true;
     userObj.joinedAt = Date.now();
 
@@ -780,31 +837,35 @@ export function registerRoomHandlers(
     gameSessions.set(room.id, game);
     game.addPlayer(entry.socket.id, userObj.userName, userObj.avatar, 'HOST', userObj.userId, true);
 
-    const filled = fillRoomWithBots(room.id, {
-      botCount: entry.botCount,
-      minPlayers: resolvedTargetPlayers,
-      difficulty: entry.botDifficulty
+    const fin = finalizeRoomMatchmakingAndStart(room.id, {
+      autoStart: entry.autoStart !== false,
+      difficulty: entry.botDifficulty,
+      acceptWaitMs: entry.acceptWaitMs,
+      requireAccept: entry.requireAccept
     });
-    const botsAdded = filled.botsAdded;
-
-    let autoStarted = false;
-    if (entry.autoStart !== false) {
-      autoStarted = game.startGame({ requireAllReady: false });
-    }
 
     console.log(
-      `[Matchmaking] ⏰ Hết thời gian chờ (${entry.waitMs}ms) [${resolvedMode}] -> Tạo phòng ${room.id}, thêm ${botsAdded} Bot AI & autoStart=${autoStarted}`
+      `[Matchmaking] ⏰ Hết thời gian chờ (${entry.waitMs}ms) [${resolvedMode}] -> Tạo phòng ${room.id}, thêm ${fin.botsAdded} Bot AI (Accepted: ${fin.acceptedCount}/${fin.totalPlayers}, autoStarted=${fin.autoStarted})`
     );
 
+    const acceptPayload = buildMatchAcceptPayload(room, {
+      matchedWithHumans: false,
+      timedOutToBots: true,
+      botsAdded: fin.botsAdded,
+      autoStarted: fin.autoStarted,
+      allAccepted: fin.allAccepted
+    });
+
     const responseData = {
+      ...acceptPayload,
       success: true,
       searching: false,
       mode: resolvedMode,
       targetPlayers: resolvedTargetPlayers,
       matchedWithHumans: false,
       timedOutToBots: true,
-      botsAdded,
-      autoStarted,
+      botsAdded: fin.botsAdded,
+      autoStarted: fin.autoStarted,
       roomId: room.id,
       room: {
         id: room.id,
@@ -821,6 +882,7 @@ export function registerRoomHandlers(
 
     entry.socket.emit('joined_room_success', responseData);
     entry.socket.emit('match_found', responseData);
+    entry.socket.emit('match_accept_updated', responseData);
     if (entry.onResolved) {
       const cb = entry.onResolved;
       entry.onResolved = undefined;
@@ -838,13 +900,16 @@ export function registerRoomHandlers(
       botDifficulty,
       autoStart = true,
       waitMs,
-      waitForPlayers = true
+      waitForPlayers = true,
+      acceptWaitMs,
+      requireAccept
     }: Record<string, any> = {},
     callback?: (res: Record<string, unknown>) => void
   ): Promise<void> => {
     try {
-      // Hủy phiên tìm trận cũ của chính socket này (nếu có)
+      // Hủy phiên tìm trận cũ và rời toàn bộ phòng cũ của chính socket này (nếu có)
       cancelMatchmakingForSocket(socket.id);
+      leaveAllRoomsForSocket(socket, currentUser);
 
       const rawMode = String(mode || 'QUICK_MATCH').trim().toUpperCase();
       const resolvedMode: GameModeType =
@@ -857,6 +922,9 @@ export function registerRoomHandlers(
           ? Math.min(resolvedTargetPlayers - 1, Math.max(1, botCount))
           : defaultBotsForMode;
       const resolvedDiff = botDifficulty ? (String(botDifficulty).toUpperCase() as BotDifficulty) : undefined;
+      const resolvedAcceptWaitMs =
+        typeof acceptWaitMs === 'number' && acceptWaitMs >= 0 ? Math.min(30000, acceptWaitMs) : undefined;
+      const resolvedRequireAccept = typeof requireAccept === 'boolean' ? requireAccept : undefined;
 
       const verifiedToken = socket.authSession || null;
       const resolvedUserId = (verifiedToken && verifiedToken.uid) || currentUser.userId || generateSecureUserId();
@@ -869,19 +937,16 @@ export function registerRoomHandlers(
       currentUser.avatar = cleanAvatar;
       currentUser.isAuthenticated = true;
 
-      if (sessionState.currentRoomId) {
-        leaveCurrentRoom(socket, sessionState.currentRoomId, currentUser);
-        sessionState.currentRoomId = null;
-      }
-
       // 1A (Best-Fit + FIFO Priority). Ưu tiên tìm phòng cùng mode đang chờ gom người (3/4 -> 2/4 chờ lâu nhất) TRƯỚC khi ghép người đứng lẻ 1/4 trong Queue!
       const existingRoom = findAvailableMatchmakingRoom(socket.id, resolvedMode);
       if (existingRoom) {
         const room = existingRoom;
         const isHost = room.hostId === socket.id;
         sessionState.currentRoomId = room.id;
+        sessionState.isSearchingMatch = false;
         currentUser.role = isHost ? 'HOST' : 'PLAYER';
-        currentUser.isReady = true;
+        currentUser.isReady = false;
+        currentUser.isAccepted = false;
         currentUser.joinedAt = Date.now();
 
         socket.join(room.id);
@@ -910,28 +975,74 @@ export function registerRoomHandlers(
           messageParams: { userName: currentUser.userName, role: currentUser.role }
         });
 
-        // Kiểm tra cộng giờ mềm Dynamic Queue Extension (+5s nếu còn < 5s) hoặc bắt đầu ngay nếu đã đủ targetPlayers
-        const extResult = extendRoomMatchmakingOnPlayerJoin(room.id);
+        // Kiểm tra cộng giờ mềm Dynamic Queue Extension (+5s nếu còn < 5s) hoặc chuyển sang MATCH_FOUND ngay nếu đã đủ targetPlayers
+        const extResult = extendRoomMatchmakingOnPlayerJoin(room.id, {
+          acceptWaitMs: resolvedAcceptWaitMs,
+          requireAccept: resolvedRequireAccept,
+          autoStart: autoStart !== false
+        });
 
+        const roomSnapshot = {
+          id: room.id,
+          name: room.name,
+          hostId: room.hostId,
+          mode: resolvedMode,
+          targetPlayers: resolvedTargetPlayers,
+          members: getRoomMembersArray(room),
+          messages: room.messages.slice(-MAX_CHAT_HISTORY_SIZE)
+        };
+
+        if (extResult.matchFound) {
+          const acceptSnapshot = buildMatchAcceptPayload(room, {
+            matchedWithHumans: true,
+            timedOutToBots: false,
+            botsAdded: 0,
+            autoStarted: extResult.startedImmediately
+          });
+          const responseData = {
+            ...acceptSnapshot,
+            success: true,
+            searching: false,
+            mode: resolvedMode,
+            targetPlayers: resolvedTargetPlayers,
+            matchedWithHumans: true,
+            extendedQueue: extResult.extended,
+            botsAdded: 0,
+            autoStarted: extResult.startedImmediately,
+            roomId: room.id,
+            room: roomSnapshot,
+            user: currentUser,
+            gameState: game.getStateSnapshot()
+          };
+
+          console.log(
+            `[Matchmaking] 🎉 [Best-Fit Full] Đủ ${room.members.size}/${resolvedTargetPlayers} người chơi [${resolvedMode}] tại phòng ${room.id} -> Show Popup Find Match (Accepted: ${acceptSnapshot.acceptedCount}/${acceptSnapshot.totalPlayers})`
+          );
+          socket.emit('joined_room_success', responseData);
+          socket.emit('match_found', responseData);
+          socket.emit('match_accept_updated', responseData);
+          if (callback) callback(responseData);
+          return;
+        }
+
+        const humanCount = countHumanMembers(room);
         const responseData = {
           success: true,
-          searching: Boolean(room.matchmakingEndsAt) && !extResult.startedImmediately,
+          searching: true,
+          state: 'FINDING_MATCH',
+          showMatchFoundPopup: false,
+          requireAccept: true,
+          acceptedCount: 0,
+          totalPlayers: room.members.size,
+          currentPlayers: humanCount,
           mode: resolvedMode,
           targetPlayers: resolvedTargetPlayers,
           matchedWithHumans: true,
           extendedQueue: extResult.extended,
           botsAdded: 0,
-          autoStarted: extResult.startedImmediately,
+          autoStarted: false,
           roomId: room.id,
-          room: {
-            id: room.id,
-            name: room.name,
-            hostId: room.hostId,
-            mode: resolvedMode,
-            targetPlayers: resolvedTargetPlayers,
-            members: getRoomMembersArray(room),
-            messages: room.messages.slice(-MAX_CHAT_HISTORY_SIZE)
-          },
+          room: roomSnapshot,
           user: currentUser,
           gameState: game.getStateSnapshot()
         };
@@ -940,7 +1051,6 @@ export function registerRoomHandlers(
           `[Matchmaking] 🤝 [Best-Fit] Ghép ${currentUser.userName} vào phòng đang chờ [${resolvedMode}] (${room.members.size}/${resolvedTargetPlayers}): ${room.id}`
         );
         socket.emit('joined_room_success', responseData);
-        socket.emit('match_found', responseData);
         if (callback) callback(responseData);
         return;
       }
@@ -964,6 +1074,7 @@ export function registerRoomHandlers(
           id: newRoomId,
           name: hostEntry.userName,
           createdAt: Date.now(),
+          lastActivityAt: Date.now(),
           hostId: hostEntry.socket.id,
           hostUserId: hostEntry.userId,
           mode: resolvedMode,
@@ -985,12 +1096,14 @@ export function registerRoomHandlers(
         // Đưa người chơi đang chờ (Peer) làm HOST
         const hostUser = hostEntry.sessionState.currentUser;
         hostEntry.sessionState.currentRoomId = room.id;
+        hostEntry.sessionState.isSearchingMatch = false;
         hostUser.socketId = hostEntry.socket.id;
         hostUser.userId = hostEntry.userId;
         hostUser.userName = hostEntry.userName;
         hostUser.avatar = hostEntry.avatar;
         hostUser.role = 'HOST';
-        hostUser.isReady = true;
+        hostUser.isReady = false;
+        hostUser.isAccepted = false;
         hostUser.isAuthenticated = true;
         hostUser.joinedAt = Date.now();
 
@@ -1000,8 +1113,10 @@ export function registerRoomHandlers(
 
         // Đưa người chơi hiện tại vào phòng làm PLAYER
         sessionState.currentRoomId = room.id;
+        sessionState.isSearchingMatch = false;
         currentUser.role = 'PLAYER';
-        currentUser.isReady = true;
+        currentUser.isReady = false;
+        currentUser.isAccepted = false;
         currentUser.joinedAt = Date.now();
 
         socket.join(room.id);
@@ -1018,12 +1133,14 @@ export function registerRoomHandlers(
           cancelMatchmakingForSocket(otherId);
           const u = otherEntry.sessionState.currentUser;
           otherEntry.sessionState.currentRoomId = room.id;
+          otherEntry.sessionState.isSearchingMatch = false;
           u.socketId = otherEntry.socket.id;
           u.userId = otherEntry.userId;
           u.userName = otherEntry.userName;
           u.avatar = otherEntry.avatar;
           u.role = 'PLAYER';
-          u.isReady = true;
+          u.isReady = false;
+          u.isAccepted = false;
           u.isAuthenticated = true;
           u.joinedAt = Date.now();
           otherEntry.socket.join(room.id);
@@ -1032,29 +1149,119 @@ export function registerRoomHandlers(
           extraPeers.push(otherEntry);
         }
 
-        // Nếu đã đủ số người mục tiêu (2/2 với RACE_1V1 hoặc 4/4 với QUICK_MATCH) và autoStart=true -> Bắt đầu ngay!
-        // Nếu chưa đủ (ví dụ 2/4 ở QUICK_MATCH) -> Bật đồng hồ đếm ngược phòng (cộng giờ mềm +5s nếu còn < 5s, trần 16s) để tìm thêm người thứ 3, 4 hoặc tự bù Bot khi hết giờ!
-        let autoStarted = false;
-        if (room.members.size >= resolvedTargetPlayers && autoStart !== false && hostEntry.autoStart !== false) {
-          autoStarted = game.startGame({ requireAllReady: false });
-        } else if (room.members.size < resolvedTargetPlayers) {
-          const now = Date.now();
-          const hostElapsed = Math.max(0, now - hostEntry.joinedQueueAt);
-          let remainingForRoomMs = Math.max(0, hostEntry.waitMs - hostElapsed);
-          const maxCapRemaining = Math.max(0, MATCHMAKING_MAX_WAIT_CAP_MS - hostElapsed);
-          if (remainingForRoomMs < MATCHMAKING_EXTEND_MS) {
-            remainingForRoomMs = Math.min(maxCapRemaining, MATCHMAKING_EXTEND_MS);
+        const effectiveAcceptWaitMs =
+          typeof resolvedAcceptWaitMs === 'number' ? resolvedAcceptWaitMs : hostEntry.acceptWaitMs;
+        const effectiveRequireAccept =
+          typeof resolvedRequireAccept === 'boolean' ? resolvedRequireAccept : hostEntry.requireAccept;
+        const effectiveAutoStart = autoStart !== false && hostEntry.autoStart !== false;
+
+        // Nếu đã đủ số người mục tiêu (2/2 với RACE_1V1 hoặc 4/4 với QUICK_MATCH) -> Bắn thông tin tìm thấy trận để hiển thị Popup Find Match + số người đã Accept!
+        if (room.members.size >= resolvedTargetPlayers) {
+          const fin = finalizeRoomMatchmakingAndStart(room.id, {
+            autoStart: effectiveAutoStart,
+            difficulty: resolvedDiff || hostEntry.botDifficulty,
+            acceptWaitMs: effectiveAcceptWaitMs,
+            requireAccept: effectiveRequireAccept
+          });
+
+          const membersList = getRoomMembersArray(room);
+          const roomSnapshot = {
+            id: room.id,
+            name: room.name,
+            hostId: room.hostId,
+            mode: resolvedMode,
+            targetPlayers: resolvedTargetPlayers,
+            members: membersList,
+            messages: room.messages.slice(-MAX_CHAT_HISTORY_SIZE)
+          };
+          const stateSnapshot = game.getStateSnapshot();
+          const acceptSnapshot = buildMatchAcceptPayload(room, {
+            matchedWithHumans: true,
+            timedOutToBots: false,
+            botsAdded: fin.botsAdded,
+            autoStarted: fin.autoStarted,
+            allAccepted: fin.allAccepted
+          });
+
+          const hostPayload = {
+            ...acceptSnapshot,
+            success: true,
+            searching: false,
+            mode: resolvedMode,
+            targetPlayers: resolvedTargetPlayers,
+            matchedWithHumans: true,
+            botsAdded: fin.botsAdded,
+            autoStarted: fin.autoStarted,
+            roomId: room.id,
+            room: roomSnapshot,
+            user: hostUser,
+            gameState: stateSnapshot
+          };
+          hostEntry.socket.emit('joined_room_success', hostPayload);
+          hostEntry.socket.emit('match_found', hostPayload);
+          hostEntry.socket.emit('match_accept_updated', hostPayload);
+          if (hostEntry.onResolved) {
+            const cb = hostEntry.onResolved;
+            hostEntry.onResolved = undefined;
+            cb(hostPayload);
           }
-          if (remainingForRoomMs > 0) {
-            startRoomMatchmakingCountdown(room.id, {
-              waitMs: remainingForRoomMs,
-              mode: resolvedMode,
-              targetPlayers: resolvedTargetPlayers,
-              autoStart: autoStart !== false && hostEntry.autoStart !== false,
-              difficulty: resolvedDiff || hostEntry.botDifficulty
-            });
+
+          for (const ep of extraPeers) {
+            const epPayload = {
+              ...hostPayload,
+              user: ep.sessionState.currentUser
+            };
+            ep.socket.emit('joined_room_success', epPayload);
+            ep.socket.emit('match_found', epPayload);
+            ep.socket.emit('match_accept_updated', epPayload);
+            if (ep.onResolved) {
+              const cb = ep.onResolved;
+              ep.onResolved = undefined;
+              cb(epPayload);
+            }
           }
+
+          hostEntry.socket.emit('user_joined', {
+            user: currentUser,
+            members: membersList,
+            systemMessage: SystemMessageCode.SYS_PLAYER_JOINED_ROOM,
+            messageCode: SystemMessageCode.SYS_PLAYER_JOINED_ROOM,
+            messageParams: { userName: currentUser.userName, role: currentUser.role }
+          });
+
+          const currentPayload = {
+            ...hostPayload,
+            user: currentUser
+          };
+
+          console.log(
+            `[Matchmaking] 🎉 Ghép đủ ${room.members.size}/${resolvedTargetPlayers} người chơi [${resolvedMode}] vào phòng ${room.id} -> Show Popup Find Match (Accepted: ${acceptSnapshot.acceptedCount}/${acceptSnapshot.totalPlayers})`
+          );
+
+          socket.emit('joined_room_success', currentPayload);
+          socket.emit('match_found', currentPayload);
+          socket.emit('match_accept_updated', currentPayload);
+          if (callback) callback(currentPayload);
+          return;
         }
+
+        // Chưa đủ người mục tiêu (ví dụ 2/4 ở QUICK_MATCH) -> Bật đồng hồ đếm ngược phòng (cộng giờ mềm +5s nếu còn < 5s, trần 16s) để tìm thêm người thứ 3, 4 hoặc tự bù Bot khi hết giờ!
+        const now = Date.now();
+        const hostElapsed = Math.max(0, now - hostEntry.joinedQueueAt);
+        let remainingForRoomMs = Math.max(0, hostEntry.waitMs - hostElapsed);
+        const maxCapRemaining = Math.max(0, MATCHMAKING_MAX_WAIT_CAP_MS - hostElapsed);
+        if (remainingForRoomMs < MATCHMAKING_EXTEND_MS) {
+          remainingForRoomMs = Math.min(maxCapRemaining, MATCHMAKING_EXTEND_MS);
+        }
+        startRoomMatchmakingCountdown(room.id, {
+          waitMs: remainingForRoomMs,
+          acceptWaitMs: effectiveAcceptWaitMs,
+          requireAccept: effectiveRequireAccept,
+          mode: resolvedMode,
+          targetPlayers: resolvedTargetPlayers,
+          autoStart: effectiveAutoStart,
+          difficulty: resolvedDiff || hostEntry.botDifficulty
+        });
 
         const membersList = getRoomMembersArray(room);
         const roomSnapshot = {
@@ -1068,36 +1275,38 @@ export function registerRoomHandlers(
         };
         const stateSnapshot = game.getStateSnapshot();
 
-        // Thông báo cho Host (người đang chờ trong queue)
         const hostPayload = {
           success: true,
-          searching: room.members.size < resolvedTargetPlayers && Boolean(room.matchmakingEndsAt),
+          searching: Boolean(room.matchmakingEndsAt),
+          state: 'FINDING_MATCH',
+          showMatchFoundPopup: false,
+          requireAccept: true,
+          acceptedCount: 0,
+          totalPlayers: room.members.size,
+          currentPlayers: room.members.size,
           mode: resolvedMode,
           targetPlayers: resolvedTargetPlayers,
           matchedWithHumans: true,
           botsAdded: 0,
-          autoStarted,
+          autoStarted: false,
           roomId: room.id,
           room: roomSnapshot,
           user: hostUser,
           gameState: stateSnapshot
         };
         hostEntry.socket.emit('joined_room_success', hostPayload);
-        hostEntry.socket.emit('match_found', hostPayload);
         if (hostEntry.onResolved) {
           const cb = hostEntry.onResolved;
           hostEntry.onResolved = undefined;
           cb(hostPayload);
         }
 
-        // Thông báo cho các peer phụ (nếu có)
         for (const ep of extraPeers) {
           const epPayload = {
             ...hostPayload,
             user: ep.sessionState.currentUser
           };
           ep.socket.emit('joined_room_success', epPayload);
-          ep.socket.emit('match_found', epPayload);
           if (ep.onResolved) {
             const cb = ep.onResolved;
             ep.onResolved = undefined;
@@ -1105,7 +1314,6 @@ export function registerRoomHandlers(
           }
         }
 
-        // Broadcast sự kiện user_joined cho phòng
         hostEntry.socket.emit('user_joined', {
           user: currentUser,
           members: membersList,
@@ -1115,25 +1323,15 @@ export function registerRoomHandlers(
         });
 
         const currentPayload = {
-          success: true,
-          searching: room.members.size < resolvedTargetPlayers && Boolean(room.matchmakingEndsAt),
-          mode: resolvedMode,
-          targetPlayers: resolvedTargetPlayers,
-          matchedWithHumans: true,
-          botsAdded: 0,
-          autoStarted,
-          roomId: room.id,
-          room: roomSnapshot,
-          user: currentUser,
-          gameState: stateSnapshot
+          ...hostPayload,
+          user: currentUser
         };
 
         console.log(
-          `[Matchmaking] 🤝 Ghép thành công ${room.members.size}/${resolvedTargetPlayers} người chơi [${resolvedMode}] vào phòng mới: ${room.id}`
+          `[Matchmaking] 🤝 Ghép thành công ${room.members.size}/${resolvedTargetPlayers} người chơi [${resolvedMode}] vào phòng chờ: ${room.id}`
         );
 
         socket.emit('joined_room_success', currentPayload);
-        socket.emit('match_found', currentPayload);
         if (callback) callback(currentPayload);
         return;
       }
@@ -1158,6 +1356,8 @@ export function registerRoomHandlers(
         botDifficulty: resolvedDiff,
         autoStart: autoStart !== false,
         waitMs: resolvedWaitMs,
+        acceptWaitMs: resolvedAcceptWaitMs,
+        requireAccept: resolvedRequireAccept,
         joinedQueueAt: Date.now(),
         timer: null,
         tickTimer: null,
@@ -1184,7 +1384,8 @@ export function registerRoomHandlers(
           userName: cleanName,
           avatar: cleanAvatar,
           role: 'HOST' as const,
-          isReady: true,
+          isReady: false,
+          isAccepted: false,
           isBot: false,
           botDifficulty: null,
           joinedAt: startedAt
@@ -1198,9 +1399,12 @@ export function registerRoomHandlers(
       socket.emit('matchmaking_searching', {
         searching: true,
         state: 'FINDING_MATCH',
+        showMatchFoundPopup: false,
         mode: resolvedMode,
         currentPlayers: 1,
         targetPlayers: resolvedTargetPlayers,
+        acceptedCount: 0,
+        totalPlayers: 1,
         members: soloSlotMembers,
         waitMs: resolvedWaitMs,
         remainingMs: remainingSeconds * 1000,
@@ -1221,9 +1425,12 @@ export function registerRoomHandlers(
       socket.emit('matchmaking_tick', {
         searching: true,
         state: 'FINDING_MATCH',
+        showMatchFoundPopup: false,
         mode: resolvedMode,
         currentPlayers: 1,
         targetPlayers: resolvedTargetPlayers,
+        acceptedCount: 0,
+        totalPlayers: 1,
         members: soloSlotMembers,
         waitMs: resolvedWaitMs,
         remainingMs: remainingSeconds * 1000,
@@ -1244,9 +1451,12 @@ export function registerRoomHandlers(
           socket.emit('matchmaking_tick', {
             searching: true,
             state: 'FINDING_MATCH',
+            showMatchFoundPopup: false,
             mode: resolvedMode,
             currentPlayers: 1,
             targetPlayers: resolvedTargetPlayers,
+            acceptedCount: 0,
+            totalPlayers: 1,
             members: soloSlotMembers,
             waitMs: resolvedWaitMs,
             remainingMs: remainingSeconds * 1000,
@@ -1304,6 +1514,11 @@ export function registerRoomHandlers(
       const entry = matchmakingQueue.get(socket.id);
       if (!entry) {
         const activeRoom = sessionState.currentRoomId ? rooms.get(sessionState.currentRoomId) : null;
+        if (activeRoom && activeRoom.matchAcceptEndsAt && activeRoom.matchAcceptStartedAt) {
+          const acceptPayload = buildMatchAcceptPayload(activeRoom);
+          if (callback) callback(acceptPayload);
+          return;
+        }
         if (activeRoom && activeRoom.matchmakingEndsAt && activeRoom.matchmakingStartedAt) {
           const now = Date.now();
           const remainingMs = Math.max(0, activeRoom.matchmakingEndsAt - now);
@@ -1311,14 +1526,17 @@ export function registerRoomHandlers(
           const totalMs = Math.max(1000, activeRoom.matchmakingEndsAt - activeRoom.matchmakingStartedAt);
           const totalWaitSeconds = Math.ceil(totalMs / 1000);
           const elapsedSeconds = Math.max(0, totalWaitSeconds - timeRemaining);
-          const humanCount = Array.from(activeRoom.members.values()).filter(m => !isBotMember(m)).length;
+          const humanCount = countHumanMembers(activeRoom);
           const roomPayload = {
             searching: true,
             state: 'FINDING_MATCH',
+            showMatchFoundPopup: false,
             roomId: activeRoom.id,
             mode: activeRoom.mode || 'QUICK_MATCH',
             currentPlayers: humanCount,
             targetPlayers: activeRoom.targetPlayers || DEFAULT_MIN_PLAYERS_WITH_BOTS,
+            acceptedCount: 0,
+            totalPlayers: activeRoom.members.size,
             members: getRoomMembersArray(activeRoom),
             waitMs: totalMs,
             remainingMs,
@@ -1338,6 +1556,7 @@ export function registerRoomHandlers(
         const idlePayload = {
           searching: false,
           state: 'IDLE',
+          showMatchFoundPopup: false,
           waitMs: 0,
           remainingMs: 0,
           timeRemaining: 0,
@@ -1357,9 +1576,12 @@ export function registerRoomHandlers(
       const activePayload = {
         searching: true,
         state: 'FINDING_MATCH',
+        showMatchFoundPopup: false,
         mode: entry.mode || 'QUICK_MATCH',
         currentPlayers: 1,
         targetPlayers: entry.targetPlayers || DEFAULT_MIN_PLAYERS_WITH_BOTS,
+        acceptedCount: 0,
+        totalPlayers: 1,
         members: [
           {
             socketId: entry.socket.id,
@@ -1367,7 +1589,8 @@ export function registerRoomHandlers(
             userName: entry.userName,
             avatar: entry.avatar,
             role: 'HOST',
-            isReady: true,
+            isReady: false,
+            isAccepted: false,
             isBot: false,
             botDifficulty: null,
             joinedAt: entry.joinedQueueAt
@@ -1388,8 +1611,8 @@ export function registerRoomHandlers(
     }
   );
 
-  // 11. HỦY TÌM TRẬN NHANH HỢP NHẤT (Unified Cancel Match: cancel_match & cancel_quick_match)
-  // Hỗ trợ hủy cả khi đang đứng lẻ 1/4 trong Queue lẫn khi đã được gom tạm vào phòng 2/4, 3/4 đang đếm ngược trước khi Start Game
+  // 11. HỦY TÌM TRẬN NHANH HỢP NHẤT (Unified Cancel Match: cancel_match, cancel_quick_match & decline_match)
+  // Hỗ trợ hủy cả khi đang đứng lẻ 1/4 trong Queue lẫn khi đã được gom tạm vào phòng 2/4, 3/4 hoặc đang ở Popup Find Match trước khi Start Game
   const handleCancelMatchmaking = (
     dataOrCallback?: unknown,
     maybeCallback?: (res: Record<string, unknown>) => void
@@ -1423,6 +1646,7 @@ export function registerRoomHandlers(
       cancelledFromPreStartRoom,
       searching: false,
       state: 'IDLE',
+      showMatchFoundPopup: false,
       timeRemaining: 0,
       remainingMs: 0,
       systemMessage: SystemMessageCode.SYS_MATCHMAKING_CANCELLED,
@@ -1434,4 +1658,6 @@ export function registerRoomHandlers(
 
   socket.on('cancel_match', handleCancelMatchmaking);
   socket.on('cancel_quick_match', handleCancelMatchmaking);
+  socket.on('decline_match', handleCancelMatchmaking);
 }
+

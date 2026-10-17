@@ -419,23 +419,24 @@ const socket = io("https://micmixfun.up.railway.app", {
 | Event Name | Payload Gửi Lên | Callback Response (`ack`) | Mô tả |
 | :--- | :--- | :--- | :--- |
 | `auth_guest` / `auth_firebase` | `{ userName, avatar, authToken?, firebaseIdToken? }` | `{ success: true, userId, firebaseUid, provider, authToken, expiresAt, user }` | Xác thực hoặc đổi tên/avatar trực tiếp trên kết nối Socket |
-| `create_room` | `{ roomId?, roomName?, userName?, avatar? }` | `{ success: true, roomId, roomName, hostId, mode: "CUSTOM_ROOM", authToken, expiresAt, room, user, gameState }` | **Tạo phòng riêng (`CUSTOM_ROOM`)**: Tự động đưa người tạo vào phòng làm `HOST` (`isReady: true`), khởi tạo `MimicGameSession` và phát `joined_room_success` ngay trong 1 bước |
-| `join_room` | `{ roomId, userName, avatar, userId?, authToken?, firebaseIdToken?, createIfNotExists?: false }` | `{ success: true, authToken, expiresAt, restoredSession, room, user, gameState }` | **Vào phòng riêng theo mã Code**: Kiểm tra mã phòng phải tồn tại (nếu gõ sai mã báo lỗi `ROOM_NOT_FOUND`). Chặn người ngoài tự ý nhập mã nhảy vào phòng `QUICK_MATCH` / `RACE_1V1`. Hỗ trợ Reconnect 120s khôi phục điểm ở `CUSTOM_ROOM` |
-| `leave_room` | `{}` | `{ success: true }` | Rời khỏi phòng hiện tại |
+| `create_room` | `{ roomId?, roomName?, userName?, avatar? }` | `{ success: true, roomId, roomName, hostId, mode: "CUSTOM_ROOM", authToken, expiresAt, room, user, gameState }` | **Tạo phòng riêng (`CUSTOM_ROOM`)**: Tự động thoát sạch mọi phòng cũ (`QUICK_MATCH` / `RACE_1V1` / `CUSTOM_ROOM`), bỏ qua `roomId` cũ của phòng Matchmaking nếu Client gửi nhầm, đưa người tạo vào phòng mới làm `HOST` (`isReady: true`) và khởi tạo `MimicGameSession` ngay trong 1 bước |
+| `join_room` | `{ roomId, userName, avatar, userId?, authToken?, firebaseIdToken?, createIfNotExists?: false }` | `{ success: true, authToken, expiresAt, restoredSession: false, room, user, gameState }` | **Vào phòng riêng (`CUSTOM_ROOM`) theo mã Code**: Chỉ cho phép vào phòng `CUSTOM_ROOM` khi nhập đúng mã phòng. **Bỏ hoàn toàn cơ chế tự động Reconnect**: Đã thoát phòng là thoát hẳn! Mọi lệnh `join_room` vào phòng `QUICK_MATCH` hoặc `RACE_1V1` đều bị chặn tuyệt đối (`ROOM_NOT_FOUND`) |
+| `leave_room` | `{}` | `{ success: true }` | **Rời khỏi phòng hiện tại dứt điểm** (không lưu trạng thái chờ reconnect; nếu không còn người thật nào trong phòng thì hủy phòng ngay lập tức `0ms`) |
 | `close_room` | `{ roomId? }` | `{ success: true, roomId, cleared: true }` | **(Chỉ Host)** Đóng phòng ngay lập tức và giải phóng toàn bộ RAM |
-| `player_ready_toggle` | `{ roomId?, isReady?: boolean }` | `{ success: true, isReady }` | Bật / tắt trạng thái sẵn sàng tại sảnh chờ |
+| `player_ready_toggle` | `{ roomId?, isReady?: boolean }` | `{ success: true, isReady }` | Bật / tắt trạng thái sẵn sàng tại sảnh chờ (hoặc xác nhận Accept nếu đang ở Popup Find Match) |
 | `kick_player` | `{ roomId?, targetSocketId }` | `{ success: true }` | **(Chỉ Host)** Mời người chơi hoặc xóa AI Bot khỏi phòng |
 | `add_bot` | `{ roomId?, difficulty?: "EASY"\|"NORMAL"\|"HARD", botName?, avatar? }` | `{ success: true, bot, members }` | **(Chỉ Host)** Thêm 1 AI Bot vào phòng khi ở trạng thái `IDLE` / `GAME_OVER` |
 | `remove_bot` | `{ roomId?, botSocketId? }` | `{ success: true, removedBot, members }` | **(Chỉ Host)** Xóa 1 AI Bot khỏi phòng (nếu không truyền `botSocketId` sẽ xóa Bot cuối) |
 
-#### Nhóm B — Tìm Trận Nhanh / Smart Matchmaking (`room.handler.ts`) — Hỗ Trợ `QUICK_MATCH` (4P) & `RACE_1V1` (2P)
+#### Nhóm B — Tìm Trận Nhanh / Smart Matchmaking & Popup Find Match (`room.handler.ts`) — Hỗ Trợ `QUICK_MATCH` (4P) & `RACE_1V1` (2P)
 
 | Event Name | Payload Gửi Lên | Callback Response (`ack`) | Mô tả |
 | :--- | :--- | :--- | :--- |
-| `find_match` (hoặc `quick_match`) | `{ userName?, avatar?, mode?: "QUICK_MATCH"\|"RACE_1V1", botCount?: 3, botDifficulty?, autoStart?: true, waitMs?: 10000, waitForPlayers?: true }` | `{ success: true, searching, mode, targetPlayers, matchedWithHumans, timedOutToBots?, botsAdded, autoStarted, roomId, room, user, gameState }` | Tìm trận nhanh **4 Người (`QUICK_MATCH`)**: Ưu tiên Best-Fit (`3/4 ➔ 2/4 ➔ 1/4`) + FIFO. Chờ cơ bản `10s`; khi tìm được thêm người thật (`2/4` hoặc `3/4`) lúc đồng hồ `< 5s` thì tự **cộng giờ mềm `+5s`** (trần tối đa `16s`). Hết giờ tự bù `(4 - N)` AI Bot và bắt đầu ngay |
-| `race_1v1` (hoặc `find_1v1_match`) | `{ userName?, avatar?, botDifficulty?, autoStart?: true, waitMs?: 8000, waitForPlayers?: true }` | `{ success: true, searching, mode: "RACE_1V1", targetPlayers: 2, matchedWithHumans, timedOutToBots?, botsAdded, autoStarted, roomId, room, user, gameState }` | Tìm trận **Đấu Tay Đôi `1vs1 Race` (`2 Người`)**: Khóa cứng `targetPlayers = 2`. Ghép được 1 đối thủ thật (`2/2`) là vào trận ngay lập tức; hết `8s` chờ tự bù đúng `1 AI Bot` |
-| `cancel_match` (hoặc `cancel_quick_match`) | `{}` (hoặc không truyền data) | `{ success: true, cancelled: boolean, cancelledFromPreStartRoom: boolean, searching: false, state: "IDLE", systemMessage: "SYS_MATCHMAKING_CANCELLED" }` | **Unified Cancel Match**: Hủy tìm trận được ở cả 2 trạng thái: khi đang đứng lẻ `1/4` trong Queue **và** khi đã được gom tạm vào phòng `2/4`, `3/4` đang đếm ngược chờ đủ người (`IDLE`) |
-| `get_matchmaking_state` | `{}` | `{ searching: boolean, state: "FINDING_MATCH"\|"IDLE", roomId?, mode, currentPlayers, targetPlayers, members, waitMs, remainingMs, timeRemaining, elapsedSeconds, totalDuration, progressPercent, startedAt, endsAt }` | Lấy trạng thái đồng hồ tìm trận và danh sách ghế Avatar (`members`) hiện tại từ Server |
+| `find_match` (hoặc `quick_match`) | `{ userName?, avatar?, mode?: "QUICK_MATCH"\|"RACE_1V1", botCount?: 3, botDifficulty?, autoStart?: true, waitMs?: 10000, waitForPlayers?: true, acceptWaitMs?: 5000, requireAccept?: true }` | `{ success: true, searching, state: "FINDING_MATCH"\|"MATCH_FOUND", showMatchFoundPopup, acceptedCount, totalPlayers, targetPlayers, acceptedSocketIds, allAccepted, matchedWithHumans, timedOutToBots?, botsAdded, autoStarted, roomId, room, user, gameState }` | Tìm trận nhanh **4 Người (`QUICK_MATCH`)**: Ưu tiên Best-Fit (`3/4 ➔ 2/4 ➔ 1/4`) + FIFO. Chờ cơ bản `10s`; khi tìm được thêm người thật (`2/4` hoặc `3/4`) lúc đồng hồ `< 5s` thì tự **cộng giờ mềm `+5s`** (trần tối đa `16s`). Hết giờ tự bù `(4 - N)` AI Bot. Khi đủ `4/4` người (người thật hoặc người thật + Bot), Server bắn `match_found` & `match_accept_updated` để hiển thị **Popup Find Match + số người đã Accept (`acceptedCount / totalPlayers`)** |
+| `race_1v1` (hoặc `find_1v1_match`) | `{ userName?, avatar?, botDifficulty?, autoStart?: true, waitMs?: 8000, waitForPlayers?: true, acceptWaitMs?: 5000, requireAccept?: true }` | `{ success: true, searching, state: "FINDING_MATCH"\|"MATCH_FOUND", showMatchFoundPopup, acceptedCount, totalPlayers: 2, targetPlayers: 2, acceptedSocketIds, allAccepted, mode: "RACE_1V1", matchedWithHumans, timedOutToBots?, botsAdded, autoStarted, roomId, room, user, gameState }` | Tìm trận **Đấu Tay Đôi `1vs1 Race` (`2 Người`)**: Khóa cứng `targetPlayers = 2`. Ghép đủ `2/2` người thật (hoặc hết `8s` chờ tự bù `1 AI Bot`) sẽ bắn `match_found` & `match_accept_updated` để hiển thị **Popup Find Match + số người đã Accept (`acceptedCount / 2`)** |
+| `accept_match` (hoặc `confirm_match_accept`, `match_accept`) | `{ roomId? }` | `{ success: true, roomId, acceptedCount, totalPlayers, targetPlayers, acceptedSocketIds, allAccepted, autoStarted, members }` | **Xác nhận Accept trên Popup Find Match**: Khi người chơi bấm nút **"ACCEPT"**, Server tăng `acceptedCount`, broadcast `match_accept_updated` (`acceptedCount / totalPlayers`) cho toàn phòng. AI Bot luôn được đánh dấu `isAccepted = true` ngay từ đầu. Khi **100% người chơi đã Accept** (`acceptedCount === totalPlayers`) hoặc hết `5s` đếm ngược Accept, Server phát `match_all_accepted` và bắt đầu ngay Step `5.0 THEME_SELECTION` |
+| `cancel_match` (hoặc `cancel_quick_match`, `decline_match`) | `{}` (hoặc không truyền data) | `{ success: true, cancelled: boolean, cancelledFromPreStartRoom: boolean, searching: false, state: "IDLE", showMatchFoundPopup: false, systemMessage: "SYS_MATCHMAKING_CANCELLED" }` | **Unified Cancel / Decline Match**: Hủy tìm trận khi đang đứng lẻ `1/4` trong Queue, khi đang ở phòng chờ `2/4`, `3/4`, hoặc khi từ chối ở Popup Find Match trước khi trận đấu bắt đầu |
+| `get_matchmaking_state` | `{}` | `{ searching: boolean, state: "FINDING_MATCH"\|"MATCH_FOUND"\|"IDLE", showMatchFoundPopup: boolean, acceptedCount, totalPlayers, roomId?, mode, currentPlayers, targetPlayers, members, waitMs, remainingMs, timeRemaining, elapsedSeconds, totalDuration, progressPercent, startedAt, endsAt }` | Lấy trạng thái đồng hồ tìm trận / Popup Find Match (`acceptedCount / totalPlayers`) và danh sách ghế Avatar (`members`) hiện tại từ Server |
 
 #### Nhóm C — Gameplay Đấu Trường Nhại Giọng (`game.handler.ts`) — Chuẩn UI Figma (`5.1` ➔ `5.10`)
 
@@ -449,7 +450,7 @@ const socket = io("https://micmixfun.up.railway.app", {
 | `game_emoji_reaction` | `{ roomId?, emoji: "😂" }` | — | Thả biểu tượng cảm xúc bay trên màn hình (tối đa 5 lần / giây) |
 | `confirm_showdown_skip` (hoặc `finish_round`, `skip_to_round_result`) | `{ roomId? }` | `{ success: true, isVoted, skipCount, totalCount, allSkipConfirmed }` | **Màn `SHOWDOWN_REVEAL` (`5.4 + 5.5` — `"FINISH ROUND ▶"`)**: Người chơi click nghe tự do các bản thu âm trong danh sách `"Players' Recordings"`, nghe xong bấm **"FINISH ROUND ▶"**. AI Bot luôn được đánh dấu Done sẵn (`100%`). Ngay khi **100% người chơi đã bấm Done** (hoặc hết `30s` AFK safety timer), Server lập tức chuyển sang `AI_SCORING` (`5.6`) |
 | `confirm_next_round_ready` (hoặc `new_round_now`) | `{ roomId? }` | `{ success: true, readyCount, totalCount, allReady }` | **Màn `BREAK_TIME` (`5.9` — `"NEW ROUND NOW"`) / `ROUND_RESULT` (`5.7`) / `GAME_OVER` (`5.10` ở `CUSTOM_ROOM`)**: Khi người chơi bấm **"NEW ROUND NOW"**, nếu **100% người thật trong phòng đã bấm**, Server chuyển thẳng sang Round tiếp theo ngay lập tức mà không cần đợi hết `11s` đếm ngược |
-| `get_game_state` | `{ roomId? }` | `GameStateSnapshot \| null` | Lấy toàn bộ trạng thái hiện tại của bàn chơi khi vừa kết nối lại |
+| `get_game_state` | `{ roomId? }` | `GameStateSnapshot \| null` | Lấy trạng thái hiện tại của bàn chơi (chỉ trả về dữ liệu nếu socket hiện đang là thành viên hợp lệ trong phòng đó) |
 
 #### Nhóm D — Chat, Soundboard, Chia Sẻ Audio & Live Mic (`media.handler.ts`)
 
@@ -467,7 +468,7 @@ const socket = io("https://micmixfun.up.railway.app", {
 
 ### 4.2. Sự Kiện Server Bắn Xuống Client (`Server ➔ Client`)
 
-#### 1) Sự kiện Phòng & Smart Matchmaking
+#### 1) Sự kiện Phòng, Smart Matchmaking & Popup Find Match (`acceptedCount / totalPlayers`)
 * **`joined_room_success`**: Gửi riêng cho socket vừa vào phòng thành công (cấu trúc giống hệt callback của `join_room`).
 * **`user_joined`**: Broadcast khi có người chơi hoặc Bot mới vào phòng:
   ```json
@@ -485,18 +486,21 @@ const socket = io("https://micmixfun.up.railway.app", {
 * **`kicked_from_room`**: Gửi riêng cho người bị Host kick (`{ code: "ROOM_KICKED_BY_HOST", message: "ROOM_KICKED_BY_HOST" }`).
 * **`room_closed`**: Broadcast khi phòng bị đóng (`{ roomId, reason: "HOST_CLOSED", message: "SYS_HOST_CLOSED_ROOM", messageParams, timestamp }`).
 * **`bot_added` / `bot_removed` / `bots_auto_filled`**: Broadcast khi thêm/xóa Bot thủ công hoặc tự động điền Bot lúc bắt đầu game.
-* **`matchmaking_searching`**: Gửi ngay khi bắt đầu vào hàng đợi chờ tìm người chơi thật, khi gom vào phòng chờ `2/4`, `3/4`, hoặc khi mở lại phòng tìm người mới sau trận (Server quản lý 100% timer tìm trận và trả về danh sách `members` để UI vẽ 4 ô ghế Avatar sáng dần `1/4 ➔ 2/4 ➔ 3/4`):
+* **`matchmaking_searching`**: Gửi ngay khi bắt đầu vào hàng đợi chờ tìm người chơi thật, hoặc khi gom vào phòng chờ `2/4`, `3/4` (Server quản lý 100% timer tìm trận và trả về danh sách `members` để UI vẽ 4 ô ghế Avatar sáng dần `1/4 ➔ 2/4 ➔ 3/4`):
   ```json
   {
     "searching": true,
     "state": "FINDING_MATCH",
+    "showMatchFoundPopup": false,
     "roomId": "A1B2C3",
     "mode": "QUICK_MATCH",
     "currentPlayers": 2,
     "targetPlayers": 4,
+    "acceptedCount": 0,
+    "totalPlayers": 2,
     "members": [
-      { "socketId": "...", "userName": "Player1", "avatar": "🎧", "role": "HOST", "isBot": false },
-      { "socketId": "...", "userName": "Player2", "avatar": "🦊", "role": "PLAYER", "isBot": false }
+      { "socketId": "...", "userName": "Player1", "avatar": "🎧", "role": "HOST", "isBot": false, "isAccepted": false },
+      { "socketId": "...", "userName": "Player2", "avatar": "🦊", "role": "PLAYER", "isBot": false, "isAccepted": false }
     ],
     "waitMs": 10000,
     "remainingMs": 10000,
@@ -520,10 +524,13 @@ const socket = io("https://micmixfun.up.railway.app", {
   {
     "searching": true,
     "state": "FINDING_MATCH",
+    "showMatchFoundPopup": false,
     "roomId": "A1B2C3",
     "mode": "QUICK_MATCH",
     "currentPlayers": 3,
     "targetPlayers": 4,
+    "acceptedCount": 0,
+    "totalPlayers": 3,
     "members": [ ... ],
     "waitMs": 13000,
     "remainingMs": 6000,
@@ -540,9 +547,44 @@ const socket = io("https://micmixfun.up.railway.app", {
   }
   ```
 * **`matchmaking_player_joined`**: Broadcast ngay khi có người chơi thật mới ghép vào phòng chờ (`2/4` hoặc `3/4`) làm kích hoạt cộng giờ mềm (`+5s` khi còn `< 5s`, trần `16s`) để Client hiển thị hiệu ứng sáng ô Avatar mới và cộng thêm giây chờ (`{ roomId, mode, currentPlayers, targetPlayers, members, extended: true, extendedBonusSeconds: 5, timeRemaining, remainingMs, totalWaitSeconds }`).
-* **`get_matchmaking_state` (`Client ➔ Server` ack)**: Cho phép Client lấy lại trạng thái timer tìm trận và `members` hiện tại từ Server bất cứ lúc nào nếu chuyển màn hình.
-* **`match_found`**: Gửi ngay khi ghép được người chơi thật hoặc khi hết thời gian chờ trên Server và tự động tạo phòng với AI Bot + bắt đầu Gameplay.
-* **`matchmaking_cancelled`**: Gửi khi người chơi hủy tìm trận (`{ success: true, cancelled: true, cancelledFromPreStartRoom: boolean, searching: false, state: "IDLE", timeRemaining: 0, remainingMs: 0, systemMessage: "SYS_MATCHMAKING_CANCELLED" }`).
+* **`match_found` / `matchmaking_found` / `match_accept_updated` (Show Popup Find Match + Số Người Đã Accept)**:
+  - Broadcast ngay khi phòng đã gom đủ số người chơi mục tiêu (`4/4` ở `QUICK_MATCH` hoặc `2/2` ở `RACE_1V1`, bao gồm cả người thật lẫn AI Bot được bù khi hết giờ tìm trận), và mỗi khi có người chơi bấm nút Accept (`accept_match`).
+  - **AI Bot luôn được đánh dấu `isAccepted: true` ngay từ đầu** (ví dụ: 1 người thật + 3 AI Bot sẽ hiển thị ngay `acceptedCount: 3, totalPlayers: 4`).
+  - Client dùng sự kiện này để bật **Popup Find Match** và hiển thị bộ đếm **`acceptedCount / totalPlayers`** (ví dụ: `"3/4 Players Accepted"`) cùng trạng thái tích xanh của từng thành viên trong `members[i].isAccepted`:
+  ```json
+  {
+    "success": true,
+    "searching": false,
+    "state": "MATCH_FOUND",
+    "showMatchFoundPopup": true,
+    "requireAccept": true,
+    "roomId": "A1B2C3",
+    "mode": "QUICK_MATCH",
+    "currentPlayers": 4,
+    "targetPlayers": 4,
+    "totalPlayers": 4,
+    "acceptedCount": 3,
+    "acceptedSocketIds": ["bot_1", "bot_2", "bot_3"],
+    "allAccepted": false,
+    "matchedWithHumans": false,
+    "timedOutToBots": true,
+    "botsAdded": 3,
+    "autoStarted": false,
+    "waitMs": 5000,
+    "remainingMs": 5000,
+    "timeRemaining": 5,
+    "members": [
+      { "socketId": "sock_u1", "userName": "Alex", "avatar": "🎧", "role": "HOST", "isBot": false, "isAccepted": false, "isReady": false },
+      { "socketId": "bot_1", "userName": "Bot Alpha", "avatar": "🤖", "role": "PLAYER", "isBot": true, "isAccepted": true, "isReady": true },
+      { "socketId": "bot_2", "userName": "Bot Meow", "avatar": "🐱", "role": "PLAYER", "isBot": true, "isAccepted": true, "isReady": true },
+      { "socketId": "bot_3", "userName": "Bot Shib", "avatar": "🐶", "role": "PLAYER", "isBot": true, "isAccepted": true, "isReady": true }
+    ]
+  }
+  ```
+* **`match_accept_tick`**: Bắn mỗi `1 giây` trong thời gian chờ người chơi bấm Accept trên Popup Find Match (`5s` mặc định).
+* **`match_all_accepted`**: Broadcast ngay khi **100% người chơi đã Accept** (`acceptedCount === totalPlayers` hoặc hết `5s` tự động Accept), đồng thời Server tự động bắt đầu ván đấu và phát `game_state_changed` (`state: "THEME_SELECTION"` — Step `5.0`).
+* **`get_matchmaking_state` (`Client ➔ Server` ack)**: Cho phép Client lấy lại trạng thái timer tìm trận (`FINDING_MATCH`) hoặc trạng thái Popup Find Match (`MATCH_FOUND` kèm `acceptedCount / totalPlayers`) bất cứ lúc nào.
+* **`matchmaking_cancelled`**: Gửi khi người chơi hủy tìm trận (`{ success: true, cancelled: true, cancelledFromPreStartRoom: boolean, searching: false, state: "IDLE", showMatchFoundPopup: false, timeRemaining: 0, remainingMs: 0, systemMessage: "SYS_MATCHMAKING_CANCELLED" }`).
 
 #### 2) Sự kiện Gameplay Mimic Party — Chuẩn Luồng Figma (`5.0` ➔ `5.10`)
 
@@ -572,7 +614,7 @@ const socket = io("https://micmixfun.up.railway.app", {
 | `7` | `5.6` | `AI_SCORING` | **`4s`** | Tự động khi hết `4s` ➔ `ROUND_RESULT` | `"Locking in this round..."` — AI phân tích Melody · Rhythm · Attack |
 | `8` | `5.7` | `ROUND_RESULT` | **`7s`** | Tự động khi hết `7s` (hoặc 100% Ready) ➔ `BREAK_TIME` / `GAME_OVER` | `"ROUND RESULTS"` — Podium 1st / 2nd / 3rd + Cộng điểm hiệp |
 | `9` | `5.9` | `BREAK_TIME` | **`11s`** | **100% người chơi bấm `"NEW ROUND NOW"`** (hoặc hết `11s`) ➔ `THEME_SELECTION` (vòng sau) | `"BREAK TIME"` — Nghỉ giải lao giữa 2 vòng + Nút `"NEW ROUND NOW"` |
-| `—` | `5.10` | `GAME_OVER` | **`8s`** (hoặc 100% Ready) | Tự mở lại tìm trận cho `QUICK_MATCH` / `RACE_1V1` (`FINDING_MATCH`) | `"FINAL RESULTS"` — Vinh danh nhà vô địch chung cuộc |
+| `—` | `5.10` | `GAME_OVER` | **`0s`** (`QUICK_MATCH`/`RACE_1V1`) hoặc **`8s`** (`CUSTOM_ROOM`) | Giải tán phòng ngay lập tức (`roomDisbanded: true`) đối với `QUICK_MATCH` / `RACE_1V1`; giữ sảnh ở `CUSTOM_ROOM` | `"FINAL RESULTS"` — Vinh danh nhà vô địch chung cuộc |
 
 * **`game_state_changed`**: Sự kiện trung tâm điều khiển UI mỗi khi Server chuyển sang Step mới:
   ```json
@@ -767,7 +809,7 @@ $$\text{Total Score} = \text{round}\big((\text{Melody/Pitch} \times 0.50) + (\te
 
 ---
 
-## 6. 📱 Kiến Trúc Tích Hợp Client (Android Kotlin MVI Pattern — Chuẩn UI Figma `5.0` ➔ `5.10`)
+## 6. 📱 Kiến Trúc Tích Hợp Client (Android Kotlin MVI Pattern — Chuẩn UI Figma `5.0` ➔ `5.10` & Popup Find Match)
 
 Client Android sử dụng mô hình MVI (Model-View-Intent) với `StateFlow` bám sát từng màn hình Figma:
 
@@ -785,10 +827,10 @@ enum class MimicGameState {
     AI_SCORING,            // 5.6 (4s)    - "Locking in this round... Melody · Rhythm · Attack"
     ROUND_RESULT,          // 5.7 (7s)    - "ROUND RESULTS PODIUM"
     BREAK_TIME,            // 5.9 (11s / 100% Ready) - "BREAK TIME" + Nút "NEW ROUND NOW"
-    GAME_OVER              // 5.10 (8s)   - "FINAL RESULTS"
+    GAME_OVER              // 5.10 (0s ở QuickMatch/1v1, 8s ở CustomRoom) - "FINAL RESULTS"
 }
 
-// 2. Data Class UiState
+// 2. Data Class UiState (Bao gồm trạng thái Popup Find Match + Số người đã Accept)
 data class MimicGameUiState(
     val state: MimicGameState = MimicGameState.IDLE,
     val phaseStep: String = "5.0",
@@ -796,6 +838,14 @@ data class MimicGameUiState(
     val totalRounds: Int = 3,
     val timeRemaining: Int = 0,
     val progressPercent: Int = 0,
+    // Trạng thái Tìm trận & Popup Find Match + Accept
+    val isSearchingMatch: Boolean = false,
+    val showMatchFoundPopup: Boolean = false,
+    val isMyMatchAccepted: Boolean = false,
+    val acceptedCount: Int = 0,
+    val totalMatchPlayers: Int = 4,
+    val acceptTimeRemaining: Int = 5,
+    // Trạng thái Gameplay
     val targetSound: TargetSound? = null,
     val attempts: List<PlayerAttempt> = emptyList(),
     val leaderboard: List<LeaderboardItem> = emptyList(),
@@ -806,7 +856,65 @@ data class MimicGameUiState(
     val readyCount: Int = 0
 )
 
-// 3. Socket Listeners trong ViewModel
+// 3. Socket Listeners cho Popup Find Match + Accept (match_found, match_accept_updated, match_accept_tick, match_all_accepted)
+val handleMatchFoundOrAcceptUpdate: (Array<Any>) -> Unit = { args ->
+    val data = args.firstOrNull() as? JSONObject
+    if (data != null && data.optBoolean("showMatchFoundPopup", false)) {
+        val acceptedIds = data.optJSONArray("acceptedSocketIds")
+        val myId = socket.id()
+        var iAccepted = false
+        if (acceptedIds != null && myId != null) {
+            for (i in 0 until acceptedIds.length()) {
+                if (acceptedIds.optString(i) == myId) iAccepted = true
+            }
+        }
+        _uiState.update { current ->
+            current.copy(
+                isSearchingMatch = false,
+                showMatchFoundPopup = !data.optBoolean("allAccepted", false),
+                isMyMatchAccepted = iAccepted,
+                acceptedCount = data.optInt("acceptedCount", current.acceptedCount),
+                totalMatchPlayers = data.optInt("totalPlayers", current.totalMatchPlayers),
+                acceptTimeRemaining = data.optInt("timeRemaining", current.acceptTimeRemaining)
+            )
+        }
+    }
+}
+socket.on("match_found", handleMatchFoundOrAcceptUpdate)
+socket.on("matchmaking_found", handleMatchFoundOrAcceptUpdate)
+socket.on("match_accept_updated", handleMatchFoundOrAcceptUpdate)
+socket.on("match_accept_tick", handleMatchFoundOrAcceptUpdate)
+
+socket.on("match_all_accepted") {
+    _uiState.update { it.copy(showMatchFoundPopup = false, isSearchingMatch = false) }
+}
+
+// Hành động khi User bấm nút "ACCEPT" trên Popup Find Match
+fun onAcceptMatchClicked() {
+    socket.emit("accept_match", JSONObject().put("roomId", currentRoomId), Ack { ackArgs ->
+        val res = ackArgs.firstOrNull() as? JSONObject ?: return@Ack
+        if (res.optBoolean("success")) {
+            _uiState.update { current ->
+                current.copy(
+                    isMyMatchAccepted = true,
+                    acceptedCount = res.optInt("acceptedCount", current.acceptedCount),
+                    totalMatchPlayers = res.optInt("totalPlayers", current.totalMatchPlayers),
+                    showMatchFoundPopup = !res.optBoolean("allAccepted", false)
+                )
+            }
+        }
+    })
+}
+
+// Hành động khi User thoát giữa trận hoặc rời phòng -> Xóa sạch currentRoomId dưới Client (Đã out là out hẳn, không reconnect)
+fun onLeaveRoomAndGoHome() {
+    socket.emit("leave_room", JSONObject(), Ack {
+        currentRoomId = null
+        _uiState.value = MimicGameUiState()
+    })
+}
+
+// 4. Socket Listeners cho Gameplay trong ViewModel
 socket.on("game_state_changed") { args ->
     val data = args.firstOrNull() as? JSONObject ?: return@on
     val nextState = runCatching { MimicGameState.valueOf(data.getString("state")) }
@@ -816,6 +924,8 @@ socket.on("game_state_changed") { args ->
     _uiState.update { current ->
         current.copy(
             state = nextState,
+            showMatchFoundPopup = false,
+            isSearchingMatch = false,
             phaseStep = data.optString("phaseStep", current.phaseStep),
             round = data.optInt("round", current.round),
             totalRounds = data.optInt("totalRounds", current.totalRounds),
@@ -827,6 +937,11 @@ socket.on("game_state_changed") { args ->
             totalPlayerCount = payload?.optInt("totalCount", current.totalPlayerCount) ?: current.totalPlayerCount,
             isMyNewRoundClicked = if (nextState == MimicGameState.BREAK_TIME) false else current.isMyNewRoundClicked
         )
+    }
+
+    // Nếu trận đấu QUICK_MATCH / RACE_1V1 kết thúc (roomDisbanded == true), xóa ngay currentRoomId dưới Client
+    if (nextState == MimicGameState.GAME_OVER && payload?.optBoolean("roomDisbanded", false) == true) {
+        currentRoomId = null
     }
 
     // Trigger Side-effects theo từng màn hình Figma
@@ -871,7 +986,7 @@ socket.on("game_state_changed") { args ->
     }
 }
 
-// 4. Lắng nghe nhịp đếm ngược 1s từ Server
+// 5. Lắng nghe nhịp đếm ngược 1s từ Server
 socket.on("game_state_tick") { args ->
     val data = args.firstOrNull() as? JSONObject ?: return@on
     _uiState.update { current ->
@@ -882,7 +997,7 @@ socket.on("game_state_tick") { args ->
     }
 }
 
-// 5. Lắng nghe cập nhật số người bấm "FINISH ROUND ▶" (5.5) & "NEW ROUND NOW" (5.9)
+// 6. Lắng nghe cập nhật số người bấm "FINISH ROUND ▶" (5.5) & "NEW ROUND NOW" (5.9)
 socket.on("showdown_skip_updated") { args ->
     val data = args.firstOrNull() as? JSONObject ?: return@on
     _uiState.update { current ->
@@ -903,7 +1018,7 @@ socket.on("round_ready_updated") { args ->
     }
 }
 
-// 6. Hành động khi User bấm nút "FINISH ROUND ▶" tại màn 5.5 (SHOWDOWN_REVEAL)
+// 7. Hành động khi User bấm nút "FINISH ROUND ▶" tại màn 5.5 (SHOWDOWN_REVEAL)
 fun onFinishRoundClicked() {
     socket.emit("finish_round", JSONObject().put("roomId", currentRoomId), Ack { ackArgs ->
         val res = ackArgs.firstOrNull() as? JSONObject ?: return@Ack
@@ -913,7 +1028,7 @@ fun onFinishRoundClicked() {
     })
 }
 
-// 7. Hành động khi User bấm nút "NEW ROUND NOW" tại màn 5.9 (BREAK_TIME)
+// 8. Hành động khi User bấm nút "NEW ROUND NOW" tại màn 5.9 (BREAK_TIME)
 fun onNewRoundNowClicked() {
     socket.emit("new_round_now", JSONObject().put("roomId", currentRoomId), Ack { ackArgs ->
         val res = ackArgs.firstOrNull() as? JSONObject ?: return@Ack
@@ -1129,8 +1244,8 @@ Chi tiết đầy đủ xem tại **[CLIENT_OPTIMIZATION_GUIDE.md](./CLIENT_OPTI
    * Mỗi vòng chỉ gọi `game_submit_audio` **đúng 1 lần**.
 2. **Đính kèm chỉ số DSP tính sẵn tại Client (`metrics`)**:
    * Gửi kèm `metrics: { matchPct, activeRatio, energyScore, rhythmScore }` tính từ sóng âm thời gian thực để giảm tải CPU chấm điểm trên Server.
-3. **Truyền cố định `userId` khi vào phòng (`join_room`)**:
-   * Lưu `userId` (UUID) dưới máy client và gửi kèm khi `join_room` để Server tự động khôi phục điểm số (`totalScore`, `roundScore`) nếu rớt mạng tạm thời trong 120s.
+3. **Bỏ cơ chế tự động Reconnect (Đã Out là Out hẳn)**:
+   * Khi người chơi thoát giữa trận (`leave_room`, `cancel_match`, ngắt kết nối hoặc chuyển sang mở `create_room`), người chơi bị xóa dứt điểm khỏi phòng trước đó. Client phải xóa `currentRoomId = null` ngay khi thoát phòng và tuyệt đối không tự gọi `join_room` vào lại mã phòng `QUICK_MATCH` / `RACE_1V1` cũ. Chỉ phòng `CUSTOM_ROOM` mới cho phép tham gia qua mã code phòng.
 4. **Sử dụng HTTP Stream cho các bản thu lớn (`/api/attempts/:roomId/:socketId`)**:
    * Ở `SHOWDOWN_REVEAL`, ưu tiên phát âm thanh qua `audioStreamUrl` (lazy load khi người dùng bấm nghe) và cache các file mẫu `/downloaded_sounds/*` tại bộ nhớ đệm của thiết bị.
 5. **Throttle các sự kiện tần suất cao**:
@@ -1141,7 +1256,7 @@ Chi tiết đầy đủ xem tại **[CLIENT_OPTIMIZATION_GUIDE.md](./CLIENT_OPTI
 
 ## 9. 🔐 Phương Thức Xác Thực Người Dùng (Guest Session Token / HMAC-SHA256)
 
-Server sử dụng cơ chế **Stateless Signed Session Token (`HMAC-SHA256`)** để định danh người chơi mà không bắt buộc đăng ký tài khoản mật khẩu phức tạp, đồng thời **chống giả mạo `userId`** và bảo vệ điểm số khi kết nối lại.
+Server sử dụng cơ chế **Stateless Signed Session Token (`HMAC-SHA256`)** để định danh người chơi mà không bắt buộc đăng ký tài khoản mật khẩu phức tạp, đồng thời **chống giả mạo `userId`**.
 
 ### 9.1. Cấu trúc Token
 * Định dạng: `<base64url(payloadJSON)>.<base64url(hmacSha256Signature)>`
@@ -1258,11 +1373,8 @@ Khi ứng dụng Android / iOS / Web sử dụng **Firebase Anonymous Authentica
 2. **Tự động giải phóng Audio Buffer sau mỗi vòng (`clearRoundAudioData`)**:
    * Ngay khi kết thúc pha nghe lại (`SHOWDOWN_REVEAL` ➔ `ROUND_RESULT` hoặc `GAME_OVER`), Server tự động gọi `clearRoundAudioData()` để xóa toàn bộ `audioStore` và chuỗi Base64 của vòng vừa qua khỏi RAM, chỉ giữ lại điểm số trên bảng xếp hạng.
 
-3. **Tự động dọn dẹp khi tất cả thành viên rời phòng (`leave_room` / `disconnect`)**:
-   * Khi thành viên cuối cùng rời phòng (`room.members.size === 0`):
-     * Xóa ngay lập tức `room.messages = []` và `game.clearRoundAudioData()` (0 byte âm thanh bị giữ lại).
-     * Nếu phòng chưa diễn ra trận đấu hoặc không có dữ liệu điểm chờ reconnect (`disconnectedPlayers.size === 0`), Server gọi `destroyRoomData(roomId, 'ALL_MEMBERS_LEFT')` xóa sổ phòng **ngay lập tức (0ms)**.
-     * Nếu có người chơi đang có điểm bị rớt mạng, giữ siêu dữ liệu điểm số nhẹ trong `30 giây`, hết 30s không ai vào lại sẽ tự động `destroyRoomData(roomId, 'EMPTY_ROOM_TIMEOUT')`.
+3. **Tự động dọn dẹp ngay lập tức khi không còn người thật trong phòng (`leave_room` / `disconnect`)**:
+   * Bỏ hoàn toàn cơ chế giữ phòng chờ Reconnect: Ngay khi người thật cuối cùng rời phòng (`remainingHumans.length === 0`), Server gọi `destroyRoomData(roomId, 'ALL_MEMBERS_LEFT')` xóa sổ phòng và toàn bộ dữ liệu RAM **ngay lập tức (0ms)**.
 
 ---
 
@@ -1371,19 +1483,20 @@ Client cũng có thể gọi trực tiếp **`GET /api/enums`** (hoặc **`GET /
 
 ### 12.1. Tổng quan 4 Chế Độ Chơi & Smart Matchmaking Engine (`quick_match` vs `race_1v1` vs `CUSTOM_ROOM`)
 
-| Mode | Socket Event khởi tạo | `room.mode` | Số người (`targetPlayers`) | Thời gian chờ cơ bản | Quy tắc Cộng giờ, Bù AI Bot & Giải Tán Phòng |
+| Mode | Socket Event khởi tạo | `room.mode` | Số người (`targetPlayers`) | Thời gian chờ cơ bản | Quy tắc Cộng giờ, Bù AI Bot, Popup Accept & Giải Tán Phòng |
 | :--- | :--- | :---: | :---: | :---: | :--- |
-| **1. Quick Match (4P)** | `quick_match` / `find_match` | `QUICK_MATCH` | **4 Người** | `10s` (`waitMs: 10000`) | Khi có người thật mới vào phòng (`2/4` hoặc `3/4`) mà đồng hồ `< 5s` ➔ **Cộng giờ mềm `+5s`** (trần tối đa `16s`). Hết giờ tự bù `(4 - N)` Bot. Kết thúc `GAME_OVER` **giải tán phòng ngay (`roomDisbanded: true`)** |
-| **2. 1vs1 Race (2P)** | `race_1v1` / `find_1v1_match` | `RACE_1V1` | **2 Người** | `8s` (`waitMs: 8000`) | Đủ `2/2` người thật là bắt đầu ngay (`autoStarted: true`). Hết `8s` chờ tự bù đúng `1 AI Bot`. Kết thúc `GAME_OVER` **giải tán phòng ngay (`roomDisbanded: true`)** |
-| **3. Create Room** | `create_room` | `CUSTOM_ROOM` | Tối đa **8 Người** | Không tự đếm ngược | Tạo phòng riêng & **tự động cho Host vào phòng ngay** (`role: 'HOST'`). Tách biệt 100% khỏi hàng đợi Matchmaking |
-| **4. Join Room** | `join_room` (`roomId`) | `CUSTOM_ROOM` | Tối đa **8 Người** | Không tự đếm ngược | Chỉ vào phòng `CUSTOM_ROOM` đang tồn tại theo mã Code (chặn người lạ join vào phòng `QUICK_MATCH`/`RACE_1V1`, chỉ cho phép người cũ Reconnect 120s khôi phục điểm) |
+| **1. Quick Match (4P)** | `quick_match` / `find_match` | `QUICK_MATCH` | **4 Người** | `10s` (`waitMs: 10000`) | Khi có người thật mới vào phòng (`2/4` hoặc `3/4`) mà đồng hồ `< 5s` ➔ **Cộng giờ mềm `+5s`** (trần tối đa `16s`). Hết giờ tự bù `(4 - N)` Bot. Đủ `4/4` ➔ Bắn `match_found` & `match_accept_updated` show **Popup Find Match + `acceptedCount / 4`** (AI Bot tự Accept sẵn). Đủ `4/4` Accept ➔ Vào `5.0 THEME_SELECTION`. Kết thúc `GAME_OVER` **giải tán phòng ngay (`roomDisbanded: true`)** |
+| **2. 1vs1 Race (2P)** | `race_1v1` / `find_1v1_match` | `RACE_1V1` | **2 Người** | `8s` (`waitMs: 8000`) | Đủ `2/2` người thật (hoặc hết `8s` tự bù `1 AI Bot`) ➔ Bắn `match_found` & `match_accept_updated` show **Popup Find Match + `acceptedCount / 2`**. Đủ `2/2` Accept ➔ Vào `5.0 THEME_SELECTION`. Kết thúc `GAME_OVER` **giải tán phòng ngay (`roomDisbanded: true`)** |
+| **3. Create Room** | `create_room` | `CUSTOM_ROOM` | Tối đa **8 Người** | Không tự đếm ngược | Tự động thoát sạch mọi phòng cũ (`QUICK_MATCH`/`RACE_1V1`), bỏ qua `roomId` cũ của phòng Matchmaking nếu gửi nhầm, tạo phòng riêng & **tự động cho Host vào phòng ngay** (`role: 'HOST'`). Tách biệt 100% khỏi Matchmaking |
+| **4. Join Room** | `join_room` (`roomId`) | `CUSTOM_ROOM` | Tối đa **8 Người** | Không tự đếm ngược | Chỉ vào phòng `CUSTOM_ROOM` đang tồn tại theo mã Code. **Bỏ hoàn toàn cơ chế tự động Reconnect**: Đã out là out hẳn! Mọi lệnh `join_room` vào phòng `QUICK_MATCH` / `RACE_1V1` đều bị chặn tuyệt đối (`ROOM_NOT_FOUND`) |
 
-#### 5 Cơ Chế Tối Ưu Smart Matchmaking Engine Trên Server:
+#### 6 Cơ Chế Tối Ưu Smart Matchmaking Engine Trên Server:
 1. **Best-Fit + FIFO Priority (`3/4 ➔ 2/4 ➔ 1/4`)**: Khi có người bấm tìm trận, Server luôn ưu tiên nhét vào phòng chờ đang có đông người thật nhất (`3/4` trước rồi tới `2/4`, phòng đợi lâu hơn ưu tiên trước) để đủ `4/4` vào trận ngay, thay vì tạo thêm phòng lẻ `2/4`.
-2. **Immediate Post-Game Disband (`0ms` Zero-Residual Leak)**: Ngay khi một phòng `QUICK_MATCH` hoặc `RACE_1V1` kết thúc trận (`5.10 GAME_OVER`) hoặc khi người thật cuối cùng thoát phòng, Server lập tức giải tán phòng (`destroyRoomData`), gỡ toàn bộ socket (`currentRoomId = null`) và trả người chơi về trạng thái **Online** (không giữ phòng trống, không tự động loop mở lại phòng cũ).
-3. **Strict Mode Isolation (`CUSTOM_ROOM` vs Matchmaking)**: Phòng tạo qua `create_room` được gắn cứng `CUSTOM_ROOM` và tự động join Host ngay; `join_room` chặn tạo phòng ngầm và chặn người lạ xâm nhập vào phòng `QUICK_MATCH` / `RACE_1V1` bằng mã phòng.
-4. **Live Avatar Slots (`currentPlayers`, `members`, `extendedBonusSeconds`)**: Mọi sự kiện `matchmaking_searching`, `matchmaking_tick`, `matchmaking_player_joined` và `get_matchmaking_state` đều trả về mảng `members` thực tế để UI vẽ 4 ô ghế Avatar sáng dần (`1/4 ➔ 2/4 ➔ 3/4 ➔ 4/4`).
-5. **Unified Cancel Match (`cancel_match` / `cancel_quick_match`)**: Hỗ trợ hủy tìm trận ở cả 2 trạng thái: khi đang đứng lẻ `1/4` trong `matchmakingQueue` **và** khi đã được gom tạm vào phòng `2/4`, `3/4` đang đếm ngược chờ đủ người (`IDLE`).
+2. **Popup Find Match + Accept Counter (`match_found` / `match_accept_updated` / `accept_match`)**: Ngay khi gom đủ `4/4` (ở `QUICK_MATCH`) hoặc `2/2` (ở `RACE_1V1`), Server phát `match_found` và `match_accept_updated` (`state: "MATCH_FOUND"`, `showMatchFoundPopup: true`, `acceptedCount`, `totalPlayers`, `members`). Tất cả AI Bot được đánh dấu `isAccepted = true` ngay lập tức; người chơi thật bấm `accept_match` (hoặc hết 5s đếm ngược tự Accept) sẽ chuyển ngay vào `5.0 THEME_SELECTION`.
+3. **No Session Reconnect ("Đã Out là Out hẳn")**: Khi người chơi thoát giữa trận (`leave_room`, `cancel_match`, ngắt kết nối hoặc mở `create_room`), người chơi bị xóa vĩnh viễn khỏi phòng đó. Phòng `QUICK_MATCH` và `RACE_1V1` không bao giờ cho phép `join_room` lại dưới mọi hình thức (`ROOM_NOT_FOUND`).
+4. **Immediate Post-Game Disband (`0ms` Zero-Residual Leak)**: Ngay khi một phòng `QUICK_MATCH` hoặc `RACE_1V1` kết thúc trận (`5.10 GAME_OVER`) hoặc khi người thật cuối cùng thoát phòng, Server lập tức giải tán phòng (`destroyRoomData`), gỡ toàn bộ socket (`currentRoomId = null`) và trả người chơi về trạng thái **Online** (không giữ phòng trống, không tự động loop mở lại phòng cũ).
+5. **Live Avatar Slots (`currentPlayers`, `members`, `extendedBonusSeconds`)**: Mọi sự kiện `matchmaking_searching`, `matchmaking_tick`, `matchmaking_player_joined` và `get_matchmaking_state` đều trả về mảng `members` thực tế để UI vẽ 4 ô ghế Avatar sáng dần (`1/4 ➔ 2/4 ➔ 3/4 ➔ 4/4`).
+6. **Unified Cancel / Decline Match (`cancel_match` / `cancel_quick_match` / `decline_match`)**: Hỗ trợ hủy tìm trận ở cả khi đang đứng lẻ `1/4` trong `matchmakingQueue`, khi đã được gom tạm vào phòng `2/4`, `3/4` đang đếm ngược, hoặc khi từ chối ở Popup Find Match trước khi ván đấu bắt đầu.
 
 ```javascript
 // 1. Tìm trận nhanh 4 Người (QUICK_MATCH)
@@ -1393,31 +1506,38 @@ socket.emit("quick_match", {
   waitMs: 10000 // Cơ bản 10s (Server tự +5s nếu tìm được người lúc < 5s, trần 16s)
 }, (res) => {
   console.log(res.mode);              // "QUICK_MATCH"
-  console.log(res.matchedWithHumans); // true nếu gặp người thật, false nếu hết giờ bù Bot
-  console.log(res.room.members);      // Danh sách thành viên hiện tại
+  console.log(res.state);             // "FINDING_MATCH" (nếu đang 2/4, 3/4) hoặc "MATCH_FOUND" (nếu đã đủ 4/4)
+  console.log(res.room?.members);     // Danh sách thành viên hiện tại
 });
 
-// 2. Tìm trận Đấu Tay Đôi 1vs1 Race (2 Người - RACE_1V1)
-socket.emit("race_1v1", {
-  userName: "DuelMaster",
-  avatar: "⚡",
-  waitMs: 8000 // Chờ tối đa 8s, gặp 1 người thật là autoStart ngay, hết 8s bù 1 Bot
-}, (res) => {
-  console.log(res.mode, res.targetPlayers, res.autoStarted); // "RACE_1V1", 2, true
-});
-
-// 3. Lắng nghe đồng hồ tìm trận & ghế Avatar trực tiếp từ Server
-socket.on("matchmaking_tick", ({ currentPlayers, targetPlayers, members, timeRemaining, totalWaitSeconds, extended, extendedBonusSeconds }) => {
-  console.log(`Đang tìm trận [${currentPlayers}/${targetPlayers}]... còn ${timeRemaining}/${totalWaitSeconds}s`, members);
-});
-
-socket.on("matchmaking_player_joined", ({ currentPlayers, targetPlayers, members, extended, extendedBonusSeconds, timeRemaining }) => {
-  if (extended) {
-    console.log(`Tìm thấy người chơi mới (${currentPlayers}/${targetPlayers})! Cộng thêm +${extendedBonusSeconds}s chờ (còn ${timeRemaining}s)`);
+// 2. Khi đủ 4/4 (hoặc 2/2 ở RACE_1V1) -> Server bắn match_found & match_accept_updated để Show Popup Find Match + Số người đã Accept
+socket.on("match_found", ({ roomId, showMatchFoundPopup, acceptedCount, totalPlayers, members, timeRemaining }) => {
+  if (showMatchFoundPopup) {
+    console.log(`🎉 Đã tìm thấy trận (${roomId})! Đã Accept: ${acceptedCount}/${totalPlayers} (Còn ${timeRemaining}s)`, members);
   }
 });
 
-// 4. Hủy tìm trận hợp nhất (hoạt động cả khi đang 1/4 ở Queue lẫn khi đang 2/4, 3/4 ở phòng chờ)
+socket.on("match_accept_updated", ({ roomId, acceptedCount, totalPlayers, allAccepted, members }) => {
+  console.log(`✅ Tiến độ Accept: ${acceptedCount}/${totalPlayers} (allAccepted=${allAccepted})`, members);
+});
+
+// 3. Người chơi bấm nút "ACCEPT" trên Popup Find Match
+function onClickAcceptMatch(roomId) {
+  socket.emit("accept_match", { roomId }, (res) => {
+    console.log("Đã bấm Accept:", res.acceptedCount, "/", res.totalPlayers, "autoStarted=", res.autoStarted);
+  });
+}
+
+// 4. Lắng nghe đồng hồ tìm trận & ghế Avatar trực tiếp từ Server
+socket.on("matchmaking_tick", ({ state, currentPlayers, targetPlayers, acceptedCount, totalPlayers, members, timeRemaining }) => {
+  if (state === "MATCH_FOUND") {
+    console.log(`Popup Accept [${acceptedCount}/${totalPlayers}]... còn ${timeRemaining}s`);
+  } else {
+    console.log(`Đang tìm trận [${currentPlayers}/${targetPlayers}]... còn ${timeRemaining}s`, members);
+  }
+});
+
+// 5. Hủy tìm trận hoặc thoát phòng dứt điểm (Đã out là out hẳn, không reconnect)
 socket.emit("cancel_match", {}, (res) => {
   console.log(res.cancelled, res.cancelledFromPreStartRoom);
 });

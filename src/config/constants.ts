@@ -15,6 +15,7 @@ export const DEFAULT_MATCHMAKING_BOT_COUNT = 3; // Mặc định thêm 3 Bot khi
 export const DEFAULT_MATCHMAKING_WAIT_MS: number = Number(process.env.MATCHMAKING_WAIT_MS) || 10000; // Thời gian chờ tìm người chơi thật (10s) trước khi tự tạo phòng với Bot
 export const MATCHMAKING_EXTEND_MS = 5000; // Khi có thêm người thật vào hàng đợi mà đồng hồ còn < 5s thì đẩy lên 5s (Dynamic Queue Extension)
 export const MATCHMAKING_MAX_WAIT_CAP_MS = 16000; // Trần thời gian chờ tối đa (16s) khi cộng giờ mềm
+export const DEFAULT_MATCH_ACCEPT_WAIT_MS: number = Number(process.env.MATCH_ACCEPT_WAIT_MS) || 5000; // Thời gian hiển thị Popup Find Match chờ người chơi bấm Accept (5s) trước khi tự động Accept & vào Step 5.0
 export const DEFAULT_TOTAL_ROUNDS = 3;
 export const DEFAULT_RECORD_DURATION_SEC = 5;
 

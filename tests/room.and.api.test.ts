@@ -98,11 +98,9 @@ test('Room Service — Matrix Test: Host Migration & Empty Room Cleanup', () => 
   const leftEvent = emittedEvents.find(e => e.event === 'user_left');
   assert.equal(leftEvent?.payload.systemMessage, SystemMessageCode.SYS_USER_LEFT_ROOM);
 
-  // 2. Last member leaves -> cleanup timer scheduled, destroyRoomData cleans RAM
+  // 2. Last member leaves -> room destroyed immediately (0ms, no reconnect wait), destroyRoomData cleans RAM
   leaveCurrentRoom(createMockSocket('sock_2'), roomId);
   assert.equal(roomAfterHostLeft.members.size, 0);
-  const destroyed = destroyRoomData(roomId);
-  assert.equal(destroyed, true);
   assert.equal(rooms.has(roomId), false);
   assert.equal(gameSessions.has(roomId), false);
 });
