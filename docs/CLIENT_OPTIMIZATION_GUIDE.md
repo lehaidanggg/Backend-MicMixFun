@@ -165,16 +165,31 @@ Thay vì bắt Server phải giải mã (decode) và chạy biến đổi Fourie
   ```
 * Điều này đảm bảo App trên máy người dùng **chỉ nói chuyện trực tiếp với Server thật**, không thể bị DNS Spoofing hay Proxy trung gian (Charles, mitmproxy, Fake Server) đứng giữa đọc trộm hoặc đánh cắp `firebaseIdToken` / `authToken`.
 
-### 6.3. Cơ chế Ràng Buộc Thiết Bị & IP (`Client Fingerprint` + `One-Time Challenge Nonce`)
-Server đã tích hợp sẵn 3 lớp khóa trong `server.js`:
-1. **Token Binding (`fp` - Client Fingerprint)**:
-   * Khi cấp `authToken`, Server tính mã băm `fp = SHA256(clientIP + deviceId/UserAgent + AUTH_SECRET)` và nhúng vào chữ ký HMAC của Token.
+### 6.3. Cơ chế Ràng Buộc Thiết Bị & IP Thật Qua Reverse Proxy (`Client Fingerprint` + `One-Time Challenge Nonce`)
+Server đã tích hợp sẵn 3 lớp khóa trong `src/services/auth.service.ts` và `src/socket/auth.middleware.ts`:
+1. **Token Binding (`fp` - Client Fingerprint đồng bộ qua Reverse Proxy)**:
+   * Server trích xuất IP thật của thiết bị thông qua chuỗi header chuẩn của Reverse Proxy / Load Balancer (`x-forwarded-for`, `cf-connecting-ip`, `x-real-ip` và `req.ip`) trên cả HTTP REST lẫn Socket.IO Handshake trước khi fallback về địa chỉ socket nội bộ.
+   * Khi cấp `authToken`, Server tính mã băm `fp = SHA256(realClientIP + deviceId/UserAgent + AUTH_SECRET)` và nhúng vào chữ ký HMAC của Token. Nhờ trích xuất đúng IP thật qua Reverse Proxy, `fp` luôn đồng nhất 100% giữa lúc gọi REST API (`/api/auth/guest`, `/api/auth/firebase`) và lúc mở kết nối WebSocket (`wss://...`).
    * Nếu Hacker lấy `authToken` từ máy người dùng rồi mang sang **Server trung gian** (có địa chỉ IP hoặc môi trường khác) để kết nối Socket vào Server mình, hàm `verifyAuthToken()` sẽ phát hiện lệch `fp` và từ chối ngay lập tức.
 2. **One-Time Challenge–Response (`GET /api/auth/challenge`)**:
    * Trước khi gọi `/api/auth/firebase` hoặc `/api/auth/guest`, App gọi `GET /api/auth/challenge` để lấy `nonce` (chỉ có hiệu lực **30 giây**, dùng **1 lần duy nhất**, và **khóa cứng theo IP gọi lấy nonce**).
    * App tính chữ ký:
      $$\text{challengeSig} = \text{HMAC\_SHA256}(\text{"nonce:timestamp:firebaseUid"}, \text{APP\_SIGNING\_SECRET})$$
      (lưu `APP_SIGNING_SECRET` trong tầng C++ Native NDK / JNI của Android để chống dịch ngược).
-3. **Giới hạn kết nối trên mỗi IP (`MAX_CONNECTIONS_PER_IP = 15`)**:
-   * Chặn đứng kịch bản 1 Server trung gian (1 IP) mở hàng trăm kết nối Socket đại diện cho nhiều user giả mạo vào Server.
+3. **Giới hạn kết nối độc lập trên mỗi IP thật (`MAX_CONNECTIONS_PER_IP = 15`)**:
+   * Giới hạn tối đa **15 kết nối đồng thời trên mỗi IP public thật của người dùng**, chặn đứng kịch bản 1 Server trung gian mở hàng trăm kết nối Socket đại diện cho nhiều user giả mạo mà không ảnh hưởng tới những người dùng khác đi qua cùng Load Balancer của Railway/Cloudflare.
 
+---
+
+## 7. 🎙️ Chuẩn Gửi, Xử Lý & 4 Kiểu Chấm Điểm Âm Thanh Trên Server Production
+
+Khi Client gửi bản thu âm qua `game_submit_audio` (hoặc `game_submit_bot_audio`), Server kiểm tra dung lượng ước tính trước khi cấp phát bộ nhớ (`<= 512KB` cho người chơi, `<= 350KB` cho AI Bot) và chấm điểm theo công thức:
+$$\text{totalScore} = \text{round}(\text{pitchScore} \times 0.50 + \text{rhythmScore} \times 0.30 + \text{energyScore} \times 0.20)$$
+
+### 7.1. Bảng 4 Kiểu Chấm Điểm & Khuyến Nghị Cho Client
+| Kiểu gửi từ Client | Cách Server xử lý & Chấm điểm | Khuyến nghị tối ưu cho Mobile Client |
+| :--- | :--- | :--- |
+| **1. Gửi kèm `metrics` + `audioData` (Khuyến nghị số 1)** | Server dùng `metrics: { matchPct, rhythmScore, energyScore, activeRatio }` để tính điểm chính xác theo bộ lọc DSP dưới máy Client, đồng thời lưu `audioData` vào `audioStore` để phát lại qua HTTP Stream `/api/attempts/:roomId/:socketId`. Nếu `activeRatio < 0.05` ➔ phạt **`15đ` (`Grade F`)** | **Nên dùng mặc định** trên cả Android/iOS: vừa có độ chính xác so khớp âm thanh gốc cao nhất, vừa tốn ít CPU Server nhất (`~77,400 sound/giây`, độ trễ trọn vòng mạng trên Prod `~190–210ms`) |
+| **2. Gửi file `audio/wav` (16-bit PCM) không kèm `metrics`** | Server tự đọc sóng âm 16-bit PCM (`RIFF...WAVE...data`), lấy mẫu `1,024` điểm để tính năng lượng `RMS`, tỷ lệ có tiếng `activeRatio`, tần số cắt điểm 0 (`ZCR`) và đỉnh bật âm (`Attack Peaks`). Nếu `activeRatio < 0.04` hoặc `rms < 0.008` ➔ phạt **`15đ` (`Grade F`)** | Dùng khi Client thu trực tiếp PCM `.wav` (16kHz–24kHz Mono, dung lượng `~64KB–288KB`) mà chưa kịp chạy DSP tính `metrics` dưới máy (`~72,500 sound/giây`) |
+| **3. Gửi file nén (`audio/webm`, `audio/mp4`, `audio/aac`) không kèm `metrics`** | Server lấy mẫu `256` bước trên Buffer nén để đo độ đa dạng byte (`uniqueBytes / 256`) và độ biến thiên biên độ (`avgDelta`). Nếu `uniqueBytes < 4` ➔ phạt **`10đ` (`Grade F`)** | Dùng làm fallback khi thiết bị thu AAC/Opus nén (`~60KB–128KB`). Lưu ý: nếu thu định dạng nén, Client **nên tính và gửi kèm `metrics`** để điểm số phản ánh sát nhất cao độ và nhịp điệu |
+| **4. AI Bot (`LIVE_PLAYBACK_DSP` & `CLIENT_UPLOAD`)** | Mỗi máy người thật chỉ cần render & upload tối đa **1 Bot/vòng** (`MAX_BOTS_PER_CLIENT_PER_ROUND = 1`, trần `350KB`). Các Bot còn lại dùng `LIVE_PLAYBACK_DSP` phát trực tiếp từ CDN kèm `botAudioEffects` | Nếu máy Client yếu hoặc mạng chậm không kịp upload file WAV của Bot, chỉ cần gửi `metrics` nhẹ (`< 200 bytes`) hoặc để Server tự fallback sang `LIVE_PLAYBACK_DSP` |

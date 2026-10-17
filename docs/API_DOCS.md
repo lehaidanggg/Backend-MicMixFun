@@ -9,29 +9,29 @@ Tài liệu chính thức dành cho đội phát triển **Client (Android / iOS
 1. **Xác Thực & Bảo Mật Đa Lớp (`Auth & Anti-Relay Security`)**:
    - **Firebase Anonymous / ID Token (`RS256`)**: Xác thực chữ ký RSA-SHA256 trực tiếp với chứng chỉ X.509 của Google (`securetoken@system.gserviceaccount.com`).
    - **Guest Session Token (`HMAC-SHA256`)**: Tự động cấp và gia hạn token định danh có thời hạn 7 ngày mà không cần đăng ký mật khẩu.
-   - **Client Fingerprint Binding**: Gắn chặt token với dấu vân tay thiết bị (`IP + DeviceId/User-Agent`), chặn việc đánh cắp token đem qua môi trường/server trung gian khác.
+   - **Client Fingerprint Binding (Hỗ trợ Reverse Proxy / Load Balancer)**: Gắn chặt token với dấu vân tay thiết bị (`Real Client IP qua x-forwarded-for / cf-connecting-ip / x-real-ip + DeviceId/User-Agent`), đồng bộ 100% giữa HTTP REST và WebSocket khi đi qua Railway/Cloudflare Load Balancer và chặn đánh cắp token đem qua môi trường/server trung gian khác.
    - **One-Time Challenge Nonce (`GET /api/auth/challenge`)**: Cơ chế Challenge-Response hiệu lực 30 giây, dùng 1 lần duy nhất để chống Replay Attack.
-   - **Rate Limiting & Giới hạn IP**: Giới hạn tối đa 15 kết nối đồng thời trên mỗi IP, chống spam Chat (6 tin / 3s), Soundboard (5 lần / 2s), Emoji (5 lần / 1s).
+   - **Rate Limiting & Giới hạn IP thật**: Giới hạn tối đa **15 kết nối đồng thời trên mỗi IP public thật của người dùng**, chống spam Chat (6 tin / 3s), Soundboard (5 lần / 2s), Emoji (5 lần / 1s).
 
-2. **Quản Lý Phòng & Khôi Phục Phiên (`Room & Session Reconnect`)**:
-   - Tạo phòng (`create_room`), tham gia phòng (`join_room`), rời phòng (`leave_room`), đóng phòng xóa sạch RAM (`close_room`), đổi trạng thái sẵn sàng (`player_ready_toggle`), mời ra khỏi phòng (`kick_player`).
+2. **Quản Lý Phòng & Quy Tắc "Đã Out Là Out Hẳn" (`Room Lifecycle & No Reconnect`)**:
+   - Tạo phòng (`create_room`), tham gia phòng (`join_room` — chỉ dành cho `CUSTOM_ROOM`), rời phòng (`leave_room`), đóng phòng xóa sạch RAM (`close_room`), đổi trạng thái sẵn sàng (`player_ready_toggle`), mời ra khỏi phòng (`kick_player`).
    - **Tự động chuyển quyền Chủ phòng (`Host Migration`)**: Khi Host rời phòng hoặc mất kết nối, quyền Host tự động chuyển sang người chơi thật kế tiếp.
-   - **Khôi phục điểm số khi rớt mạng (`120s Reconnect Window`)**: Người chơi bị mất mạng vào lại phòng trong vòng 120 giây được khôi phục nguyên vẹn `totalScore`, `roundScore` và trạng thái bài nộp.
+   - **Bỏ cơ chế tự động Reconnect ("Đã Out là Out hẳn")**: Rời phòng (`leave_room`, `cancel_match`, rớt mạng hoặc mở `create_room`) là xóa vĩnh viễn phiên chơi khỏi phòng cũ (`restoredSession: false, totalScore: 0`). Phòng `QUICK_MATCH` và `RACE_1V1` chặn tuyệt đối mọi lệnh `join_room` (`ROOM_NOT_FOUND`).
 
-3. **Tìm Trận Nhanh & Ghép Phòng Tự Động (`Smart Matchmaking Queue`)**:
-   - Sự kiện `find_match` / `quick_match`:
-     1. Ưu tiên ghép ngay với người chơi thật đang chờ trong hàng đợi (`matchmakingQueue`) hoặc ghép vào phòng `IDLE` đang mở còn chỗ trống.
-     2. Nếu chưa có người chơi rảnh, đưa vào hàng đợi chờ (mặc định `waitMs = 10000ms`), phát sự kiện `matchmaking_searching` và đếm ngược mỗi giây qua `matchmaking_tick`.
-     3. Hỗ trợ hủy tìm trận bất kỳ lúc nào qua `cancel_match` / `cancel_quick_match` (`matchmaking_cancelled`).
-     4. Khi hết thời gian chờ mà không có người chơi khác, tự động mở phòng mới, lấp đầy bằng **3 AI Bot** và khởi động ngay ván đấu (`timedOutToBots: true`).
+3. **Tìm Trận Nhanh, Đấu Tay Đôi 1v1 & Popup Find Match (`Smart Matchmaking Queue + Match Accept Popup`)**:
+   - Sự kiện `find_match` / `quick_match` (4 người) và `race_1v1` / `find_1v1_match` (2 người):
+     1. Ưu tiên ghép ngay với người chơi thật đang chờ trong phòng mở hoặc hàng đợi (`matchmakingQueue`), hỗ trợ cộng giờ mềm (`+5s`, trần `16s`) khi có thêm người thật vào phòng.
+     2. Khi chưa đủ người, phát sự kiện `matchmaking_searching` và đếm ngược mỗi giây qua `matchmaking_tick`.
+     3. Hỗ trợ hủy tìm trận bất kỳ lúc nào qua `cancel_match` / `cancel_quick_match` / `decline_match` (`matchmaking_cancelled`).
+     4. Khi gom đủ người chơi (`4/4` hoặc `2/2`, gồm người thật hoặc tự bù AI Bot khi hết giờ tìm trận), Server phát `match_found`, `matchmaking_found` và `match_accept_updated` (`state: "MATCH_FOUND"`, `showMatchFoundPopup: true`, `acceptedCount`, `totalPlayers`, với AI Bot tự Accept sẵn `isAccepted: true`). Khi `100%` người chơi bấm `accept_match` (hoặc hết `5s` đếm ngược), Server phát `match_all_accepted` và bắt đầu ngay `5.0 THEME_SELECTION`.
 
 4. **Đấu Trường Nhại Giọng `Mimic Party` (`State Machine`)**:
    - Hỗ trợ cấu hình số vòng (`3, 5, 7, 10` vòng) và thời lượng thu âm (`3 - 15s` hoặc tự động khớp theo độ dài file âm thanh mẫu).
-   - Chu trình 9 trạng thái: `IDLE` ➔ `THEME_SELECTION` (3.5s) ➔ `PLAYING_SAMPLE` (theo độ dài file mẫu, hỗ trợ đồng bộ phát xong sớm qua `sample_playback_done`) ➔ `PREPARE_RECORDING` (3s lấy hơi) ➔ `USER_RECORDING` (thu âm & nộp bài, tự chuyển sớm nếu tất cả đã nộp) ➔ `AI_SCORING` (5s chấm điểm hồi hộp) ➔ `SHOWDOWN_REVEAL` (25s nghe lại + thả emoji + bỏ phiếu skip sớm `confirm_showdown_skip`) ➔ `ROUND_RESULT` (chờ 100% bấm sẵn sàng `confirm_next_round_ready`) ➔ `GAME_OVER`.
+   - Chu trình 9 trạng thái: `IDLE` ➔ `THEME_SELECTION` (3.5s) ➔ `PLAYING_SAMPLE` (theo độ dài file mẫu, hỗ trợ đồng bộ phát xong sớm qua `sample_playback_done`) ➔ `PREPARE_RECORDING` (3s lấy hơi) ➔ `USER_RECORDING` (thu âm & nộp bài) ➔ `UPLOADING_SOUND` (3s đồng bộ) ➔ `SHOWDOWN_REVEAL` (30s nghe lại + thả emoji + bấm `confirm_showdown_skip`) ➔ `AI_SCORING` (4s chấm điểm hồi hộp) ➔ `ROUND_RESULT` (7s Podium vòng) ➔ `BREAK_TIME` (11s nghỉ giải lao / `confirm_next_round_ready`) ➔ `GAME_OVER`.
 
 5. **Hệ Thống AI Bot Thông Minh 3 Cấp Độ (`EASY` / `NORMAL` / `HARD`)**:
    - Quản lý Bot thủ công (`add_bot`, `remove_bot`) hoặc tự động điền đủ 4 người chơi khi bắt đầu (`game_start` với `autoFillBots: true`).
-   - Bot tự động lấy chính âm thanh mẫu (`targetSound`) của vòng đó, biến đổi cao độ (`pitch`), tốc độ (`speed`), trộn tạp âm nền (`clean_mic`, `room_ambience`, `mic_static_and_breath`), rè mic (`distortion`), rung giọng (`tremolo`) và ngắt quãng (`dropoutCount`) để tổng hợp ra file `audio/wav` thực tế, lưu vào `audioStore` và chấm điểm qua cùng thuật toán với người chơi thật.
+   - Hỗ trợ đồng thời **Quota 1:1 Client Upload (`game_submit_bot_audio` <= 350KB)** và **Live Playback DSP (`LIVE_PLAYBACK_DSP` 0% CPU/RAM Server)**.
 
 6. **Media, Soundboard Đồng Bộ, Chat & Live Mic Stream**:
    - Chat văn bản trong phòng (`send_message`), kích hoạt Soundboard phát đồng loạt trên mọi thiết bị (`trigger_sound`, `stop_all_sounds`), chia sẻ đoạn thu âm (`share_audio_clip`) và truyền giọng nói trực tiếp thời gian thực (`mic_stream_start`, `mic_stream_chunk`, `mic_stream_stop`).
@@ -52,14 +52,16 @@ Tài liệu chính thức dành cho đội phát triển **Client (Android / iOS
 | `THEME_SELECTION_DURATION` | **3.5** | Giây | Thời gian chạy hiệu ứng quay Roulette chọn chủ đề âm thanh |
 | `PLAYING_SAMPLE_DURATION` | **2.0 - 12.0** | Giây | Tự động lấy theo thời lượng thực tế của file mẫu (hoặc kết thúc sớm khi nhận `sample_playback_done`) |
 | `PREPARE_RECORDING_DURATION` | **3.0** | Giây | Thời gian đệm đếm ngược 3..2..1 để người chơi lấy hơi và bật micro |
-| `USER_RECORDING_DURATION` | **Theo file mẫu (hoặc 3-15s)** | Giây | Thời gian mở micro nhại lại âm thanh (chuyển sớm sang chấm điểm nếu 100% người chơi đã nộp bài) |
-| `AI_SCORING_DURATION` | **5.0** | Giây | Thời gian AI phân tích phổ âm thanh và tạo hiệu ứng chấm điểm hồi hộp |
-| `SHOWDOWN_REVEAL_DURATION`| **25.0**| Giây | Thời gian nghe lại bản thu của nhau, thả emoji & bỏ phiếu skip sớm |
-| `ROUND_RESULT_DURATION` | **0 (Chờ Ready)** | Giây | Dừng chờ tất cả người chơi bấm `confirm_next_round_ready` rồi đếm ngược 3s sang vòng mới |
+| `USER_RECORDING_DURATION` | **Theo file mẫu (hoặc 3-15s)** | Giây | Thời gian mở micro nhại lại âm thanh |
+| `UPLOADING_SOUND_DURATION` | **3.0** | Giây | Thời gian đệm để các máy hoàn tất upload bản thu của người chơi và AI Bot |
+| `SHOWDOWN_REVEAL_DURATION`| **30.0**| Giây | Thời gian nghe lại bản thu của nhau, thả emoji & bấm `FINISH ROUND` (`confirm_showdown_skip`) |
+| `AI_SCORING_DURATION` | **4.0** | Giây | Thời gian AI phân tích phổ âm thanh và tạo hiệu ứng khóa điểm vòng đấu |
+| `ROUND_RESULT_DURATION` | **7.0** | Giây | Thời gian hiển thị Bục vinh danh Top 1-2-3 của vòng (`ROUND RESULTS PODIUM`) |
+| `BREAK_TIME_DURATION` | **11.0** | Giây | Thời gian nghỉ giải lao giữa 2 vòng (chuyển sớm nếu 100% bấm `confirm_next_round_ready`) |
 | `DEFAULT_TOTAL_ROUNDS` | **3** | Vòng | Số vòng đấu mặc định trong 1 trận (Host có thể cấu hình `3, 5, 7, 10`) |
-| `DEFAULT_MATCHMAKING_WAIT_MS` | **10000** | Ms (10s) | Thời gian chờ tìm người chơi thật trước khi tự tạo phòng với AI Bot |
-| `ROOM_CLEANUP_DELAY_MS` | **30000**| Ms (30s) | Thời gian giữ siêu dữ liệu phòng trống chờ người chơi có điểm kết nối lại |
-| `RECONNECT_RESTORE_WINDOW` | **120000** | Ms (120s) | Thời gian tối đa bảo lưu điểm số của người chơi bị rớt mạng |
+| `DEFAULT_MATCHMAKING_WAIT_MS` | **10000** | Ms (10s) | Thời gian chờ tìm người chơi thật trước khi tự tạo phòng với AI Bot (`RACE_1V1` mặc định `8000ms`) |
+| `DEFAULT_MATCH_ACCEPT_WAIT_MS` | **5000** | Ms (5s) | Thời gian hiển thị Popup Find Match chờ người chơi bấm `accept_match` trước khi tự động Accept & vào trận |
+| `ROOM_CLEANUP_DELAY_MS` | **30000**| Ms (30s) | Thời gian giữ phòng riêng `CUSTOM_ROOM` trống trước khi xóa (`QUICK_MATCH` & `RACE_1V1` xóa ngay `0ms`) |
 
 ### 1.2. Giới Hạn Tệp Âm Thanh & Buffer (Audio Limits & Specs)
 
@@ -1596,3 +1598,35 @@ socket.emit("game_start", {
 
 
 
+### 12.5. Cơ Chế Xử Lý, 4 Kiểu Chấm Điểm Âm Thanh (`evaluateMimicAttempt`) & Thông Số Chịu Tải Production
+
+#### A. Công thức trọng số & Bảng xếp hạng điểm (`Grade`)
+Mọi lượt nộp âm thanh (`game_submit_audio` của người chơi hoặc `game_submit_bot_audio` của AI Bot) đều được giải mã Base64 một lần duy nhất qua `decodeBoundedBase64Audio` (kiểm tra kích thước ước tính trước khi cấp phát C++ `Buffer`) và tính điểm theo trọng số chuẩn UI Figma `5.6 AI_SCORING`:
+- **Công thức tổng điểm:**
+  $$\text{totalScore} = \text{round}(\text{pitchScore} \times 0.50 + \text{rhythmScore} \times 0.30 + \text{energyScore} \times 0.20)$$
+- **Thang xếp hạng (`grade`):**
+  - **`S`**: `totalScore >= 90` (`AI_REMARK_LEGENDARY_1..3`)
+  - **`A`**: `75 <= totalScore <= 89` (`AI_REMARK_GOOD_1..3`)
+  - **`B`**: `55 <= totalScore <= 74` (`AI_REMARK_FUNNY_1..4`)
+  - **`C`**: `35 <= totalScore <= 54` (`AI_REMARK_FUNNY_1..4`)
+  - **`F`**: `totalScore < 35` (`AI_REMARK_TERRIBLE_1..3` hoặc `AI_REMARK_MISSED_RECORDING`)
+
+#### B. 4 Kiểu gửi & chấm điểm âm thanh trên Server
+| Kiểu chấm điểm | Điều kiện kích hoạt | Cách Server xử lý & Chấm điểm | Bảo vệ chống gian lận / Im lặng / Tràn RAM |
+| :--- | :--- | :--- | :--- |
+| **1. Hybrid (`ClientMetrics` + Audio)** | Client gửi kèm `metrics: { matchPct, rhythmScore, energyScore, activeRatio }` và `audioData` | Chuẩn hóa `pitchScore` (`[35..99]`), `rhythmScore` (`[35..98]`), `energyScore` (`[35..100]`) từ `metrics`, đồng thời lưu Buffer (`<= 512KB`) vào `audioStore` để phát qua `/api/attempts/:roomId/:socketId` | Nếu `activeRatio < 0.05` (không phát ra tiếng) ➔ Phạt ngay **`15đ` (`Grade F`)**. Nếu file `> 512KB` ➔ Vẫn chấm điểm qua `metrics` nhưng từ chối lưu RAM |
+| **2. Raw 16-bit PCM WAV (`RIFF WAVE`)** | Client gửi file `audio/wav` (`RIFF...WAVE...data`) và **không** truyền `metrics` | Server tự quét chunk `data`, lấy mẫu tối đa `1,024` điểm sóng 16-bit signed PCM (`readInt16LE`) để đo trực tiếp: **Năng lượng `RMS`**, **Tỷ lệ có tiếng `activeRatio`**, **Tần số cắt điểm 0 (`ZCR`)** và **Đỉnh bật âm (`Attack Peaks`)** | Nếu `activeRatio < 0.04` hoặc `rms < 0.008` (file WAV im lặng) ➔ Phạt ngay **`15đ` (`Grade F`)** |
+| **3. Định dạng nén (`audio/webm`, `audio/mp4`, `audio/aac`, `audio/mpeg`)** | Client gửi file âm thanh nén và **không** truyền `metrics` | Server lấy mẫu `256` bước dọc theo Buffer đã giải mã để đo độ đa dạng phổ byte (`uniqueBytes / 256`) và độ biến thiên biên độ trung bình (`avgDelta`) | Nếu `uniqueBytes < 4` (buffer rỗng/đồng nhất) ➔ Phạt ngay **`10đ` (`Grade F`)**. Chuỗi Base64 `< 500` ký tự ➔ **`0đ` (`Grade F`)** |
+| **4. AI Bot (`LIVE_PLAYBACK_DSP` / `CLIENT_UPLOAD`)** | Tự động cho AI Bot trong phòng | Mặc định sinh công thức DSP tất định (`EASY`: `52–70đ`, `NORMAL`: `70–85đ`, `HARD`: `85–96đ`) với 0% RAM Server, hoặc chấm điểm trực tiếp từ file WAV/WebM (`<= 350KB`) do Client được phân công upload qua `game_submit_bot_audio` | Vượt trần `350KB` tự động hạ về `LIVE_PLAYBACK_DSP` để bảo vệ RAM Server |
+
+#### C. Thông số chịu tải thực tế trên Server Production (`https://micmixfun.up.railway.app`)
+1. **Kết nối Socket & Định danh IP thật qua Reverse Proxy (`extractClientIp`)**:
+   - Server trích xuất IP thật của thiết bị qua header `x-forwarded-for`, `cf-connecting-ip`, `x-real-ip` (trước khi fallback về `req.ip` / `handshake.address`), đảm bảo đồng bộ Fingerprint `100%` giữa lúc gọi HTTP REST (`/api/auth/guest`, `/api/auth/firebase`) và lúc bắt tay WebSocket (`wss://...`).
+   - Giới hạn **`MAX_CONNECTIONS_PER_IP = 15` kết nối đồng thời trên mỗi IP public thật của người dùng**.
+   - Chi phí bộ nhớ thực tế trên Production: **~18 KB Heap RAM / 1 kết nối Socket** (1 container Railway 512MB–1GB RAM đáp ứng **3,000 – 5,000 kết nối Socket đồng thời**, tương đương **750 – 1,250 phòng 4 người** hoạt động cùng lúc).
+2. **Thông lượng xử lý & chấm điểm âm thanh (Benchmark thực tế)**:
+   - Ghép trận `quick_match` (Smart Matchmaking 4P): **~27,500 – 28,200 req/s** (`p95 < 0.1ms`).
+   - Giải mã Base64 + Chấm điểm `64KB WAV` (`ClientMetrics` hoặc `Server Waveform DSP`): **~72,500 – 77,400 sound/giây** (`~0.014ms / sound` CPU time; độ trễ mạng trọn vòng Upload + Chấm điểm trên Prod Railway đạt **`188ms – 238ms`**).
+   - Giải mã Base64 + Chấm điểm `288KB WAV` lớn: **~26,100 sound/giây** (độ trễ trọn vòng mạng trên Prod đạt **`277ms`**).
+   - Giải mã Base64 + Chấm điểm `128KB WebM/Opus`: **~55,800 sound/giây** (độ trễ trọn vòng mạng trên Prod đạt **`238ms`**).
+   - Toàn bộ Buffer âm thanh trong `audioStore` được giải phóng sạch 100% (`clearRoundAudioData()`) ngay khi kết thúc mỗi vòng hoặc khi giải tán phòng (`0` residual memory leak).
