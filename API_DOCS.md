@@ -66,23 +66,29 @@ Tài liệu chính thức dành cho đội phát triển **Client (Android / iOS
 | Hằng số (Constant) | Giá trị | Đơn vị | Mô tả |
 | :--- | :--- | :--- | :--- |
 | `MAX_HTTP_BUFFER_SIZE` | **1** (`1e6`) | MB | Giới hạn dung lượng tối đa cho 1 gói tin qua Socket.IO để bảo vệ RAM |
+| `MAX_USER_AUDIO_UPLOAD_BYTES` | **512 KB** (`524288`) | Bytes | Trần dung lượng tối đa cho 1 bản thu âm của người chơi thật (kiểm tra trước khi cấp phát Buffer) |
+| `MAX_BOT_AUDIO_UPLOAD_BYTES` | **350 KB** (`358400`) | Bytes | Trần dung lượng tối đa cho 1 file audio AI Bot do Client upload (vượt trần tự hạ về `LIVE_PLAYBACK_DSP`) |
+| `MAX_BOTS_PER_CLIENT_PER_ROUND` | **1** | Bot / Máy | **Quota 1:1**: Mỗi máy Client chỉ phải render & upload tối đa **1 AI Bot / vòng** |
 | `MIN_AUDIO_PAYLOAD_SIZE`| **500** | Chars | Ngưỡng chuỗi Base64 tối thiểu để loại bỏ bản thu rỗng/mất tiếng |
 | `SAMPLE_RATE` | **24000 - 48000**| Hz | Tần số lấy mẫu âm thanh khuyến nghị cho Android, iOS và Web |
 | `AUDIO_CHANNELS` | **1 (Mono)** | Kênh | Định dạng 1 kênh để tối ưu băng thông đường truyền |
 | `PREFERRED_MIME_TYPE` | `audio/webm` / `audio/mp4` / `audio/wav` | MIME | Định dạng nén ưu tiên độ trễ thấp |
-| `STREAM_URL_THRESHOLD` | **65536** | Bytes | Nếu chuỗi Base64 > 64KB, server tự thay `audioUrl` bằng đường dẫn HTTP stream `/api/attempts/:roomId/:socketId` |
+| `STREAM_URL_THRESHOLD` | **4096** | Chars | Nếu chuỗi Base64 `> 4KB`, server tự thay `audioUrl` bằng đường dẫn HTTP stream `/api/attempts/:roomId/:socketId` để giảm kích thước JSON |
 
 ### 1.3. Cấu Hình Phòng, Bot & Bảo Mật (Room, Bot & Security Limits)
 
 | Hằng số (Constant) | Giá trị | Mô tả |
 | :--- | :--- | :--- |
 | `MAX_MEMBERS_PER_ROOM` | **12** người | Số thành viên tối đa (cả người thật và AI Bot) trong 1 phòng |
-| `DEFAULT_MIN_PLAYERS_WITH_BOTS` | **4** người | Số người chơi tối thiểu mặc định khi bật `autoFillBots` (ví dụ: 1 người + 3 Bot) |
-| `DEFAULT_MATCHMAKING_BOT_COUNT` | **3** Bot | Số lượng AI Bot mặc định thêm vào khi tìm trận nhanh không gặp người thật |
-| `MAX_CHAT_HISTORY_SIZE` | **50** tin nhắn | Số tin nhắn tối đa lưu trữ tạm thời trong RAM mỗi phòng |
+| `MAX_BOTS_PER_ROOM` | **3** Bot | Số lượng AI Bot tối đa trong 1 phòng |
+| `DEFAULT_MIN_PLAYERS_WITH_BOTS` | **4** người | Số người chơi mục tiêu của `QUICK_MATCH` (hoặc khi bật `autoFillBots` ở phòng 1 người) |
+| `RACE_1V1_PLAYERS` | **2** người | Số người chơi cố định của chế độ Đấu Tay Đôi `RACE_1V1` (1 vs 1) |
+| `MAX_CHAT_HISTORY_SIZE` | **50** tin nhắn | Số tin nhắn tối đa lưu trữ tạm thời trong RAM mỗi phòng (không lưu chuỗi Base64 audio vào lịch sử) |
 | `MAX_USERNAME_LENGTH` | **20** ký tự | Độ dài tối đa của tên hiển thị |
-| `MAX_CONNECTIONS_PER_IP` | **15** kết nối | Số kết nối Socket.IO tối đa đồng thời trên cùng 1 địa chỉ IP |
-| `CHALLENGE_TTL_MS` | **30000** ms (30s) | Thời hạn hiệu lực của mã One-Time Challenge Nonce |
+| `MAX_CONNECTIONS_PER_IP` | **15** kết nối | Số kết nối Socket.IO tối đa đồng thời trên cùng 1 địa chỉ IP (tự động đối soát mỗi 60s) |
+| `ROOM_CLEANUP_DELAY_MS` | **30000** ms (30s) | Thời gian ân hạn chờ reconnect cho phòng riêng `CUSTOM_ROOM` (`QUICK_MATCH` & `RACE_1V1` hủy ngay `0ms`) |
+| `ROOM_IDLE_TIMEOUT_MS` | **30 phút** | Tự động thu hồi phòng `CUSTOM_ROOM` bị bỏ không ở trạng thái `IDLE` / `GAME_OVER` quá 30 phút |
+| `CHALLENGE_TTL_MS` | **30000** ms (30s) | Thời hạn hiệu lực của mã One-Time Challenge Nonce (`MAX_CHALLENGE_NONCES = 10000`) |
 | `AUTH_TOKEN_TTL_MS` | **7 ngày** | Thời hạn hiệu lực của Session Token (`HMAC-SHA256`) |
 
 ---
@@ -93,21 +99,21 @@ Server vận hành theo mô hình **State Machine tập trung (100% Server-Autho
 
 ```mermaid
 stateDiagram-v2
-    [*] --> IDLE : Tạo phòng / Ghép trận chờ đủ người
+    [*] --> IDLE : Tạo phòng CUSTOM_ROOM / Ghép trận chờ đủ người
     IDLE --> THEME_SELECTION : Đủ người thật hoặc Hết giờ chờ (tự bù AI Bot) / Host bấm game_start
-    THEME_SELECTION --> PLAYING_SAMPLE : Step 5.0 (3.5s - Random Pack & Sound)
+    THEME_SELECTION --> PLAYING_SAMPLE : Step 5.0 (3.5s - Random Pack & Sound + Phát sớm botAssignments)
     PLAYING_SAMPLE --> PREPARE_RECORDING : Step 5.1 (Theo độ dài file mẫu 2s-12s)
     PREPARE_RECORDING --> USER_RECORDING : Step 5.1b (3s đếm ngược chuẩn bị mic)
     USER_RECORDING --> UPLOADING_SOUND : Step 5.2 (Hết giờ thu âm - Không cắt ngang sớm)
-    UPLOADING_SOUND --> LISTENING_NOW_PLAYING : Step 5.3 (3s đồng bộ bản thu)
-    LISTENING_NOW_PLAYING --> SHOWDOWN_REVEAL : Step 5.4 (5s phát lượt nổi bật)
-    SHOWDOWN_REVEAL --> AI_SCORING : Step 5.5 (10s nghe lại toàn bộ bài thi)
+    UPLOADING_SOUND --> SHOWDOWN_REVEAL : Step 5.3 (3s đồng bộ bản thu User & Bot)
+    SHOWDOWN_REVEAL --> AI_SCORING : Step 5.4/5.5 (Chờ 100% bấm FINISH ROUND hoặc auto 30s)
     AI_SCORING --> ROUND_RESULT : Step 5.6 (4s AI Voice Detector chấm điểm)
-    ROUND_RESULT --> BREAK_TIME : Step 5.7 (8s xem bảng điểm vòng, nếu round < totalRounds)
-    BREAK_TIME --> THEME_SELECTION : Step 5.8 (11s nghỉ giữa hiệp -> Sang Round kế tiếp)
-    ROUND_RESULT --> GAME_OVER : Step 5.7 -> 5.9 (Hoàn thành vòng cuối round == totalRounds)
+    ROUND_RESULT --> BREAK_TIME : Step 5.7 (7s xem Podium vòng, nếu round < totalRounds)
+    BREAK_TIME --> THEME_SELECTION : Step 5.9 (11s nghỉ hoặc 100% bấm NEW ROUND NOW -> Sang Round kế tiếp)
+    ROUND_RESULT --> GAME_OVER : Step 5.7 -> 5.10 (Hoàn thành vòng cuối round == totalRounds)
     USER_RECORDING --> GAME_OVER : (Riêng RACE_1V1) Đối thủ thoát giữa trận -> Báo thắng cuộc ngay
-    GAME_OVER --> IDLE : Step 5.9 (8s vinh danh -> Tự mở lại phòng tìm người mới & đếm giờ bù Bot)
+    GAME_OVER --> [*] : (QUICK_MATCH & RACE_1V1) Hiển thị kết quả -> Hủy phòng ngay (roomDisbanded=true) & trả về Online
+    GAME_OVER --> IDLE : (Riêng CUSTOM_ROOM) Giữ phòng cho nhóm bạn chơi lại ván mới
 ```
 
 ---
@@ -141,14 +147,28 @@ Base URL:
 
 ### 3.2. Chi Tiết Request & Response Từng REST API
 
-#### 1) `GET /api/health` — Kiểm tra tình trạng máy chủ
+#### 1) `GET /api/health` — Kiểm tra tình trạng máy chủ & Telemetry tài nguyên
 * **Response (`200 OK`)**:
   ```json
   {
     "status": "online",
     "timestamp": 1760494800000,
     "totalActiveRooms": 3,
-    "totalConnectedSockets": 11
+    "totalConnectedSockets": 11,
+    "stateCounters": {
+      "rooms": 3,
+      "gameSessions": 3,
+      "matchmakingQueue": 0,
+      "challengeNonces": 2,
+      "trackedIps": 8,
+      "totalStoredAudioBuffers": 4
+    },
+    "memory": {
+      "rssMB": 68.42,
+      "heapUsedMB": 24.15,
+      "externalMB": 2.31,
+      "arrayBuffersMB": 0.48
+    }
   }
   ```
 
@@ -258,6 +278,7 @@ Base URL:
   ```
 
 #### 6) `GET /api/rooms` — Danh sách phòng đang mở
+* **Query Params**: `?limit=100&includeMatchmaking=false` *(Mặc định chỉ trả về các phòng riêng `CUSTOM_ROOM`, tối đa 100 phòng; truyền `includeMatchmaking=true` nếu muốn xem cả phòng `QUICK_MATCH` / `RACE_1V1`)*.
 * **Response (`200 OK`)**:
   ```json
   {
@@ -265,6 +286,7 @@ Base URL:
       {
         "roomId": "MIMIC99",
         "roomName": "Phòng Đại Chiến",
+        "mode": "CUSTOM_ROOM",
         "memberCount": 4,
         "maxMembers": 12,
         "gameState": "IDLE",
@@ -364,7 +386,7 @@ Base URL:
   ```
 
 #### 10) `GET /api/attempts/:roomId/:socketId` — Stream Audio bản thu của Người chơi / AI Bot
-* **Mô tả**: Trả về trực tiếp binary buffer (`audio/webm`, `audio/mp4` hoặc `audio/wav` đối với AI Bot) của bài dự thi trong vòng hiện tại. Tự động xoá khỏi RAM sau khi qua giai đoạn `SHOWDOWN_REVEAL`.
+* **Mô tả**: Trả về trực tiếp binary buffer (`audio/webm`, `audio/mp4` hoặc `audio/wav` đối với AI Bot thuộc chế độ `CLIENT_UPLOAD`). Đối với AI Bot thuộc chế độ `LIVE_PLAYBACK_DSP` (không cần Client upload), endpoint này tự động Redirect (`302`) sang URL file âm thanh gốc trên CDN. Tự động xoá khỏi RAM sau mỗi vòng và khi kết thúc game.
 * **Error Responses**:
   - `404 Not Found` (`ROOM_NOT_FOUND` hoặc `ATTEMPT_AUDIO_NOT_FOUND`).
 
@@ -397,8 +419,8 @@ const socket = io("https://micmixfun.up.railway.app", {
 | Event Name | Payload Gửi Lên | Callback Response (`ack`) | Mô tả |
 | :--- | :--- | :--- | :--- |
 | `auth_guest` / `auth_firebase` | `{ userName, avatar, authToken?, firebaseIdToken? }` | `{ success: true, userId, firebaseUid, provider, authToken, expiresAt, user }` | Xác thực hoặc đổi tên/avatar trực tiếp trên kết nối Socket |
-| `create_room` | `{ roomId?, roomName?, userName? }` | `{ success: true, roomId, roomName, hostId, mode: "CUSTOM_ROOM", room }` | Tạo phòng riêng (`CUSTOM_ROOM` — cách ly hoàn toàn, không bị người tìm trận ngẫu nhiên ghép vào) |
-| `join_room` | `{ roomId, userName, avatar, userId?, authToken?, firebaseIdToken? }` | `{ success: true, authToken, expiresAt, restoredSession, room, user, gameState }` | Vào phòng theo mã Code (tự tạo phòng `CUSTOM_ROOM` nếu chưa có; tự khôi phục điểm nếu rớt mạng vào lại trong 120s) |
+| `create_room` | `{ roomId?, roomName?, userName?, avatar? }` | `{ success: true, roomId, roomName, hostId, mode: "CUSTOM_ROOM", authToken, expiresAt, room, user, gameState }` | **Tạo phòng riêng (`CUSTOM_ROOM`)**: Tự động đưa người tạo vào phòng làm `HOST` (`isReady: true`), khởi tạo `MimicGameSession` và phát `joined_room_success` ngay trong 1 bước |
+| `join_room` | `{ roomId, userName, avatar, userId?, authToken?, firebaseIdToken?, createIfNotExists?: false }` | `{ success: true, authToken, expiresAt, restoredSession, room, user, gameState }` | **Vào phòng riêng theo mã Code**: Kiểm tra mã phòng phải tồn tại (nếu gõ sai mã báo lỗi `ROOM_NOT_FOUND`). Chặn người ngoài tự ý nhập mã nhảy vào phòng `QUICK_MATCH` / `RACE_1V1`. Hỗ trợ Reconnect 120s khôi phục điểm ở `CUSTOM_ROOM` |
 | `leave_room` | `{}` | `{ success: true }` | Rời khỏi phòng hiện tại |
 | `close_room` | `{ roomId? }` | `{ success: true, roomId, cleared: true }` | **(Chỉ Host)** Đóng phòng ngay lập tức và giải phóng toàn bộ RAM |
 | `player_ready_toggle` | `{ roomId?, isReady?: boolean }` | `{ success: true, isReady }` | Bật / tắt trạng thái sẵn sàng tại sảnh chờ |
@@ -419,24 +441,24 @@ const socket = io("https://micmixfun.up.railway.app", {
 
 | Event Name | Payload Gửi Lên | Callback Response (`ack`) | Mô tả |
 | :--- | :--- | :--- | :--- |
-| `game_start` (hoặc `fill_bots_and_start`, `matchmaking_timeout`) | `{ roomId?, requireAllReady?: false, autoFillBots?: true, minPlayers?: 4, botCount?, botDifficulty? }` | `{ success: true, botsAdded, totalPlayers }` | **(Chỉ Host)** Bắt đầu trận đấu. Mặc định nếu phòng < `targetPlayers` sẽ tự động điền thêm AI Bot cho đủ số người |
+| `game_start` (hoặc `fill_bots_and_start`, `matchmaking_timeout`) | `{ roomId?, requireAllReady?: false, autoFillBots?: boolean, minPlayers?: 4, botCount?, botDifficulty? }` | `{ success: true, botsAdded, totalPlayers }` | **(Chỉ Host)** Bắt đầu trận đấu. Với `CUSTOM_ROOM` đã có từ 2 thành viên trở lên (`>= 2`), Server **không tự động chèn AI Bot** (trừ khi Host truyền rõ `autoFillBots: true`, `botCount > 0` hoặc gọi `fill_bots_and_start`). Nếu chỉ có 1 mình Host thì tự bù thêm Bot cho đủ 4 người |
 | `game_update_config` | `{ roomId?, totalRounds?: 3\|5\|7\|10, recordDuration?: 3..15, useCustomRecordDuration?: boolean }` | `{ success: true, totalRounds, recordDuration }` | **(Chỉ Host)** Cập nhật số vòng đấu và thời gian thu âm khi ở sảnh chờ |
 | `sample_playback_done` | `{ roomId? }` | — | Ghi nhận thiết bị đã phát xong file âm thanh mẫu (Server vẫn giữ đúng bộ đếm `PLAYING_SAMPLE` trước khi sang `PREPARE_RECORDING`) |
-| `game_submit_audio` | `{ roomId?, botSocketId?, audioData: "data:audio/webm;base64,...", mimeType?: "audio/webm", metrics?: { matchPct?, melodyScore?, pitchScore?, rhythmScore?, energyScore?, attackScore?, activeRatio? } }` | `{ success: true, evaluation: { totalScore, pitchScore, melodyScore, rhythmScore, energyScore, attackScore, grade, remark } }` | Nộp bản thu âm nhại giọng của User (hoặc của Bot nếu truyền `botSocketId`). Server chấm điểm theo chuẩn Figma (`Melody 50% · Rhythm 30% · Attack 20%`). Nếu gói tin tới trễ nhẹ vào đầu `SHOWDOWN_REVEAL`, Server vẫn nhận bài, chấm điểm và phát `attempts_updated` cho cả phòng |
-| `game_submit_bot_audio` | `{ roomId?, botSocketId, audioData: "data:audio/wav;base64,...", mimeType?: "audio/wav", metrics?: { matchPct?, melodyScore?, rhythmScore?, attackScore?, activeRatio? } }` | `{ success: true, botSocketId, uploadedBy, assignedGeneratorSocketId, audioUrl, evaluation: { totalScore, pitchScore, melodyScore, rhythmScore, energyScore, attackScore, grade, remark } }` | Client được phân công (`assignedGeneratorSocketId`) nộp file audio đã gen cho AI Bot lên Server: Server **lưu vào `audioStore` để phát lại qua `/api/attempts/:roomId/:botSocketId` VÀ chấm điểm thực tế trên Server (`evaluateMimicAttempt`)**, cập nhật lại `bot.roundScore` & `bot.totalScore` (nếu Client không upload thì dùng điểm DSP fallback) |
+| `game_submit_audio` | `{ roomId?, botSocketId?, audioData: "data:audio/webm;base64,...", mimeType?: "audio/webm", metrics?: { matchPct?, melodyScore?, pitchScore?, rhythmScore?, energyScore?, attackScore?, activeRatio? } }` | `{ success: true, evaluation: { totalScore, pitchScore, melodyScore, rhythmScore, energyScore, attackScore, grade, remark } }` | Nộp bản thu âm nhại giọng của User (tối đa `512KB`). Server giải mã 1 lần qua `decodeBoundedBase64Audio`, chấm điểm theo chuẩn Figma (`Melody 50% · Rhythm 30% · Attack 20%`) và lưu vào `audioStore` để phát qua `/api/attempts/:roomId/:socketId` |
+| `game_submit_bot_audio` | `{ roomId?, botSocketId, audioData?: "data:audio/wav;base64,...", mimeType?: "audio/wav", metrics?: { matchPct?, melodyScore?, rhythmScore?, attackScore?, activeRatio? } }` | `{ success: true, botSocketId, uploadedBy, assignedGeneratorSocketId, generationMode, audioUrl, evaluation }` | Client được phân công (`assignedGeneratorSocketId`, tối đa **1 Bot/Client/vòng**) nộp file audio đã gen cho AI Bot (`<= 350KB`) hoặc chỉ gửi `metrics` nhẹ. Nếu Bot không được gán upload hoặc vượt trần `350KB`, tự động dùng chế độ `LIVE_PLAYBACK_DSP` |
 | `game_emoji_reaction` | `{ roomId?, emoji: "😂" }` | — | Thả biểu tượng cảm xúc bay trên màn hình (tối đa 5 lần / giây) |
 | `confirm_showdown_skip` (hoặc `finish_round`, `skip_to_round_result`) | `{ roomId? }` | `{ success: true, isVoted, skipCount, totalCount, allSkipConfirmed }` | **Màn `SHOWDOWN_REVEAL` (`5.4 + 5.5` — `"FINISH ROUND ▶"`)**: Người chơi click nghe tự do các bản thu âm trong danh sách `"Players' Recordings"`, nghe xong bấm **"FINISH ROUND ▶"**. AI Bot luôn được đánh dấu Done sẵn (`100%`). Ngay khi **100% người chơi đã bấm Done** (hoặc hết `30s` AFK safety timer), Server lập tức chuyển sang `AI_SCORING` (`5.6`) |
-| `confirm_next_round_ready` (hoặc `new_round_now`) | `{ roomId? }` | `{ success: true, readyCount, totalCount, allReady }` | **Màn `BREAK_TIME` (`5.9` — `"NEW ROUND NOW"`) / `ROUND_RESULT` (`5.7`) / `GAME_OVER` (`5.10`)**: Khi người chơi bấm **"NEW ROUND NOW"**, nếu **100% người thật trong phòng đã bấm**, Server chuyển thẳng sang Round tiếp theo ngay lập tức mà không cần đợi hết `11s` đếm ngược (hoặc tự chuyển khi hết giờ) |
+| `confirm_next_round_ready` (hoặc `new_round_now`) | `{ roomId? }` | `{ success: true, readyCount, totalCount, allReady }` | **Màn `BREAK_TIME` (`5.9` — `"NEW ROUND NOW"`) / `ROUND_RESULT` (`5.7`) / `GAME_OVER` (`5.10` ở `CUSTOM_ROOM`)**: Khi người chơi bấm **"NEW ROUND NOW"**, nếu **100% người thật trong phòng đã bấm**, Server chuyển thẳng sang Round tiếp theo ngay lập tức mà không cần đợi hết `11s` đếm ngược |
 | `get_game_state` | `{ roomId? }` | `GameStateSnapshot \| null` | Lấy toàn bộ trạng thái hiện tại của bàn chơi khi vừa kết nối lại |
 
 #### Nhóm D — Chat, Soundboard, Chia Sẻ Audio & Live Mic (`media.handler.ts`)
 
 | Event Name | Payload Gửi Lên | Callback Response (`ack`) | Mô tả |
 | :--- | :--- | :--- | :--- |
-| `send_message` | `{ message: "Hello!", type?: "text", audioMeta?: null }` | `{ success: true, messageId }` | Gửi tin nhắn chat vào phòng (lưu tối đa 50 tin gần nhất) |
-| `trigger_sound` | `{ soundId, soundName?, soundUrl, volume?: 1.0, pitch?: 1.0 }` | `{ success: true }` | Phát hiệu ứng âm thanh Soundboard đồng bộ cho toàn bộ thành viên trong phòng |
+| `send_message` | `{ message: "Hello!", type?: "text", audioMeta?: null }` | `{ success: true, messageId }` | Gửi tin nhắn chat vào phòng (Rate limit: 6 tin / 3s, lưu tối đa 50 tin gần nhất) |
+| `trigger_sound` | `{ soundId, soundName?, soundUrl, volume?: 1.0, pitch?: 1.0 }` | `{ success: true }` | Phát hiệu ứng âm thanh Soundboard đồng bộ cho toàn bộ thành viên trong phòng (Rate limit: 5 lần / 2s) |
 | `stop_all_sounds` | `{}` | — | Dừng tất cả âm thanh Soundboard đang phát trong phòng |
-| `share_audio_clip` | `{ audioData, audioName?, duration?, mimeType?: "audio/webm" }` | `{ success: true, audioId }` | Chia sẻ một đoạn ghi âm ngắn vào phòng và lưu vào lịch sử chat |
+| `share_audio_clip` | `{ audioData, audioName?, duration?, mimeType?: "audio/webm" }` | `{ success: true, audioId }` | Chia sẻ đoạn ghi âm ngắn realtime cho các thành viên đang online trong phòng (Rate limit: 5 clip / 10s; trong lịch sử `room.messages` tự động đặt `audioData: null, truncatedForMemory: true` để bảo vệ RAM) |
 | `mic_stream_start` | `{ sampleRate?: 48000, channels?: 1 }` | — | Bắt đầu truyền giọng nói trực tiếp (Live Mic Stream) |
 | `mic_stream_chunk` | `<ArrayBuffer \| Base64Chunk>` | — | Gửi từng mảnh dữ liệu âm thanh micro thời gian thực |
 | `mic_stream_stop` | `{}` | — | Kết thúc truyền giọng nói trực tiếp |
@@ -1025,13 +1047,15 @@ Client tự động mở khóa giao diện Host (hiển thị nút Bắt đầu,
      - `AI_SCORING` chạy **4s** (*"Locking in this round... Melody · Rhythm · Attack"*) rồi sang `ROUND_RESULT` (**7s** Podium).
      - Tại `BREAK_TIME` (**11s**), nếu **100% người thật bấm nút `"NEW ROUND NOW"`** (`confirm_next_round_ready` / `new_round_now`), Server bắt đầu ngay Round tiếp theo mà không cần đợi hết 11s; nếu có người chưa bấm thì hết 11s Server tự động qua vòng mới.
 
-2. **Quy tắc khi có người rời trận giữa chừng (`Mid-Game Leave`) & Tự động tìm người mới sau trận**:
+2. **Quy tắc khi có người rời trận giữa chừng (`Mid-Game Leave`) & Giải tán phòng ngay sau trận (`QUICK_MATCH` & `RACE_1V1`)**:
    - **Mode `QUICK_MATCH` (`4 Người`)**:
      - Khi 1 người thoát giữa trận, ván đấu **vẫn tiếp tục chạy bình thường tới hết tất cả các Round (`3/3`)** cho những người chơi còn lại. Nếu phòng đang ở `SHOWDOWN_REVEAL` hoặc `BREAK_TIME` và những người còn lại đều đã bấm Done/Ready, Server lập tức chuyển bước ngay mà không bị kẹt bởi người vừa thoát.
-     - Sau khi kết thúc `GAME_OVER` (**8s**), Server tự động xóa các AI Bot cũ, mở lại phòng chờ và bật bộ đếm tìm người chơi mới (`matchmaking_searching` + `matchmaking_tick` + tự hút người từ `matchmakingQueue`). Nếu hết thời gian chờ mà chưa đủ 4 người thật, Server tự động bù thêm AI Bot và bắt đầu ván mới.
+     - Ngay khi phát sự kiện `5.10 GAME_OVER` (hoặc khi người thật cuối cùng rời phòng), Server **giải tán và xóa sổ phòng ngay lập tức (`roomDisbanded: true`, `autoRestart: false`, `duration: 0`, `currentRoomId = null`)**, giải phóng 100% RAM/Timer và đưa người chơi về trạng thái **Online** (ngoài phòng). Nếu muốn chơi tiếp, Client bấm `quick_match` để tìm trận mới.
    - **Mode `RACE_1V1` (`2 Người`)**:
      - Khi đối thủ thoát giữa trận, Server **kết thúc ván đấu ngay lập tức** và chuyển thẳng sang `GAME_OVER` kèm `reason: "OPPONENT_LEFT_FORFEIT"`, `forfeitedBySocketId`, `forfeitedByUserName` để trao chiến thắng ngay cho người ở lại.
-     - Sau `GAME_OVER` (**8s**), phòng tự động mở lại tìm đối thủ 1v1 mới (quá giờ tự bù `1 AI Bot`).
+     - Ngay khi phát sự kiện `5.10 GAME_OVER`, Server **giải tán và xóa sổ phòng ngay lập tức (`roomDisbanded: true`, `autoRestart: false`, `duration: 0`, `currentRoomId = null`)** và đưa người chơi về trạng thái **Online**.
+   - **Mode `CUSTOM_ROOM` (`Phòng Riêng Tạo Mã`)**:
+     - Sau `GAME_OVER` (**8s**), phòng riêng vẫn giữ nguyên các thành viên để Chủ phòng có thể bấm `game_start` chơi lại ván mới hoặc đóng phòng (`close_room`).
 
 ---
 
@@ -1340,23 +1364,24 @@ Client cũng có thể gọi trực tiếp **`GET /api/enums`** (hoặc **`GET /
 ## 12. 🤖 Hệ Thống AI Bot, 4 Chế Độ Chơi & Smart Matchmaking Engine
 
 > **Tài liệu liên quan:**
-> - Bản thiết kế trực quan 4 Chế Độ Chơi & Luồng Matchmaking: [`GAME_DESIGN_MODES.html`](./GAME_DESIGN_MODES.html)
+> - Bản thiết kế trực quan 4 Chế Độ Chơi & Luồng Matchmaking: [`GAME_FLOW_DIAGRAMS.html`](./GAME_FLOW_DIAGRAMS.html) & [`GAME_DESIGN_MODES.html`](./GAME_DESIGN_MODES.html)
 > - Bảng tra cứu Enum đầy đủ: [`ENUM_LOCALIZATION_GUIDE.md`](./ENUM_LOCALIZATION_GUIDE.md)
 > - Thiết kế tổng hợp âm thanh AI Bot: [`BOT_SOUND_GENERATION_PLAN.md`](./BOT_SOUND_GENERATION_PLAN.md)
+> - Quy tắc kiến trúc & hiệu năng (Guardrails): [`AGENTS.md`](./AGENTS.md)
 
 ### 12.1. Tổng quan 4 Chế Độ Chơi & Smart Matchmaking Engine (`quick_match` vs `race_1v1` vs `CUSTOM_ROOM`)
 
-| Mode | Socket Event khởi tạo | `room.mode` | Số người (`targetPlayers`) | Thời gian chờ cơ bản | Quy tắc Cộng giờ & Bù AI Bot |
+| Mode | Socket Event khởi tạo | `room.mode` | Số người (`targetPlayers`) | Thời gian chờ cơ bản | Quy tắc Cộng giờ, Bù AI Bot & Giải Tán Phòng |
 | :--- | :--- | :---: | :---: | :---: | :--- |
-| **1. Quick Match (4P)** | `quick_match` / `find_match` | `QUICK_MATCH` | **4 Người** | `10s` (`waitMs: 10000`) | Khi có người thật mới vào phòng (`2/4` hoặc `3/4`) mà đồng hồ `< 5s` ➔ **Cộng giờ mềm `+5s`** (trần tối đa `16s`). Hết giờ tự bù `(4 - N)` Bot |
-| **2. 1vs1 Race (2P)** | `race_1v1` / `find_1v1_match` | `RACE_1V1` | **2 Người** | `8s` (`waitMs: 8000`) | Đủ `2/2` người thật là bắt đầu ngay (`autoStarted: true`). Hết `8s` chờ tự bù đúng `1 AI Bot` |
-| **3. Create Room** | `create_room` | `CUSTOM_ROOM` | Tối đa **8 Người** | Không tự đếm ngược | Cách ly hoàn toàn (`CUSTOM_ROOM`), người tìm trận ngẫu nhiên không bao giờ bị ghép nhầm vào |
-| **4. Join Room** | `join_room` (`roomId`) | `CUSTOM_ROOM` | Tối đa **8 Người** | Không tự đếm ngược | Vào đúng phòng theo mã Code 6 ký tự; hỗ trợ Reconnect 120s khôi phục điểm |
+| **1. Quick Match (4P)** | `quick_match` / `find_match` | `QUICK_MATCH` | **4 Người** | `10s` (`waitMs: 10000`) | Khi có người thật mới vào phòng (`2/4` hoặc `3/4`) mà đồng hồ `< 5s` ➔ **Cộng giờ mềm `+5s`** (trần tối đa `16s`). Hết giờ tự bù `(4 - N)` Bot. Kết thúc `GAME_OVER` **giải tán phòng ngay (`roomDisbanded: true`)** |
+| **2. 1vs1 Race (2P)** | `race_1v1` / `find_1v1_match` | `RACE_1V1` | **2 Người** | `8s` (`waitMs: 8000`) | Đủ `2/2` người thật là bắt đầu ngay (`autoStarted: true`). Hết `8s` chờ tự bù đúng `1 AI Bot`. Kết thúc `GAME_OVER` **giải tán phòng ngay (`roomDisbanded: true`)** |
+| **3. Create Room** | `create_room` | `CUSTOM_ROOM` | Tối đa **8 Người** | Không tự đếm ngược | Tạo phòng riêng & **tự động cho Host vào phòng ngay** (`role: 'HOST'`). Tách biệt 100% khỏi hàng đợi Matchmaking |
+| **4. Join Room** | `join_room` (`roomId`) | `CUSTOM_ROOM` | Tối đa **8 Người** | Không tự đếm ngược | Chỉ vào phòng `CUSTOM_ROOM` đang tồn tại theo mã Code (chặn người lạ join vào phòng `QUICK_MATCH`/`RACE_1V1`, chỉ cho phép người cũ Reconnect 120s khôi phục điểm) |
 
 #### 5 Cơ Chế Tối Ưu Smart Matchmaking Engine Trên Server:
 1. **Best-Fit + FIFO Priority (`3/4 ➔ 2/4 ➔ 1/4`)**: Khi có người bấm tìm trận, Server luôn ưu tiên nhét vào phòng chờ đang có đông người thật nhất (`3/4` trước rồi tới `2/4`, phòng đợi lâu hơn ưu tiên trước) để đủ `4/4` vào trận ngay, thay vì tạo thêm phòng lẻ `2/4`.
-2. **Queue Draining on Room Re-Open**: Ngay khi một phòng `QUICK_MATCH` hoặc `RACE_1V1` kết thúc trận (`GAME_OVER`) và mở lại tìm người mới, Server tự động hút ngay các user đang đứng chờ trong `matchmakingQueue` cùng mode vào các ghế trống.
-3. **Custom Room Isolation (`mode: 'CUSTOM_ROOM'`)**: Phòng tạo qua `create_room` / `join_room` được gắn cứng `CUSTOM_ROOM`, tách biệt 100% khỏi hàng đợi Matchmaking.
+2. **Immediate Post-Game Disband (`0ms` Zero-Residual Leak)**: Ngay khi một phòng `QUICK_MATCH` hoặc `RACE_1V1` kết thúc trận (`5.10 GAME_OVER`) hoặc khi người thật cuối cùng thoát phòng, Server lập tức giải tán phòng (`destroyRoomData`), gỡ toàn bộ socket (`currentRoomId = null`) và trả người chơi về trạng thái **Online** (không giữ phòng trống, không tự động loop mở lại phòng cũ).
+3. **Strict Mode Isolation (`CUSTOM_ROOM` vs Matchmaking)**: Phòng tạo qua `create_room` được gắn cứng `CUSTOM_ROOM` và tự động join Host ngay; `join_room` chặn tạo phòng ngầm và chặn người lạ xâm nhập vào phòng `QUICK_MATCH` / `RACE_1V1` bằng mã phòng.
 4. **Live Avatar Slots (`currentPlayers`, `members`, `extendedBonusSeconds`)**: Mọi sự kiện `matchmaking_searching`, `matchmaking_tick`, `matchmaking_player_joined` và `get_matchmaking_state` đều trả về mảng `members` thực tế để UI vẽ 4 ô ghế Avatar sáng dần (`1/4 ➔ 2/4 ➔ 3/4 ➔ 4/4`).
 5. **Unified Cancel Match (`cancel_match` / `cancel_quick_match`)**: Hỗ trợ hủy tìm trận ở cả 2 trạng thái: khi đang đứng lẻ `1/4` trong `matchmakingQueue` **và** khi đã được gom tạm vào phòng `2/4`, `3/4` đang đếm ngược chờ đủ người (`IDLE`).
 
@@ -1400,17 +1425,17 @@ socket.emit("cancel_match", {}, (res) => {
 
 ### 12.2. Bắt đầu trận tại phòng Custom (`game_start` / `fill_bots_and_start`)
 Khi Chủ phòng ở phòng Custom (`CUSTOM_ROOM`) muốn bắt đầu trận đấu, gọi `game_start`:
-- Mặc định `minPlayers = 4` (`autoFillBots = true`): Nếu phòng có ít hơn 4 người (ví dụ 1–3 người), Server tự động thêm AI Bot cho đủ 4 người chơi, phát sự kiện `bots_auto_filled` (`SYS_MATCHMAKING_BOTS_FILLED`) rồi bắt đầu vòng 1 ngay!
-- Nếu bạn bè trong phòng muốn tự chơi với nhau mà **không thêm Bot**, truyền `autoFillBots: false`.
+- **Khi phòng đã có từ `>= 2` thành viên trở lên** (ví dụ 2–8 người bạn hoặc đã chủ động `add_bot` tại sảnh): Mặc định Server **KHÔNG tự động nhồi thêm Bot ngoài ý muốn** (`shouldAutoFill = false`), giữ nguyên số người hiện có để bạn bè đấu với nhau.
+- **Khi chỉ có `1` mình Chủ phòng trong phòng** (hoặc khi truyền rõ `autoFillBots: true` / `botCount > 0`): Server mới tự động bù thêm AI Bot theo `botCount` hoặc cho đủ `minPlayers` (mặc định `4`), phát sự kiện `bots_auto_filled` (`SYS_MATCHMAKING_BOTS_FILLED`) rồi bắt đầu vòng 1 ngay!
 
 ```javascript
 socket.emit("game_start", {
   roomId: "K9P2",
   requireAllReady: false,
-  autoFillBots: true, // Đặt false nếu phòng Custom chỉ muốn chơi giữa người thật với nhau
-  minPlayers: 4       // Mặc định bù thêm Bot cho đủ 4 người chơi
+  autoFillBots: false, // Mặc định false khi phòng CUSTOM_ROOM đã có >= 2 người; đặt true hoặc truyền botCount > 0 nếu muốn bù thêm Bot
+  botCount: 0
 }, (res) => {
-  console.log(res); // { success: true, botsAdded: 3, totalPlayers: 4 }
+  console.log(res); // { success: true, botsAdded: 0, totalPlayers: 2 }
 });
 ```
 
@@ -1434,17 +1459,20 @@ socket.emit("game_start", {
   });
   ```
 
-### 12.4. Cơ chế Gen Sound của AI Bot dưới Client & Upload Lên Server Để Chấm Điểm (`game_submit_bot_audio`)
-1. **Phân công Round-Robin (`botAssignments`)**:
-   - Khi vào `USER_RECORDING` (`5.2`) và `UPLOADING_SOUND` (`5.3`), Server tính sẵn công thức biến đổi giọng người thật `botAudioEffects` theo 3 độ khó (`EASY` / `NORMAL` / `HARD`) và chia đều (Round-Robin) cho các máy người thật trong phòng qua trường `assignedGeneratorSocketId` (tự động Failover sang người thật khác nếu người được giao rớt mạng):
+### 12.4. Cơ chế Quota 1:1 Gen Sound của AI Bot dưới Client & Upload Lên Server Để Chấm Điểm (`game_submit_bot_audio`)
+1. **Phân công Quota 1:1 (`MAX_BOTS_PER_CLIENT_PER_ROUND = 1`) ngay từ đầu vòng (`5.0 THEME_SELECTION` ➔ `5.3 UPLOADING_SOUND`)**:
+   - Ngay từ `5.0 THEME_SELECTION`, Server tính sẵn công thức biến đổi giọng người thật `botAudioEffects` theo 3 độ khó (`EASY` / `NORMAL` / `HARD`) và trả về mảng `botAssignments` xuyên suốt `5.0`, `5.1`, `5.15`, `5.2` và `5.3` để Client có dư thời gian render ngầm bằng `OfflineAudioContext`:
+     - **Mỗi máy người thật chỉ nhận tối đa `1 Bot` mỗi vòng (`botGenerationMode: "CLIENT_UPLOAD"`, `assignedGeneratorSocketId: "<socketId>"`)**.
+     - **Các Bot dư ra** (ví dụ phòng 1 Người thật + 3 Bot thì Bot #2 và Bot #3 dư ra): Được gắn `botGenerationMode: "LIVE_PLAYBACK_DSP"`, `assignedGeneratorSocketId: null`. Không máy Client nào phải render/upload file cho các Bot này; ở màn `SHOWDOWN_REVEAL`, khi người chơi bấm nghe, Client phát trực tiếp `targetSound.url` qua Web Audio API / Android AudioTrack kèm bộ lọc `botAudioEffects` thời gian thực!
+   - Ba cấp độ công thức `botAudioEffects`:
      - **`EASY` (Yếu — Điểm khoảng 50–70đ)**: Lệch cao độ (`pitch` ±11%..18%) và tốc độ (`speed` ±10%..17%) trong ngưỡng giọng người thật, vào nhịp trễ (`startDelayMs` 180..340ms), có tiếng lấy hơi đầu câu, luyến giọng nhẹ và 1–2 nhịp ngập ngừng êm (`dropoutCount`).
      - **`NORMAL` (Thông thường — Điểm khoảng 68–86đ)**: Lệch nhẹ cao độ (`pitch` ±4.5%..9%) và tốc độ (`speed` ±4%..8.5%), âm sắc micro smartphone tiêu chuẩn (`[220Hz, 4200Hz]`), trễ phản xạ tự nhiên 70..140ms.
      - **`HARD` (Khó — Điểm khoảng 84–97đ)**: Bám rất sát âm thanh gốc (`pitch` ±1%..3.2%, `speed` ±1%..3%), thu âm micro trong trẻo (`[150Hz, 6000Hz]`), bắt nhịp nhanh (`startDelayMs` 15..40ms).
-2. **Upload & Chấm Điểm Thực Tế Trên Server (`game_submit_bot_audio`)**:
-   - Khi máy Client có `socket.id === assignedGeneratorSocketId` gen xong file âm thanh của Bot (ví dụ `audio/wav` hoặc `audio/webm`) và gửi lên qua `game_submit_bot_audio` (`{ roomId, botSocketId, audioData, mimeType, metrics }`):
-     - Server lưu `Buffer` âm thanh của Bot vào `audioStore` để toàn bộ người chơi trong phòng bấm nghe đồng bộ qua `GET /api/attempts/:roomId/:botSocketId`.
-     - Server **gọi trực tiếp `evaluateMimicAttempt(audioData, metrics)` để chấm điểm bản sound vừa upload của Bot trên Server**, trừ điểm fallback tạm và cập nhật lại `bot.roundScore`, `bot.totalScore` cùng `bot.currentAttempt.evaluation` (`botAudioUploaded = true`), đồng thời trả về `evaluation` trong callback và broadcast `bot_audio_synced` nếu đang ở màn `SHOWDOWN_REVEAL`.
-     - Nếu vì lý do mạng mà Client không upload kịp `game_submit_bot_audio`, Server tự động dùng công thức DSP fallback để ván đấu không bao giờ bị kẹt.
+2. **Upload & Chấm Điểm Thực Tế Trên Server (`game_submit_bot_audio`, giới hạn `<= 350KB`)**:
+   - Khi máy Client có `socket.id === assignedGeneratorSocketId` (`botGenerationMode === "CLIENT_UPLOAD"`) gen xong file âm thanh của Bot và gửi lên qua `game_submit_bot_audio` (`{ roomId, botSocketId, audioData, mimeType, metrics }`):
+     - Server giải mã an toàn qua `decodeBoundedBase64Audio(audioData, 350 * 1024)` (chặn đứng payload `> 350KB` trước khi cấp phát C++ `Buffer`) và lưu vào `audioStore` để toàn bộ người chơi trong phòng bấm nghe đồng bộ qua `GET /api/attempts/:roomId/:botSocketId`.
+     - Server **gọi trực tiếp `evaluateMimicAttempt(audioData, metrics, preDecodedBuffer)` (single-pass decode) để chấm điểm bản sound vừa upload của Bot trên Server**, trừ điểm fallback tạm và cập nhật lại `bot.roundScore`, `bot.totalScore` cùng `bot.currentAttempt.evaluation` (`botAudioUploaded = true`), đồng thời trả về `evaluation` trong callback và broadcast `bot_audio_synced` nếu đang ở màn `SHOWDOWN_REVEAL`.
+     - Nếu vì lý do mạng mà Client không upload kịp `game_submit_bot_audio` (hoặc với các Bot `LIVE_PLAYBACK_DSP`), Server tự động dùng công thức DSP fallback để ván đấu không bao giờ bị kẹt.
 
 
 

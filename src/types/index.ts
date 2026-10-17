@@ -198,6 +198,7 @@ export interface RoomData {
   id: string;
   name: string;
   createdAt: number;
+  lastActivityAt?: number;
   hostId: string;
   hostUserId: string | null;
   mode?: GameModeType;
@@ -242,4 +243,5 @@ export interface AuthenticatedSocket extends Socket {
   clientFingerprint?: string;
   clientIp?: string;
   authSession?: AuthTokenPayload;
+  sessionState?: SocketSessionState;
 }

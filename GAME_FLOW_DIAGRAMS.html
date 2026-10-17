@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MicMixFun — Sơ Đồ Luồng Hoạt Động Các Chế Độ Game</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-card: #1e293b;
+      --border-color: #334155;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --accent-blue: #38bdf8;
+      --accent-purple: #a855f7;
+      --accent-green: #22c55e;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      padding-bottom: 60px;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 60%, #0c4a6e 100%);
+      border-bottom: 1px solid var(--border-color);
+      padding: 36px 24px 28px;
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      margin-bottom: 10px;
+      background: linear-gradient(90deg, #38bdf8, #c084fc, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    header p {
+      color: var(--text-secondary);
+      max-width: 780px;
+      margin: 0 auto;
+      font-size: 0.98rem;
+    }
+
+    .badge-row {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 14px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+    }
+
+    .badge.qm { color: #38bdf8; border-color: rgba(56, 189, 248, 0.35); }
+    .badge.v1 { color: #f43f5e; border-color: rgba(244, 63, 94, 0.35); }
+    .badge.cr { color: #22c55e; border-color: rgba(34, 197, 94, 0.35); }
+    .badge.bot { color: #c084fc; border-color: rgba(192, 132, 252, 0.35); }
+
+    .container {
+      max-width: 1380px;
+      margin: 0 auto;
+      padding: 24px 20px;
+    }
+
+    /* Navigation Tabs */
+    .nav-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 28px;
+      background: var(--bg-secondary);
+      padding: 10px;
+      border-radius: 14px;
+      border: 1px solid var(--border-color);
+      position: sticky;
+      top: 12px;
+      z-index: 50;
+      backdrop-filter: blur(12px);
+    }
+
+    .tab-btn {
+      flex: 1 1 auto;
+      min-width: 160px;
+      padding: 11px 16px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 0.92rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .tab-btn.active {
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(168, 85, 247, 0.18));
+      color: #fff;
+      border-color: rgba(56, 189, 248, 0.45);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    }
+
+    .section-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 26px;
+      margin-bottom: 28px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 18px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .section-title {
+      font-size: 1.35rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-subtitle {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+    }
+
+    /* Key Highlights Grid */
+    .highlights-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+
+    .highlight-box {
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid var(--border-color);
+      border-left: 4px solid var(--accent-blue);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+
+    .highlight-box.rose { border-left-color: var(--accent-rose); }
+    .highlight-box.green { border-left-color: var(--accent-green); }
+    .highlight-box.purple { border-left-color: var(--accent-purple); }
+    .highlight-box.amber { border-left-color: var(--accent-amber); }
+
+    .highlight-box h4 {
+      font-size: 0.92rem;
+      margin-bottom: 4px;
+      color: #f1f5f9;
+    }
+
+    .highlight-box p {
+      font-size: 0.84rem;
+      color: var(--text-secondary);
+    }
+
+    code {
+      font-family: "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+      background: rgba(56, 189, 248, 0.12);
+      color: #7dd3fc;
+      padding: 2px 6px;
+      border-radius: 5px;
+      font-size: 0.83em;
+    }
+
+    /* Diagram Wrapper */
+    .diagram-wrapper {
+      background: #0b1120;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 24px 16px;
+      overflow-x: auto;
+      text-align: center;
+    }
+
+    .mermaid {
+      display: inline-block;
+      min-width: 100%;
+    }
+
+    /* Comparison Table */
+    .table-wrap {
+      overflow-x: auto;
+      margin-top: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    th, td {
+      padding: 13px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    th {
+      background: rgba(15, 23, 42, 0.8);
+      color: #e2e8f0;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Phase Timeline Pills */
+    .phase-steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+
+    .step-pill {
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 12px 14px;
+      position: relative;
+    }
+
+    .step-pill .step-num {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(56, 189, 248, 0.18);
+      color: #38bdf8;
+      margin-bottom: 6px;
+    }
+
+    .step-pill h5 {
+      font-size: 0.92rem;
+      margin-bottom: 4px;
+    }
+
+    .step-pill p {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>🎙️ MicMixFun Backend — Sơ Đồ Luồng Hoạt Động Game</h1>
+    <p>Tài liệu trực quan hóa toàn bộ luồng ghép trận, quản lý phòng và vòng lặp trạng thái của 3 chế độ: <strong>Quick Match (4P)</strong>, <strong>1vs1 Race</strong> và <strong>Create/Join Custom Room</strong>.</p>
+    <div class="badge-row">
+      <span class="badge qm">⚡ QUICK_MATCH (4 Người)</span>
+      <span class="badge v1">⚔️ RACE_1V1 (Solo 1vs1)</span>
+      <span class="badge cr">🏠 CUSTOM_ROOM (Tạo/Vào phòng, tối đa 12P)</span>
+      <span class="badge bot">🤖 AI Bot Quota 1:1 + Live Playback DSP</span>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Sticky Navigation -->
+    <nav class="nav-tabs">
+      <button class="tab-btn active" onclick="scrollToSection('sec-compare')">📊 Bảng So Sánh</button>
+      <button class="tab-btn" onclick="scrollToSection('sec-quick-match')">⚡ 1. Quick Match (4P)</button>
+      <button class="tab-btn" onclick="scrollToSection('sec-1v1')">⚔️ 2. Đấu 1vs1 Race</button>
+      <button class="tab-btn" onclick="scrollToSection('sec-custom-room')">🏠 3. Create / Join Room</button>
+      <button class="tab-btn" onclick="scrollToSection('sec-game-loop')">🔄 4. Vòng Lặp Gameplay & Bot 1:1</button>
+      <button class="tab-btn" onclick="scrollToSection('sec-sequence')">📡 5. Sequence Socket.IO</button>
+    </nav>
+
+    <!-- 0. BẢNG SO SÁNH TỔNG QUAN -->
+    <section id="sec-compare" class="section-card">
+      <div class="section-header">
+        <div>
+          <div class="section-title">📊 Bảng So Sánh 3 Chế Độ Chơi</div>
+          <div class="section-subtitle">Tổng hợp các quy tắc ghép người, thời gian chờ, bù Bot và xử lý thoát giữa trận</div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Tiêu chí</th>
+              <th>⚡ Quick Match (<code>QUICK_MATCH</code>)</th>
+              <th>⚔️ 1vs1 Race (<code>RACE_1V1</code>)</th>
+              <th>🏠 Custom Room (<code>CUSTOM_ROOM</code>)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Socket Events kích hoạt</strong></td>
+              <td><code>quick_match</code> / <code>find_match</code></td>
+              <td><code>race_1v1</code> / <code>find_1v1_match</code></td>
+              <td><code>create_room</code> / <code>join_room</code> / <code>game_start</code></td>
+            </tr>
+            <tr>
+              <td><strong>Số người chơi mục tiêu</strong></td>
+              <td><strong>4 người</strong> (<code>targetPlayers = 4</code>)</td>
+              <td><strong>2 người</strong> (<code>targetPlayers = 2</code>)</td>
+              <td>Từ <strong>1 đến 12 người</strong> (<code>MAX_MEMBERS_PER_ROOM = 12</code>)</td>
+            </tr>
+            <tr>
+              <td><strong>Chiến lược ghép phòng</strong></td>
+              <td>Ưu tiên <strong>Best-Fit</strong> phòng đang gom (<code>3/4</code> &rarr; <code>2/4</code>) trước khi ghép người lẻ <code>1/4</code> trong Queue</td>
+              <td>Ghép trực tiếp 2 người chơi đang tìm trận <code>1v1</code></td>
+              <td>Vào phòng theo mã <code>roomId</code> cố định do Host chia sẻ</td>
+            </tr>
+            <tr>
+              <td><strong>Đồng hồ chờ &amp; Cộng giờ mềm</strong></td>
+              <td>Chờ <code>10s</code>. Khi có người mới vào mà đồng hồ còn <code>&lt; 5s</code> &rarr; cộng mềm lên <code>5s</code> (Trần tối đa <code>16s</code>)</td>
+              <td>Chờ <code>10s</code>. Đủ <code>2/2</code> người thật là bắt đầu ngay lập tức</td>
+              <td>Không tự đếm ngược; chờ Host bấm nút <code>game_start</code></td>
+            </tr>
+            <tr>
+              <td><strong>Cơ chế bù AI Bot</strong></td>
+              <td>Hết giờ tự động bù thêm Bot cho đủ <strong>4 người</strong> (tối đa 3 Bot: <code>NORMAL</code>, <code>EASY</code>, <code>HARD</code>)</td>
+              <td>Hết <code>10s</code> không có người thật &rarr; tự động bù <strong>1 AI Bot</strong> (<code>1 Human vs 1 Bot</code>)</td>
+              <td>Host chủ động <code>add_bot</code> / <code>remove_bot</code> (tối đa 3 Bot) hoặc bật <code>autoFillBots</code> khi Start</td>
+            </tr>
+            <tr>
+              <td><strong>Phân công Client gen Bot</strong></td>
+              <td><strong>Quota 1:1</strong> (Mỗi người thật chỉ upload tối đa 1 Bot/vòng; Bot dư ra chạy <code>LIVE_PLAYBACK_DSP</code>)</td>
+              <td>Nếu đấu với 1 Bot: người chơi thật phụ trách 1 Bot đó (<code>CLIENT_UPLOAD</code>)</td>
+              <td><strong>Quota 1:1</strong> xoay vòng Round-Robin giữa các người thật trong phòng</td>
+            </tr>
+            <tr>
+              <td><strong>Khi có người thoát giữa trận</strong></td>
+              <td>Trận đấu <strong>tiếp tục bình thường</strong> qua các vòng còn lại; tự động chia lại Quota Bot</td>
+              <td><strong>Xử thắng ngay lập tức!</strong> Chuyển thẳng sang <code>5.10 GAME_OVER</code> (<code>OPPONENT_LEFT_FORFEIT</code>)</td>
+              <td>Trận đấu <strong>tiếp tục bình thường</strong>; nếu Host thoát thì tự động <strong>Host Migration</strong></td>
+            </tr>
+            <tr>
+              <td><strong>Sau khi kết thúc trận (<code>GAME_OVER</code>)</strong></td>
+              <td>Hiển thị màn kết quả &rarr; <strong>Hủy phòng ngay</strong> &amp; trả User về mode <strong>Online</strong> (không giữ sảnh chờ, không tự restart)</td>
+              <td>Hiển thị màn kết quả &rarr; <strong>Hủy phòng ngay</strong> &amp; trả User về mode <strong>Online</strong> (không giữ sảnh chờ, không tự restart)</td>
+              <td><strong>Giữ nguyên phòng chờ</strong> để cả nhóm bấm Sẵn sàng / Chơi lại ván mới</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 1. QUICK MATCH (4P) -->
+    <section id="sec-quick-match" class="section-card">
+      <div class="section-header">
+        <div>
+          <div class="section-title">⚡ 1. Sơ Đồ Luồng Quick Match 4 Người (<code>QUICK_MATCH</code>)</div>
+          <div class="section-subtitle">Thuật toán Best-Fit + FIFO Priority, Dynamic Queue Extension (+5s, trần 16s) và AI Bot Fallback</div>
+        </div>
+      </div>
+
+      <div class="highlights-grid">
+        <div class="highlight-box">
+          <h4>1A. Ưu tiên Best-Fit (3/4 &rarr; 2/4)</h4>
+          <p>Ưu tiên lấp đầy phòng đang có <code>3/4</code> người trước, sau đó tới phòng <code>2/4</code> chờ lâu nhất để đẩy phòng vào trận nhanh nhất.</p>
+        </div>
+        <div class="highlight-box amber">
+          <h4>Dynamic Queue Extension (+5s)</h4>
+          <p>Khi phòng nhận thêm người (2/4 hoặc 3/4) mà đồng hồ còn <code>&lt; 5s</code>, Server tự động gia hạn lên <code>5s</code> (tổng thời gian chờ không quá <code>16s</code>).</p>
+        </div>
+        <div class="highlight-box purple">
+          <h4>Kết thúc trận &rarr; Hủy phòng &amp; Trả về Online</h4>
+          <p>Sau khi gửi màn kết quả <code>5.10 GAME_OVER</code>, Server hủy phòng ngay và trả User về mode Online (không giữ sảnh chờ hay tự chạy lại trận mới).</p>
+        </div>
+      </div>
+
+      <div class="diagram-wrapper">
+        <pre class="mermaid">
+flowchart TD
+    Start(["Client gửi quick_match / find_match<br/>(mode: QUICK_MATCH, targetPlayers: 4)"]) --> CancelOld["Hủy phiên matchmaking cũ của socket (nếu có)"]
+    CancelOld --> Step1A{"1A. Có phòng QUICK_MATCH đang gom người?<br/>(Ưu tiên phòng 3/4 trước -> phòng 2/4 FIFO)"}
+
+    %% Nhánh 1A: Best-Fit vào phòng đang gom
+    Step1A -- "Có phòng đang gom" --> JoinExisting["Đưa User vào phòng + Hút thêm user lẻ từ Queue<br/>(drainMatchmakingQueueIntoRoom)"]
+    JoinExisting --> CheckFull1A{"Đủ 4/4 người?"}
+    CheckFull1A -- "Đủ 4/4" --> StartNow["Hủy Timer chờ -> Auto-Start trận đấu ngay!<br/>(Chuyển sang 5.0 THEME_SELECTION)"]
+    CheckFull1A -- "Chưa đủ (2/4 hoặc 3/4)" --> DynExt["Dynamic Queue Extension:<br/>Nếu đồng hồ còn < 5s -> Đẩy lên 5s (Trần tối đa 16s)"]
+    DynExt --> RoomTimer["Đợi đồng hồ đếm ngược của phòng"]
+
+    %% Nhánh 1B: Ghép với người đang đứng lẻ trong Queue
+    Step1A -- "Không có" --> Step1B{"1B. Có User khác đang chờ lẻ (1/4)<br/>trong matchmakingQueue?"}
+    Step1B -- "Có Peer đang chờ" --> CreatePairRoom["Tạo phòng QUICK_MATCH mới (Peer làm HOST, User mới làm PLAYER)<br/>+ Gom thêm các Peer cùng mode trong Queue"]
+    CreatePairRoom --> CheckFull1B{"Đủ 4/4 người?"}
+    CheckFull1B -- "Đủ 4/4" --> StartNow
+    CheckFull1B -- "Chưa đủ (2/4 hoặc 3/4)" --> StartRoomCountdown["Bật đồng hồ đếm ngược phòng<br/>(Tối thiểu 5s, trần tổng 16s)"]
+    StartRoomCountdown --> RoomTimer
+
+    %% Nhánh 2: Đứng chờ 1 mình trong Queue
+    Step1B -- "Không có ai" --> Enqueue["Đưa vào matchmakingQueue (1/4)<br/>Emit matchmaking_searching (Chờ mặc định 10s)"]
+    Enqueue --> QueueTimeout{"Có người ghép trong 10s?"}
+    QueueTimeout -- "Có người vào ghép" --> CreatePairRoom
+    QueueTimeout -- "Hết 10s (Timeout)" --> SoloBotFallback["Tạo phòng mới + Tự động thêm 3 AI Bot<br/>(1 Human + 3 Bots = 4/4)"]
+    SoloBotFallback --> StartNow
+
+    %% Hết giờ đếm ngược phòng gom dở
+    RoomTimer -- "Có thêm người vào đủ 4/4" --> StartNow
+    RoomTimer -- "Hết giờ mà vẫn 2/4 hoặc 3/4" --> FillMissingBots["Tự động bù 1-2 AI Bot cho đủ 4/4<br/>(fillRoomWithBots + Emit match_found)"]
+    FillMissingBots --> StartNow
+
+    %% Trong trận & Sau trận
+    StartNow --> MidGame{"Người chơi thoát giữa trận?"}
+    MidGame -- "Còn >= 1 người thật" --> ContinueMatch["Trận đấu TIẾP TỤC qua các vòng còn lại<br/>+ Tự động tính lại Quota Bot 1:1"]
+    ContinueMatch --> GameOver["5.10 GAME_OVER (Hiển thị bảng kết quả)<br/>-> Hủy phòng ngay & trả User về mode Online (roomDisbanded: true)"]
+        </pre>
+      </div>
+    </section>
+
+    <!-- 2. 1VS1 RACE -->
+    <section id="sec-1v1" class="section-card">
+      <div class="section-header">
+        <div>
+          <div class="section-title">⚔️ 2. Sơ Đồ Luồng Đấu Tay Đôi 1vs1 (<code>RACE_1V1</code>)</div>
+          <div class="section-subtitle">Solo 2 người chơi (<code>targetPlayers = 2</code>), ghép đủ 2/2 vào trận ngay, đối thủ thoát giữa chừng xử thắng lập tức</div>
+        </div>
+      </div>
+
+      <div class="highlights-grid">
+        <div class="highlight-box rose">
+          <h4>Ghép 2/2 Vào Trận Ngay</h4>
+          <p>Ngay khi có 2 người chơi tìm trận <code>RACE_1V1</code>, phòng được tạo và kích hoạt <code>startGame()</code> ngay lập tức mà không cần chờ thêm.</p>
+        </div>
+        <div class="highlight-box purple">
+          <h4>Timeout 10s &rarr; Solo với 1 AI Bot</h4>
+          <p>Nếu sau <code>10s</code> chưa có đối thủ người thật, hệ thống tạo phòng và thêm đúng <strong>1 AI Bot</strong> để người chơi đấu 1vs1 với Bot.</p>
+        </div>
+        <div class="highlight-box green">
+          <h4>Thoát Giữa Trận &rarr; Xử Thắng Ngay</h4>
+          <p>Nếu đối thủ thoát khi trận đấu đang diễn ra, hệ thống kết thúc trận ngay lập tức (<code>5.10 GAME_OVER</code>) với lý do <code>OPPONENT_LEFT_FORFEIT</code>.</p>
+        </div>
+      </div>
+
+      <div class="diagram-wrapper">
+        <pre class="mermaid">
+flowchart TD
+    Start1v1(["Client gửi race_1v1 / find_1v1_match<br/>(mode: RACE_1V1, targetPlayers: 2)"]) --> CheckPeer{"Có đối thủ đang chờ trong<br/>Phòng 1/2 hoặc matchmakingQueue?"}
+
+    %% Ghép được người thật ngay
+    CheckPeer -- "Có đối thủ (Đủ 2/2)" --> Match2P["Tạo phòng RACE_1V1 (1 HOST vs 1 PLAYER)<br/>Emit joined_room_success & match_found"]
+    Match2P --> AutoStart1v1["Tự động bắt đầu trận ngay lập tức (0 Bot)<br/>Chuyển sang 5.0 THEME_SELECTION"]
+
+    %% Chưa có đối thủ -> Chờ 10s
+    CheckPeer -- "Chưa có đối thủ" --> Wait1v1["Đưa vào matchmakingQueue (1/2)<br/>Emit matchmaking_searching (Timer chờ 10s)"]
+    Wait1v1 --> WaitResult{"Có đối thủ vào trong 10s?"}
+    WaitResult -- "Có đối thủ vào" --> Match2P
+    WaitResult -- "Hết 10s (Timeout)" --> Bot1v1["Tạo phòng RACE_1V1 + Bù đúng 1 AI Bot<br/>(1 Human vs 1 Bot = 2/2)"]
+    Bot1v1 --> AutoStart1v1
+
+    %% Luật đặc thù khi đang thi đấu 1vs1
+    AutoStart1v1 --> InGame1v1{"Diễn biến trong trận 1vs1"}
+    InGame1v1 -- "Thi đấu hết các vòng" --> NormalEnd["5.10 GAME_OVER: Trao cúp thắng/thua chung cuộc<br/>-> Hủy phòng & trả User về mode Online"]
+    InGame1v1 -- "Đối thủ thoát giữa trận" --> ForfeitEnd["XỬ THẮNG NGAY LẬP TỨC! (5.10 GAME_OVER - OPPONENT_LEFT_FORFEIT)<br/>-> Hủy phòng & trả User về mode Online"]
+        </pre>
+      </div>
+    </section>
+
+    <!-- 3. CREATE / JOIN CUSTOM ROOM -->
+    <section id="sec-custom-room" class="section-card">
+      <div class="section-header">
+        <div>
+          <div class="section-title">🏠 3. Sơ Đồ Luồng Tạo Phòng &amp; Vào Phòng (<code>CUSTOM_ROOM</code>)</div>
+          <div class="section-subtitle">Tạo phòng riêng theo mã <code>roomId</code>, tùy chỉnh cấu hình, thêm/xóa AI Bot thủ công (tối đa 3 Bot) và Host Migration</div>
+        </div>
+      </div>
+
+      <div class="highlights-grid">
+        <div class="highlight-box green">
+          <h4>Tùy chỉnh Phòng &amp; Quản lý Bot</h4>
+          <p>Host có thể đổi số vòng (<code>3/5/7/10</code>), thời lượng thu âm (<code>3-15s</code>), và thêm/xóa tối đa <code>3 AI Bot</code> (<code>EASY</code>, <code>NORMAL</code>, <code>HARD</code>).</p>
+        </div>
+        <div class="highlight-box">
+          <h4>Khôi phục Điểm khi Reconnect (&lt; 120s)</h4>
+          <p>Nếu người chơi bị rớt mạng và gọi lại <code>join_room</code> trong vòng <code>120s</code> với cùng <code>userId</code> xác thực, toàn bộ điểm số được khôi phục.</p>
+        </div>
+        <div class="highlight-box amber">
+          <h4>Host Migration &amp; Dọn Phòng Trống</h4>
+          <p>Khi Host rời phòng, quyền Host tự động chuyển cho thành viên người thật tiếp theo. Khi phòng không còn người thật, Server đợi <code>30s</code> rồi xóa phòng khỏi RAM.</p>
+        </div>
+      </div>
+
+      <div class="diagram-wrapper">
+        <pre class="mermaid">
+flowchart TD
+    subgraph InitPhase ["1. Tạo Phòng hoặc Tham Gia Phòng"]
+        Create["Host gửi create_room(roomId, roomName)"] --> CheckExist{"Mã phòng đã tồn tại?"}
+        CheckExist -- "Đã tồn tại" --> ErrExist["Trả lỗi ROOM_ID_ALREADY_EXISTS"]
+        CheckExist -- "Hợp lệ" --> NewRoom["Khởi tạo Room (CUSTOM_ROOM, max 12P)<br/>+ Đưa ngay người tạo vào làm HOST"]
+
+        Join["Client gửi join_room(roomId, authToken)"] --> CheckRoomValid{"Phòng tồn tại & là CUSTOM_ROOM?"}
+        CheckRoomValid -- "Không tồn tại / Nhập nhầm phòng Matchmaking" --> ErrNotFound["Trả lỗi ROOM_NOT_FOUND"]
+        CheckRoomValid -- "Hợp lệ" --> CheckFull{"Phòng đã đầy (12/12)?"}
+        CheckFull -- "Đầy" --> ErrFull["Trả lỗi ROOM_FULL"]
+        CheckFull -- "Còn chỗ" --> CheckReconnect{"Có lịch sử rớt mạng < 120s?"}
+        CheckReconnect -- "Có" --> RestoreScore["Khôi phục totalScore, roundScore & currentAttempt"]
+        CheckReconnect -- "Không" --> AddMember["Thêm vào phòng với vai trò PLAYER"]
+        NewRoom --> LobbyState
+        RestoreScore --> LobbyState
+        AddMember --> LobbyState
+    end
+
+    LobbyState["Phòng Chờ (State: IDLE) - Emit joined_room_success & user_joined"]
+
+    subgraph LobbyManage ["2. Quản Lý Phòng Chờ (Trước Khi Bắt Đầu)"]
+        LobbyState --> UpdateCfg["Host gọi game_update_config<br/>(totalRounds: 3/5/7/10, recordDuration: 3-15s)"]
+        LobbyState --> BotManage["Host gọi add_bot / remove_bot<br/>(Giới hạn cứng MAX_BOTS_PER_ROOM = 3 Bot)"]
+        LobbyState --> ToggleReady["Player gọi player_ready(isReady: true/false)"]
+        LobbyState --> KickMember["Host gọi kick_player(targetSocketId)"]
+        LobbyState --> HostLeave["Nếu Host rời phòng -> Tự động Host Migration<br/>cho thành viên người thật kế tiếp"]
+    end
+
+    UpdateCfg --> HostStart
+    BotManage --> HostStart
+    ToggleReady --> HostStart
+    KickMember --> HostStart
+
+    subgraph StartGameFlow ["3. Khởi Động Trận Đấu (game_start)"]
+        HostStart["Host bấm Bắt đầu (game_start)"] --> CheckReady{"requireAllReady === true?"}
+        CheckReady -- "Còn người chưa Ready" --> ErrNotReady["Emit game_error: GAME_PLAYERS_NOT_READY"]
+        CheckReady -- "Tất cả đã Ready (hoặc false)" --> CheckAutoFill{"Chỉ có 1 mình Host (size < 2)<br/>hoặc autoFillBots === true?"}
+        CheckAutoFill -- "Có" --> FillBots["Tự động bù thêm AI Bot (tối đa 3 Bot)"]
+        CheckAutoFill -- "Không (Đã có >= 2 người/Bot)" --> StartRound1["Gọi game.startGame() -> Bắt đầu Vòng 1 (5.0 THEME_SELECTION)"]
+        FillBots --> StartRound1
+    end
+        </pre>
+      </div>
+    </section>
+
+    <!-- 4. GAMEPLAY LOOP (5.0 -> 5.10) & BOT QUOTA 1:1 -->
+    <section id="sec-game-loop" class="section-card">
+      <div class="section-header">
+        <div>
+          <div class="section-title">🔄 4. Vòng Lặp Gameplay (Steps 5.0 &rarr; 5.10) &amp; Cơ Chế Bot Quota 1:1</div>
+          <div class="section-subtitle">Chu trình 1 vòng đấu chuẩn và cơ chế phân bổ Pre-Recording Staggered Queue + Live Playback DSP Fallback</div>
+        </div>
+      </div>
+
+      <div class="phase-steps">
+        <div class="step-pill">
+          <span class="step-num">Bước 5.0 (3.5s)</span>
+          <h5>THEME_SELECTION</h5>
+          <p>Chọn ngẫu nhiên chủ đề &amp; âm thanh mẫu. Giao sớm <code>botAssignments</code> (Quota 1:1).</p>
+        </div>
+        <div class="step-pill">
+          <span class="step-num">Bước 5.1 (Theo sound)</span>
+          <h5>PLAYING_SAMPLE</h5>
+          <p>Phát âm thanh mẫu. Client tận dụng thời gian rảnh để gen ngầm tối đa 1 Bot.</p>
+        </div>
+        <div class="step-pill">
+          <span class="step-num">Bước 5.1b (3s)</span>
+          <h5>PREPARE_RECORDING</h5>
+          <p>Đếm ngược 3-2-1 chuẩn bị lấy hơi &amp; bật Micro.</p>
+        </div>
+        <div class="step-pill">
+          <span class="step-num">Bước 5.2 (Theo sound)</span>
+          <h5>USER_RECORDING</h5>
+          <p>Người chơi thu âm giọng nhại lại âm thanh mẫu.</p>
+        </div>
+        <div class="step-pill">
+          <span class="step-num">Bước 5.3 (3s)</span>
+          <h5>UPLOADING_SOUND</h5>
+          <p>Client nộp bài thu của mình (<code>game_submit_audio</code>) &amp; bài của Bot (nếu chưa gửi sớm).</p>
+        </div>
+        <div class="step-pill">
+          <span class="step-num">Bước 5.5 (Tối đa 30s)</span>
+          <h5>SHOWDOWN_REVEAL</h5>
+          <p>Cả phòng nghe lại các bản thu &amp; thả cảm xúc. Qua ngay khi 100% bấm Done.</p>
+        </div>
+        <div class="step-pill">
+          <span class="step-num">Bước 5.6 (4s) &rarr; 5.7 (7s)</span>
+          <h5>AI_SCORING &amp; RESULT</h5>
+          <p>Khóa điểm vòng đấu và vinh danh Bục Podium Top 1-2-3.</p>
+        </div>
+        <div class="step-pill">
+          <span class="step-num">Bước 5.9 (11s) / 5.10</span>
+          <h5>BREAK_TIME / GAME_OVER</h5>
+          <p>Nghỉ giải lao giữa hiệp hoặc trao Cúp Chung cuộc sau vòng cuối.</p>
+        </div>
+      </div>
+
+      <div class="diagram-wrapper">
+        <pre class="mermaid">
+flowchart TD
+    RoundStart(["Bắt đầu Vòng Mới (startNextRound)"]) --> Step50["5.0 THEME_SELECTION (3.5s)<br/>1. Chọn Pack & TargetSound<br/>2. simulateAllBotsAttempts()<br/>3. Chia Quota Bot 1:1 (getBotGenerationAssignments)"]
+
+    Step50 --> BotQuotaSplit{"Phân loại từng Bot trong phòng<br/>(MAX_BOTS_PER_CLIENT_PER_ROUND = 1)"}
+    BotQuotaSplit -- "Trong hạn mức 1:1<br/>(Mỗi người thật tối đa 1 Bot)" --> ModeUpload["generationMode = CLIENT_UPLOAD<br/>requiresClientUpload = true<br/>Client render ngầm ở bước 5.0 / 5.1 / 5.1b và gửi game_submit_bot_audio"]
+    BotQuotaSplit -- "Vượt hạn mức 1:1<br/>(VD: 1 Người + 3 Bot -> Dư 2 Bot)" --> ModeLiveDSP["generationMode = LIVE_PLAYBACK_DSP<br/>requiresClientUpload = false, assignedGeneratorSocketId = null<br/>0 tốn CPU/Upload lúc thu âm!"]
+
+    ModeUpload --> Step51["5.1 PLAYING_SAMPLE (Phát âm thanh mẫu)"]
+    ModeLiveDSP --> Step51
+
+    Step51 --> Step51b["5.1b PREPARE_RECORDING (3s - Đếm ngược mở Mic)"]
+    Step51b --> Step52["5.2 USER_RECORDING (Người chơi thu âm giọng nhại)"]
+    Step52 --> Step53["5.3 UPLOADING_SOUND (3s)<br/>Client gửi game_submit_audio (bài của User)<br/>Server kiểm tra kích thước Bot audio <= 350KB (quá cỡ tự hạ về LIVE_PLAYBACK_DSP)"]
+
+    Step53 --> Step55["5.5 SHOWDOWN_REVEAL (Tối đa 30s - Nghe lại bài thu)<br/>- User & Bot CLIENT_UPLOAD: phát từ /api/attempts/:roomId/:socketId<br/>- Bot LIVE_PLAYBACK_DSP: Client phát trực tiếp baseSoundUrl với pitch + speed<br/>- Nhảy bước ngay nếu 100% người chơi bấm Done (confirm_showdown_skip)"]
+
+    Step55 --> Step56["5.6 AI_SCORING (4s - Khóa sổ & tổng hợp điểm)"]
+    Step56 --> Step57["5.7 ROUND_RESULT (7s - Vinh danh Podium Top 1-2-3 của vòng)"]
+    Step57 --> CheckLast{"currentRound >= totalRounds?"}
+
+    CheckLast -- "Chưa (Còn vòng tiếp)" --> Step59["5.9 BREAK_TIME (11s - Nghỉ giải lao)<br/>Qua vòng mới ngay nếu 100% bấm NEW ROUND NOW (confirm_next_round_ready)"]
+    Step59 --> RoundStart
+
+    CheckLast -- "Đã hết vòng cuối" --> Step510["5.10 GAME_OVER (Trao Cúp Chung Cuộc)<br/>- QUICK_MATCH / RACE_1V1: Hiển thị kết quả -> Hủy phòng & trả User về mode Online<br/>- CUSTOM_ROOM: Giữ phòng chờ, khi 100% bấm Chơi lại -> Đếm ngược 3s vào trận mới"]
+        </pre>
+      </div>
+    </section>
+
+    <!-- 5. SEQUENCE DIAGRAM SOCKET.IO -->
+    <section id="sec-sequence" class="section-card">
+      <div class="section-header">
+        <div>
+          <div class="section-title">📡 5. Sequence Diagram Giao Tiếp Socket.IO (Client &harr; Server)</div>
+          <div class="section-subtitle">Trình tự sự kiện Socket.IO từ lúc tìm trận / vào phòng cho tới khi kết thúc vòng đấu</div>
+        </div>
+      </div>
+
+      <div class="diagram-wrapper">
+        <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor C1 as Client 1 (Host / Người chơi 1)
+    actor C2 as Client 2 (Người chơi 2)
+    participant S as MicMixFun Server (Room + MimicGameSession)
+
+    rect rgb(15, 35, 65)
+    Note over C1,S: A. Giai đoạn Ghép Trận / Vào Phòng (Quick Match / 1vs1 / Custom Room)
+    C1->>S: quick_match / race_1v1 / create_room
+    S-->>C1: matchmaking_searching (hoặc joined_room_success)
+    C2->>S: quick_match / race_1v1 / join_room
+    S-->>C1: match_found & user_joined (Khi ghép chung phòng)
+    S-->>C2: joined_room_success & match_found
+    Note over S: Nếu hết giờ chờ (10s-16s) mà thiếu người -> Tự bù AI Bot (fillRoomWithBots)
+    end
+
+    rect rgb(30, 20, 60)
+    Note over C1,S: B. Giai đoạn Chuẩn Bị & Render Ngầm Bot (5.0 -> 5.1b)
+    S-->>C1: game_state_changed (5.0 THEME_SELECTION + targetSound + botAssignments Quota 1:1)
+    S-->>C2: game_state_changed (5.0 THEME_SELECTION + targetSound + botAssignments Quota 1:1)
+    S-->>C1: game_state_changed (5.1 PLAYING_SAMPLE)
+    C1->>S: game_submit_bot_audio (Upload sớm 1 Bot được giao ngay trong lúc 5.0/5.1)
+    S-->>C1: Ack { success: true, generationMode: "CLIENT_UPLOAD", evaluation }
+    S-->>C1: game_state_changed (5.1b PREPARE_RECORDING - 3s)
+    end
+
+    rect rgb(15, 45, 40)
+    Note over C1,S: C. Giai đoạn Thu Âm & Nộp Bài (5.2 -> 5.3)
+    S-->>C1: game_state_changed (5.2 USER_RECORDING)
+    S-->>C2: game_state_changed (5.2 USER_RECORDING)
+    S-->>C1: game_state_changed (5.3 UPLOADING_SOUND - 3s)
+    C1->>S: game_submit_audio (audioData + clientMetrics của C1)
+    C2->>S: game_submit_audio (audioData + clientMetrics của C2)
+    end
+
+    rect rgb(50, 25, 35)
+    Note over C1,S: D. Giai đoạn Nghe Lại, Chấm Điểm & Kết Quả (5.5 -> 5.10)
+    S-->>C1: game_state_changed (5.5 SHOWDOWN_REVEAL + danh sách attempts)
+    S-->>C2: game_state_changed (5.5 SHOWDOWN_REVEAL + danh sách attempts)
+    C1->>S: confirm_showdown_skip (Bấm Done)
+    C2->>S: confirm_showdown_skip (Bấm Done -> Đủ 100% chuyển bước ngay)
+    S-->>C1: game_state_changed (5.6 AI_SCORING - 4s)
+    S-->>C1: game_state_changed (5.7 ROUND_RESULT - 7s)
+    S-->>C1: game_state_changed (5.9 BREAK_TIME - 11s hoặc 5.10 GAME_OVER)
+    end
+        </pre>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      securityLevel: 'loose',
+      flowchart: {
+        useMaxWidth: true,
+        htmlLabels: true,
+        curve: 'basis'
+      },
+      sequence: {
+        useMaxWidth: true,
+        mirrorActors: false
+      }
+    });
+
+    function scrollToSection(id) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      if (event && event.currentTarget) {
+        event.currentTarget.classList.add('active');
+      }
+    }
+  </script>
+</body>
+</html>

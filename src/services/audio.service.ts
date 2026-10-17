@@ -384,3 +384,32 @@ export function pickBotVariantSound(
 ): ReturnType<typeof transformTargetSoundForBot> {
   return transformTargetSoundForBot(targetFileNameOrPath, packId, difficulty, botSeed);
 }
+
+/**
+ * Giải mã chuỗi Base64 Audio an toàn có kiểm tra kích thước ước tính TRƯỚC khi cấp phát Buffer C++
+ * Giúp ngăn chặn tấn công Memory Spike / DoS hoặc quên kiểm tra giới hạn dung lượng.
+ */
+export function decodeBoundedBase64Audio(
+  audioBase64?: string | null,
+  maxBytes: number = 512 * 1024
+): { buffer: Buffer | null; estimatedBytes: number; exceededMaxBytes: boolean } {
+  if (!audioBase64 || typeof audioBase64 !== 'string') {
+    return { buffer: null, estimatedBytes: 0, exceededMaxBytes: false };
+  }
+  const commaIdx = audioBase64.indexOf(',');
+  const rawB64 = commaIdx !== -1 ? audioBase64.slice(commaIdx + 1) : audioBase64;
+  const estimatedBytes = Math.floor((rawB64.length * 3) / 4);
+  if (estimatedBytes > maxBytes) {
+    return { buffer: null, estimatedBytes, exceededMaxBytes: true };
+  }
+  try {
+    const buffer = Buffer.from(rawB64, 'base64');
+    if (buffer.length > maxBytes) {
+      return { buffer: null, estimatedBytes: buffer.length, exceededMaxBytes: true };
+    }
+    return { buffer, estimatedBytes: buffer.length, exceededMaxBytes: false };
+  } catch {
+    return { buffer: null, estimatedBytes: 0, exceededMaxBytes: false };
+  }
+}
+

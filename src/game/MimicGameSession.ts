@@ -4,14 +4,16 @@ import {
   DEFAULT_TOTAL_ROUNDS,
   GAME_STEP_DURATIONS,
   MAX_BOTS_PER_CLIENT_PER_ROUND,
-  MAX_BOT_AUDIO_UPLOAD_BYTES
+  MAX_BOT_AUDIO_UPLOAD_BYTES,
+  MAX_USER_AUDIO_UPLOAD_BYTES
 } from '../config/constants';
 import {
   getSoundDuration,
   resolveSoundFile,
   getSoundUrl,
   normalizeBotDifficulty,
-  transformTargetSoundForBot
+  transformTargetSoundForBot,
+  decodeBoundedBase64Audio
 } from '../services/audio.service';
 import { AiRemarkCode, ErrorCode, GameMessageCode } from '../config/messages';
 import { GAME_STATES, STATE_LABELS, SOUND_PACKS, AI_REMARKS } from './soundPacks';
@@ -193,10 +195,15 @@ export class MimicGameSession {
       leavingPlayer &&
       !leavingPlayer.isBot &&
       leavingPlayer.userId &&
+      this.gameMode === 'CUSTOM_ROOM' &&
       (leavingPlayer.totalScore > 0 || leavingPlayer.currentAttempt)
     ) {
+      const sanitizedAttempt = leavingPlayer.currentAttempt
+        ? { ...leavingPlayer.currentAttempt, audioUrl: null }
+        : null;
       this.disconnectedPlayers.set(leavingPlayer.userId, {
         ...leavingPlayer,
+        currentAttempt: sanitizedAttempt,
         disconnectedAt: Date.now()
       });
     }
@@ -205,16 +212,27 @@ export class MimicGameSession {
     this.showdownSkipVotes.delete(socketId);
     this.sampleDoneSockets.delete(socketId);
 
+    if (
+      this.state !== GAME_STATES.LISTENING_NOW_PLAYING &&
+      this.state !== GAME_STATES.SHOWDOWN_REVEAL
+    ) {
+      this.audioStore.delete(socketId);
+    }
+
     const humanPlayers = Array.from(this.players.values()).filter(p => !p.isBot);
     if (this.players.size === 0 || humanPlayers.length === 0) {
       this.stopTimer();
+      this.clearRoundAudioData();
       this.state = GAME_STATES.IDLE;
       return;
     }
 
     // Cập nhật lại phân công gen Bot nếu người vừa thoát là người thật
     if (leavingPlayer && !leavingPlayer.isBot) {
-      this.getBotGenerationAssignments();
+      const updatedAssignments = this.getBotGenerationAssignments();
+      if (this.currentPayload && Array.isArray(this.currentPayload.botAssignments)) {
+        this.currentPayload.botAssignments = updatedAssignments;
+      }
     }
 
     // Với chế độ 1vs1 Race: nếu 1 người chơi thoát giữa chừng khi trận đấu đang diễn ra -> Báo kết quả thắng cuộc (GAME_OVER) ngay lập tức!
@@ -250,7 +268,7 @@ export class MimicGameSession {
       if (allRemainingReady) {
         this.startNextRound();
       }
-    } else if (this.state === GAME_STATES.GAME_OVER) {
+    } else if (this.state === GAME_STATES.GAME_OVER && this.gameMode === 'CUSTOM_ROOM') {
       const allRemainingReady = Array.from(this.players.values()).every(p => p.isBot || p.isReady);
       if (allRemainingReady) {
         this.triggerNextStageAfterAllReady();
@@ -997,85 +1015,109 @@ export class MimicGameSession {
     }
 
     const assignedId = bot.currentAttempt?.assignedGeneratorSocketId;
-    if (assignedId && assignedId !== requesterSocketId && requesterSocketId !== this.hostId) {
+    if (assignedId) {
       // Nếu người được phân công vẫn còn trong phòng thì chỉ nhận từ đúng người đó hoặc Host
-      if (this.players.has(assignedId)) {
+      if (assignedId !== requesterSocketId && requesterSocketId !== this.hostId && this.players.has(assignedId)) {
         return {
           success: false,
           code: ErrorCode.GAME_HOST_ONLY_CONFIG,
           message: ErrorCode.GAME_HOST_ONLY_CONFIG
         };
       }
+    } else if (requesterSocketId !== this.hostId) {
+      // Nếu Bot đang ở chế độ LIVE_PLAYBACK_DSP (không phân công cho ai), chỉ Host mới được phép ghi đè nếu cần
+      return {
+        success: false,
+        code: ErrorCode.GAME_HOST_ONLY_CONFIG,
+        message: ErrorCode.GAME_HOST_ONLY_CONFIG
+      };
     }
 
     if (audioBase64 && typeof audioBase64 === 'string') {
-      const commaIdx = audioBase64.indexOf(',');
-      const rawB64 = commaIdx !== -1 ? audioBase64.slice(commaIdx + 1) : audioBase64;
-      try {
-        const buf = Buffer.from(rawB64, 'base64');
-        // Bảo vệ RAM Server & băng thông: chỉ lưu vào audioStore nếu kích thước <= MAX_BOT_AUDIO_UPLOAD_BYTES (~350KB)
-        if (buf.length > 0 && buf.length <= MAX_BOT_AUDIO_UPLOAD_BYTES) {
-          this.audioStore.set(botSocketId, {
-            buffer: buf,
-            mimeType: mimeType || 'audio/wav',
-            updatedAt: Date.now()
-          });
-          const streamUrl = `/api/attempts/${encodeURIComponent(this.roomId)}/${encodeURIComponent(botSocketId)}?r=${this.currentRound}`;
-          const resolvedUrl = `${streamUrl}&t=${Date.now()}`;
+      // Bảo vệ RAM Server & băng thông: kiểm tra kích thước ước tính TRƯỚC khi cấp phát Buffer C++
+      const { buffer: buf, estimatedBytes, exceededMaxBytes } = decodeBoundedBase64Audio(
+        audioBase64,
+        MAX_BOT_AUDIO_UPLOAD_BYTES
+      );
+      if (buf && buf.length > 0) {
+        this.audioStore.set(botSocketId, {
+          buffer: buf,
+          mimeType: mimeType || 'audio/wav',
+          updatedAt: Date.now()
+        });
+        const streamUrl = `/api/attempts/${encodeURIComponent(this.roomId)}/${encodeURIComponent(botSocketId)}?r=${this.currentRound}`;
+        const resolvedUrl = `${streamUrl}&t=${Date.now()}`;
 
-          // Chấm điểm thực tế trên Server cho bản sound của Bot vừa được Client gen và upload lên!
-          const evaluation = this.evaluateMimicAttempt(audioBase64, clientMetrics);
-          const oldRoundScore = bot.roundScore || 0;
-          bot.roundScore = evaluation.totalScore;
-          bot.totalScore = Math.max(0, bot.totalScore - oldRoundScore) + evaluation.totalScore;
+        // Chấm điểm thực tế trên Server cho bản sound của Bot vừa được Client gen và upload lên (tái sử dụng trực tiếp buf đã decode)!
+        const evaluation = this.evaluateMimicAttempt(audioBase64, clientMetrics, buf);
+        const oldRoundScore = bot.roundScore || 0;
+        bot.roundScore = evaluation.totalScore;
+        bot.totalScore = Math.max(0, bot.totalScore - oldRoundScore) + evaluation.totalScore;
 
-          if (bot.currentAttempt) {
-            bot.currentAttempt.audioUrl = resolvedUrl;
-            bot.currentAttempt.audioStreamUrl = streamUrl;
-            bot.currentAttempt.mimeType = mimeType || 'audio/wav';
-            bot.currentAttempt.botAudioUploaded = true;
-            bot.currentAttempt.evaluation = evaluation;
-            bot.currentAttempt.submittedAt = Date.now();
+        if (bot.currentAttempt) {
+          bot.currentAttempt.audioUrl = resolvedUrl;
+          bot.currentAttempt.audioStreamUrl = streamUrl;
+          bot.currentAttempt.mimeType = mimeType || 'audio/wav';
+          bot.currentAttempt.botAudioUploaded = true;
+          bot.currentAttempt.generationMode = 'CLIENT_UPLOAD';
+          bot.currentAttempt.requiresClientUpload = true;
+          if (bot.currentAttempt.botAudioEffects) {
+            bot.currentAttempt.botAudioEffects.generationMode = 'CLIENT_UPLOAD';
+            bot.currentAttempt.botAudioEffects.requiresClientUpload = true;
           }
-
-          console.log(
-            `[MimicGame:${this.roomId}] 🤖🎯 Bot ${bot.userName} (${botSocketId}) đã nhận audio từ Client ${requester.userName} & chấm điểm trên Server: ${evaluation.totalScore}đ (${evaluation.grade})`
-          );
-
-          // Nếu đang ở pha nghe lại (SHOWDOWN_REVEAL / LISTENING_NOW_PLAYING), cập nhật lại danh sách attempts cho cả phòng
-          if (
-            this.state === GAME_STATES.SHOWDOWN_REVEAL ||
-            this.state === GAME_STATES.LISTENING_NOW_PLAYING
-          ) {
-            const updatedAttempts = this.ensureAllPlayerAttempts();
-            if (this.currentPayload) {
-              this.currentPayload.attempts = updatedAttempts;
-              this.currentPayload.roundWinner = updatedAttempts[0] || null;
-            }
-            this.io.to(this.roomId).emit('bot_audio_synced', {
-              roomId: this.roomId,
-              botSocketId,
-              botName: bot.userName,
-              uploadedBy: requesterSocketId,
-              audioUrl: resolvedUrl,
-              audioStreamUrl: streamUrl,
-              evaluation,
-              attempts: updatedAttempts
-            });
-          }
-
-          return {
-            success: true,
-            botSocketId,
-            uploadedBy: requesterSocketId,
-            assignedGeneratorSocketId: assignedId || requesterSocketId,
-            generationMode: bot.currentAttempt?.generationMode || 'CLIENT_UPLOAD',
-            audioUrl: resolvedUrl,
-            evaluation
-          };
+          bot.currentAttempt.evaluation = evaluation;
+          bot.currentAttempt.submittedAt = Date.now();
         }
-      } catch {
-        // ignore invalid base64
+
+        console.log(
+          `[MimicGame:${this.roomId}] 🤖🎯 Bot ${bot.userName} (${botSocketId}) đã nhận audio từ Client ${requester.userName} & chấm điểm trên Server: ${evaluation.totalScore}đ (${evaluation.grade})`
+        );
+
+        // Nếu đang ở pha nghe lại (SHOWDOWN_REVEAL / LISTENING_NOW_PLAYING), cập nhật lại danh sách attempts cho cả phòng
+        if (
+          this.state === GAME_STATES.SHOWDOWN_REVEAL ||
+          this.state === GAME_STATES.LISTENING_NOW_PLAYING
+        ) {
+          const updatedAttempts = this.ensureAllPlayerAttempts();
+          if (this.currentPayload) {
+            this.currentPayload.attempts = updatedAttempts;
+            this.currentPayload.roundWinner = updatedAttempts[0] || null;
+          }
+          this.io.to(this.roomId).emit('bot_audio_synced', {
+            roomId: this.roomId,
+            botSocketId,
+            botName: bot.userName,
+            uploadedBy: requesterSocketId,
+            audioUrl: resolvedUrl,
+            audioStreamUrl: streamUrl,
+            evaluation,
+            attempts: updatedAttempts
+          });
+        }
+
+        return {
+          success: true,
+          botSocketId,
+          uploadedBy: requesterSocketId,
+          assignedGeneratorSocketId: assignedId || requesterSocketId,
+          generationMode: bot.currentAttempt?.generationMode || 'CLIENT_UPLOAD',
+          audioUrl: resolvedUrl,
+          evaluation
+        };
+      } else if (exceededMaxBytes) {
+        console.warn(
+          `[MimicGame:${this.roomId}] ⚠️ Audio upload cho Bot ${bot.userName} (${botSocketId}) vượt giới hạn (~${estimatedBytes} > ${MAX_BOT_AUDIO_UPLOAD_BYTES} bytes) -> Hạ xuống LIVE_PLAYBACK_DSP`
+        );
+      }
+    }
+
+    // Nếu không có audio hợp lệ được lưu vào audioStore -> Đảm bảo Bot chuyển sang LIVE_PLAYBACK_DSP để bước 5.5 phát trực tiếp từ sound gốc
+    if (bot.currentAttempt && !bot.currentAttempt.botAudioUploaded) {
+      bot.currentAttempt.generationMode = 'LIVE_PLAYBACK_DSP';
+      bot.currentAttempt.requiresClientUpload = false;
+      if (bot.currentAttempt.botAudioEffects) {
+        bot.currentAttempt.botAudioEffects.generationMode = 'LIVE_PLAYBACK_DSP';
+        bot.currentAttempt.botAudioEffects.requiresClientUpload = false;
       }
     }
 
@@ -1141,27 +1183,33 @@ export class MimicGameSession {
       };
     }
 
-    const evaluation = this.evaluateMimicAttempt(audioBase64, clientMetrics);
-
     let resolvedAudioUrl: string | null = audioBase64 || null;
+    let decodedBuf: Buffer | null = null;
     const streamUrl = `/api/attempts/${encodeURIComponent(this.roomId)}/${encodeURIComponent(socketId)}?r=${this.currentRound}`;
     if (audioBase64 && typeof audioBase64 === 'string') {
-      const commaIdx = audioBase64.indexOf(',');
-      const rawB64 = commaIdx !== -1 ? audioBase64.slice(commaIdx + 1) : audioBase64;
-      try {
-        const buf = Buffer.from(rawB64, 'base64');
+      const { buffer: buf, estimatedBytes, exceededMaxBytes } = decodeBoundedBase64Audio(
+        audioBase64,
+        MAX_USER_AUDIO_UPLOAD_BYTES
+      );
+      if (buf && buf.length > 0) {
+        decodedBuf = buf;
         this.audioStore.set(socketId, {
           buffer: buf,
           mimeType: mimeType || 'audio/webm',
           updatedAt: Date.now()
         });
-        if (audioBase64.length > 65536) {
+        if (audioBase64.length > 4096) {
           resolvedAudioUrl = `${streamUrl}&t=${Date.now()}`;
         }
-      } catch {
-        // Bỏ qua lỗi giải mã base64
+      } else if (exceededMaxBytes) {
+        console.warn(
+          `[MimicGame:${this.roomId}] ⚠️ Audio người chơi ${player.userName} vượt trần (~${estimatedBytes} bytes > ${MAX_USER_AUDIO_UPLOAD_BYTES} bytes) -> Bỏ lưu audioStore để bảo vệ RAM`
+        );
+        resolvedAudioUrl = null;
       }
     }
+
+    const evaluation = this.evaluateMimicAttempt(audioBase64, clientMetrics, decodedBuf);
 
     const oldRoundScore = player.roundScore || 0;
     player.roundScore = evaluation.totalScore;
@@ -1600,14 +1648,15 @@ export class MimicGameSession {
       : GameMessageCode.GAME_MSG_GAME_OVER_FINISHED;
 
     const isAutoMatchmakingMode = this.gameMode === 'QUICK_MATCH' || this.gameMode === 'RACE_1V1';
-    const gameOverDuration = isAutoMatchmakingMode ? GAME_STEP_DURATIONS.GAME_OVER_REMATCH_DELAY : 0;
 
     this.transitionToState(
       GAME_STATES.GAME_OVER,
-      gameOverDuration,
+      0,
       {
         phaseStep: '5.10',
         gameMode: this.gameMode,
+        roomDisbanded: isAutoMatchmakingMode,
+        autoRestart: false,
         finalRanking,
         champion,
         readyCount,
@@ -1618,15 +1667,14 @@ export class MimicGameSession {
         messageParams: champion ? { championName: champion.userName, totalScore: champion.totalScore } : {},
         ...extraMeta
       },
-      isAutoMatchmakingMode
-        ? () => {
-            const humanPlayers = Array.from(this.players.values()).filter(p => !p.isBot);
-            if (humanPlayers.length > 0 && this.onGameOverRematchReady) {
-              this.onGameOverRematchReady(this.roomId, this);
-            }
-          }
-        : null
+      null
     );
+
+    // Với QUICK_MATCH và RACE_1V1: ngay sau khi gửi màn kết quả GAME_OVER cho tất cả người chơi,
+    // hủy phòng luôn và trả user về mode Online (không giữ ở sảnh chờ và không tự restart game mới)
+    if (isAutoMatchmakingMode && this.onGameOverRematchReady) {
+      this.onGameOverRematchReady(this.roomId, this);
+    }
   }
 
   confirmRoundReady(socketId: string): {
@@ -1664,6 +1712,15 @@ export class MimicGameSession {
       this.state !== GAME_STATES.BREAK_TIME &&
       this.state !== GAME_STATES.GAME_OVER
     ) {
+      return {
+        success: false,
+        code: ErrorCode.GAME_NOT_IN_READY_PHASE,
+        message: ErrorCode.GAME_NOT_IN_READY_PHASE
+      };
+    }
+
+    // Với QUICK_MATCH và RACE_1V1: không hỗ trợ bấm Ready chơi lại trong phòng sau khi đã GAME_OVER
+    if (this.state === GAME_STATES.GAME_OVER && this.gameMode !== 'CUSTOM_ROOM') {
       return {
         success: false,
         code: ErrorCode.GAME_NOT_IN_READY_PHASE,
@@ -1731,7 +1788,7 @@ export class MimicGameSession {
         } else {
           this.startBreakTimeState();
         }
-      } else if (this.state === GAME_STATES.GAME_OVER) {
+      } else if (this.state === GAME_STATES.GAME_OVER && this.gameMode === 'CUSTOM_ROOM') {
         this.triggerNextStageAfterAllReady();
       }
     }
@@ -1742,6 +1799,7 @@ export class MimicGameSession {
   triggerNextStageAfterAllReady(): void {
     if (this.nextStageTimer) return;
     if (this.state !== GAME_STATES.GAME_OVER) return;
+    if (this.gameMode !== 'CUSTOM_ROOM') return;
 
     const countdownSec = GAME_STEP_DURATIONS.READY_COUNTDOWN;
     console.log(`[MimicGame:${this.roomId}] 🎉 TẤT CẢ NGƯỜI CHƠI ĐÃ SẴN SÀNG CHƠI LẠI! Đang đếm ngược ${countdownSec}s...`);
@@ -1759,13 +1817,17 @@ export class MimicGameSession {
     this.nextStageTimer = setTimeout(() => {
       this.nextStageTimer = null;
       if (this.players.size === 0) return;
-      if (this.state === GAME_STATES.GAME_OVER) {
+      if (this.state === GAME_STATES.GAME_OVER && this.gameMode === 'CUSTOM_ROOM') {
         this.startGame();
       }
     }, countdownSec * 1000);
   }
 
-  evaluateMimicAttempt(audioBase64?: string | null, clientMetrics: ClientMetrics | null = null): EvaluationResult {
+  evaluateMimicAttempt(
+    audioBase64?: string | null,
+    clientMetrics: ClientMetrics | null = null,
+    preDecodedBuffer: Buffer | null = null
+  ): EvaluationResult {
     const isBotClientDsp = audioBase64 === '__BOT_CLIENT_DSP__';
     if (!isBotClientDsp && (!audioBase64 || typeof audioBase64 !== 'string' || audioBase64.length < 500)) {
       return {
@@ -1821,10 +1883,13 @@ export class MimicGameSession {
       rhythmScore = Math.min(98, Math.max(35, Math.round(rawRhythm)));
       energyScore = Math.min(100, Math.max(35, Math.round(rawAttack)));
     } else {
-      const safeAudio = audioBase64 || '';
-      const commaIdx = safeAudio.indexOf(',');
-      const rawB64 = commaIdx !== -1 ? safeAudio.slice(commaIdx + 1) : safeAudio;
-      const buf = Buffer.from(rawB64, 'base64');
+      let buf = preDecodedBuffer;
+      if (!buf) {
+        const safeAudio = audioBase64 || '';
+        const commaIdx = safeAudio.indexOf(',');
+        const rawB64 = commaIdx !== -1 ? safeAudio.slice(commaIdx + 1) : safeAudio;
+        buf = Buffer.from(rawB64, 'base64');
+      }
 
       // Nếu là file RIFF WAV (16-bit PCM) được upload từ Client (User hoặc Bot): phân tích trực tiếp sóng âm PCM!
       const isWavPcm =

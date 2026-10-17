@@ -31,7 +31,7 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Device-Id', 'Accept', 'Origin', 'X-Requested-With']
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: '64kb' }));
 
 // Đăng ký Routes & Socket Handlers
 registerWebRoutes(app);

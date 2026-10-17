@@ -20,8 +20,10 @@ import {
 } from '../config/messages';
 import { GAME_STATES, STATE_LABELS, SOUND_PACKS } from '../game/soundPacks';
 import { getAllDownloadedSounds } from '../services/audio.service';
-import { rooms, gameSessions } from '../services/room.service';
+import { rooms, gameSessions, matchmakingQueue } from '../services/room.service';
 import {
+  challengeNonces,
+  ipConnectionCounts,
   sanitizeUserName,
   extractClientIp,
   computeClientFingerprint,
@@ -214,13 +216,32 @@ export function registerApiRoutes(app: Express, io: Server): void {
     });
   });
 
-  // 4. Health Check
+  // 4. Health Check & Resource Telemetry
   app.get('/api/health', (_req: Request, res: Response) => {
+    const mem = process.memoryUsage();
+    let totalStoredAudioBuffers = 0;
+    for (const game of gameSessions.values()) {
+      totalStoredAudioBuffers += game.audioStore.size;
+    }
     res.json({
       status: 'online',
       timestamp: Date.now(),
       totalActiveRooms: rooms.size,
-      totalConnectedSockets: io ? io.engine.clientsCount : 0
+      totalConnectedSockets: io ? io.engine.clientsCount : 0,
+      stateCounters: {
+        rooms: rooms.size,
+        gameSessions: gameSessions.size,
+        matchmakingQueue: matchmakingQueue.size,
+        challengeNonces: challengeNonces.size,
+        trackedIps: ipConnectionCounts.size,
+        totalStoredAudioBuffers
+      },
+      memory: {
+        rssMB: Number((mem.rss / (1024 * 1024)).toFixed(2)),
+        heapUsedMB: Number((mem.heapUsed / (1024 * 1024)).toFixed(2)),
+        externalMB: Number((mem.external / (1024 * 1024)).toFixed(2)),
+        arrayBuffersMB: Number(((mem.arrayBuffers || 0) / (1024 * 1024)).toFixed(2))
+      }
     });
   });
 
@@ -268,19 +289,27 @@ export function registerApiRoutes(app: Express, io: Server): void {
     });
   });
 
-  // 6. Danh sách các phòng đang mở
-  app.get('/api/rooms', (_req: Request, res: Response) => {
+  // 6. Danh sách các phòng đang mở (mặc định chỉ trả về CUSTOM_ROOM và giới hạn tối đa 100 phòng)
+  app.get('/api/rooms', (req: Request, res: Response) => {
+    const includeMatchmaking = req.query.includeMatchmaking === 'true';
+    const maxLimit = Math.min(200, Math.max(1, Number(req.query.limit) || 100));
     const roomList = [];
     for (const [, room] of rooms.entries()) {
+      const mode = room.mode || 'CUSTOM_ROOM';
+      if (!includeMatchmaking && mode !== 'CUSTOM_ROOM') {
+        continue;
+      }
       const game = gameSessions.get(room.id);
       roomList.push({
         roomId: room.id,
         roomName: room.name,
+        mode,
         memberCount: room.members.size,
-        maxMembers: MAX_MEMBERS_PER_ROOM,
+        maxMembers: room.targetPlayers || MAX_MEMBERS_PER_ROOM,
         gameState: game ? game.state : GAME_STATES.IDLE,
         createdAt: room.createdAt
       });
+      if (roomList.length >= maxLimit) break;
     }
     res.json({ rooms: roomList });
   });

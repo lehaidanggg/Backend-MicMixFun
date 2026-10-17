@@ -97,17 +97,21 @@ export function registerRoomHandlers(
   socket.on('auth_guest', handleSocketAuth);
   socket.on('auth_firebase', handleSocketAuth);
 
-  // 1. TẠO PHÒNG (create_room)
+  // 1. TẠO PHÒNG RIÊNG (create_room) — Tự động đưa người tạo vào phòng với vai trò HOST & khởi tạo MimicGameSession
   socket.on(
     'create_room',
-    ({ roomId, roomName, userName }: Record<string, any> = {}, callback?: (res: Record<string, unknown>) => void) => {
+    (
+      { roomId, roomName, userName, avatar }: Record<string, any> = {},
+      callback?: (res: Record<string, unknown>) => void
+    ) => {
       try {
         cancelMatchmakingForSocket(socket.id);
         const generatedRoomId = String(roomId || Math.random().toString(36).substring(2, 8))
           .trim()
           .toUpperCase()
           .slice(0, 16);
-        const cleanUserName = sanitizeUserName(userName, socket.id);
+        const cleanUserName = sanitizeUserName(userName || currentUser.userName, socket.id);
+        const cleanAvatar = avatar || currentUser.avatar || '🎧';
         const safeRoomName = String(roomName || cleanUserName).trim().slice(0, 40);
 
         if (rooms.has(generatedRoomId)) {
@@ -121,12 +125,20 @@ export function registerRoomHandlers(
           return;
         }
 
+        if (sessionState.currentRoomId && sessionState.currentRoomId !== generatedRoomId) {
+          leaveCurrentRoom(socket, sessionState.currentRoomId, currentUser);
+        }
+
+        const resolvedUserId =
+          (socket.authSession && socket.authSession.uid) || currentUser.userId || generateSecureUserId();
+
         const newRoom: RoomData = {
           id: generatedRoomId,
           name: safeRoomName,
           createdAt: Date.now(),
+          lastActivityAt: Date.now(),
           hostId: socket.id,
-          hostUserId: currentUser.userId || null,
+          hostUserId: resolvedUserId,
           mode: 'CUSTOM_ROOM',
           targetPlayers: MAX_MEMBERS_PER_ROOM,
           members: new Map(),
@@ -135,21 +147,52 @@ export function registerRoomHandlers(
         };
         rooms.set(generatedRoomId, newRoom);
 
-        console.log(`[Room] 🏠 Đã tạo phòng mới: ${generatedRoomId} - "${safeRoomName}" (Host: ${socket.id})`);
+        sessionState.currentRoomId = generatedRoomId;
+        currentUser.socketId = socket.id;
+        currentUser.userId = resolvedUserId;
+        currentUser.userName = cleanUserName;
+        currentUser.avatar = cleanAvatar;
+        currentUser.role = 'HOST';
+        currentUser.isReady = true;
+        currentUser.isAuthenticated = true;
+        currentUser.joinedAt = Date.now();
+
+        socket.join(generatedRoomId);
+        newRoom.members.set(socket.id, currentUser);
+
+        const game = new MimicGameSession(generatedRoomId, io, {
+          gameMode: 'CUSTOM_ROOM',
+          targetPlayers: MAX_MEMBERS_PER_ROOM
+        });
+        game.hostId = socket.id;
+        game.addPlayer(socket.id, currentUser.userName, currentUser.avatar, 'HOST', currentUser.userId, true);
+        gameSessions.set(generatedRoomId, game);
+
+        const roomSnapshot = {
+          id: generatedRoomId,
+          name: safeRoomName,
+          hostId: socket.id,
+          mode: 'CUSTOM_ROOM' as const,
+          targetPlayers: MAX_MEMBERS_PER_ROOM,
+          members: getRoomMembersArray(newRoom),
+          messages: []
+        };
+
+        const responseData = {
+          success: true,
+          roomId: generatedRoomId,
+          roomName: safeRoomName,
+          hostId: socket.id,
+          mode: 'CUSTOM_ROOM',
+          room: roomSnapshot,
+          user: currentUser,
+          gameState: game.getStateSnapshot()
+        };
+
+        console.log(`[Room] 🏠 Đã tạo phòng mới & đưa Host vào phòng: ${generatedRoomId} - "${safeRoomName}" (Host: ${socket.id})`);
+        socket.emit('joined_room_success', responseData);
         if (callback) {
-          callback({
-            success: true,
-            roomId: generatedRoomId,
-            roomName: safeRoomName,
-            hostId: socket.id,
-            mode: 'CUSTOM_ROOM',
-            room: {
-              id: generatedRoomId,
-              name: safeRoomName,
-              hostId: socket.id,
-              mode: 'CUSTOM_ROOM'
-            }
-          });
+          callback(responseData);
         }
       } catch {
         if (callback) {
@@ -167,7 +210,16 @@ export function registerRoomHandlers(
   socket.on(
     'join_room',
     async (
-      { roomId, userName, avatar, userId, authToken, firebaseIdToken, firebaseToken }: Record<string, any> = {},
+      {
+        roomId,
+        userName,
+        avatar,
+        userId,
+        authToken,
+        firebaseIdToken,
+        firebaseToken,
+        createIfNotExists = false
+      }: Record<string, any> = {},
       callback?: (res: Record<string, unknown>) => void
     ) => {
       try {
@@ -224,23 +276,28 @@ export function registerRoomHandlers(
           }
         }
 
-        const cleanName = sanitizeUserName(userName || (verifiedToken && verifiedToken.name), socket.id);
-        const cleanAvatar = avatar || (verifiedToken && verifiedToken.avatar) || '🎧';
-        const issuedAuth = issueAuthToken({
-          userId: resolvedUserId,
-          firebaseUid: resolvedFbUid,
-          provider: resolvedProvider,
-          userName: cleanName,
-          avatar: cleanAvatar,
-          fingerprint: socket.clientFingerprint || null
-        });
-        socket.authSession = issuedAuth.payload;
-
+        // Nếu phòng không tồn tại: chỉ tạo mới nếu createIfNotExists=true, ngược lại báo lỗi ROOM_NOT_FOUND
         if (!rooms.has(targetRoomId)) {
+          if (!createIfNotExists) {
+            socket.emit('game_error', {
+              code: ErrorCode.ROOM_NOT_FOUND,
+              message: ErrorCode.ROOM_NOT_FOUND
+            });
+            if (callback) {
+              callback({
+                success: false,
+                code: ErrorCode.ROOM_NOT_FOUND,
+                message: ErrorCode.ROOM_NOT_FOUND
+              });
+            }
+            return;
+          }
+
           rooms.set(targetRoomId, {
             id: targetRoomId,
             name: targetRoomId,
             createdAt: Date.now(),
+            lastActivityAt: Date.now(),
             hostId: socket.id,
             hostUserId: resolvedUserId,
             mode: 'CUSTOM_ROOM',
@@ -253,6 +310,45 @@ export function registerRoomHandlers(
         }
 
         const room = rooms.get(targetRoomId)!;
+        room.lastActivityAt = Date.now();
+        const existingGameForRoom = gameSessions.get(targetRoomId);
+
+        // Chặn người lạ bên ngoài tự ý gọi join_room vào phòng QUICK_MATCH hoặc RACE_1V1 (trừ khi là thành viên của phòng đó đang reconnect)
+        if (room.mode === 'QUICK_MATCH' || room.mode === 'RACE_1V1') {
+          const isExistingOrReconnectingMember =
+            room.members.has(socket.id) ||
+            Boolean(
+              resolvedUserId &&
+                (Array.from(room.members.values()).some(m => m.userId === resolvedUserId) ||
+                  existingGameForRoom?.disconnectedPlayers.has(resolvedUserId))
+            );
+          if (!isExistingOrReconnectingMember) {
+            socket.emit('game_error', {
+              code: ErrorCode.ROOM_NOT_FOUND,
+              message: ErrorCode.ROOM_NOT_FOUND
+            });
+            if (callback) {
+              callback({
+                success: false,
+                code: ErrorCode.ROOM_NOT_FOUND,
+                message: ErrorCode.ROOM_NOT_FOUND
+              });
+            }
+            return;
+          }
+        }
+
+        const cleanName = sanitizeUserName(userName || (verifiedToken && verifiedToken.name), socket.id);
+        const cleanAvatar = avatar || (verifiedToken && verifiedToken.avatar) || '🎧';
+        const issuedAuth = issueAuthToken({
+          userId: resolvedUserId,
+          firebaseUid: resolvedFbUid,
+          provider: resolvedProvider,
+          userName: cleanName,
+          avatar: cleanAvatar,
+          fingerprint: socket.clientFingerprint || null
+        });
+        socket.authSession = issuedAuth.payload;
 
         if (room.cleanupTimer) {
           clearTimeout(room.cleanupTimer);
@@ -272,13 +368,14 @@ export function registerRoomHandlers(
           }
         }
 
-        if (!room.members.has(socket.id) && room.members.size >= MAX_MEMBERS_PER_ROOM) {
+        const maxAllowedMembers = room.targetPlayers || MAX_MEMBERS_PER_ROOM;
+        if (!room.members.has(socket.id) && room.members.size >= maxAllowedMembers) {
           if (callback) {
             callback({
               success: false,
               code: ErrorCode.ROOM_FULL,
               message: ErrorCode.ROOM_FULL,
-              messageParams: { maxMembers: MAX_MEMBERS_PER_ROOM }
+              messageParams: { maxMembers: maxAllowedMembers }
             });
           }
           return;

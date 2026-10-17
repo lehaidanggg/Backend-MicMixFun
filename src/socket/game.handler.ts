@@ -18,12 +18,13 @@ export function registerGameHandlers(
     {
       roomId,
       requireAllReady = false,
-      autoFillBots = true,
+      autoFillBots,
       minPlayers = DEFAULT_MIN_PLAYERS_WITH_BOTS,
       botCount,
       botDifficulty
     }: Record<string, any> = {},
-    callback?: (res: Record<string, unknown>) => void
+    callback?: (res: Record<string, unknown>) => void,
+    forceFillDefault = false
   ): void => {
     const targetRoom = String(roomId || sessionState.currentRoomId || '').toUpperCase();
     if (!targetRoom) {
@@ -47,6 +48,7 @@ export function registerGameHandlers(
       }
       return;
     }
+    room.lastActivityAt = Date.now();
 
     if (room.hostId !== socket.id) {
       socket.emit('game_error', {
@@ -80,13 +82,22 @@ export function registerGameHandlers(
       }
     }
 
-    // Tự động điền thêm vài AI Bot nếu phòng chưa đủ người (mặc định đủ 4 người = 1 User + 3 Bot)
+    // Với CUSTOM_ROOM đã có từ 2 thành viên trở lên (VD: nhóm bạn 2-3 người tự đấu với nhau):
+    // chỉ tự bù thêm AI Bot nếu Host truyền rõ autoFillBots=true, botCount > 0 hoặc gọi qua fill_bots_and_start.
+    // Ngược lại nếu chỉ có 1 mình Host (room.members.size < 2) và không tắt autoFillBots thì tự thêm Bot cho đủ 4 người.
+    const isCustomRoomWithMultipleMembers =
+      (room.mode || 'CUSTOM_ROOM') === 'CUSTOM_ROOM' && room.members.size >= 2;
+    const shouldAutoFill =
+      typeof autoFillBots === 'boolean'
+        ? autoFillBots
+        : (forceFillDefault || !isCustomRoomWithMultipleMembers);
+
     let botsAdded = 0;
     const difficulty = botDifficulty ? (String(botDifficulty).toUpperCase() as BotDifficulty) : undefined;
     if (typeof botCount === 'number' && botCount > 0) {
       const filled = fillRoomWithBots(targetRoom, { botCount, difficulty });
       botsAdded = filled.botsAdded;
-    } else if (autoFillBots !== false) {
+    } else if (shouldAutoFill) {
       const filled = fillRoomWithBots(targetRoom, {
         minPlayers: Number(minPlayers) || DEFAULT_MIN_PLAYERS_WITH_BOTS,
         difficulty
@@ -110,9 +121,9 @@ export function registerGameHandlers(
     }
   };
 
-  socket.on('game_start', handleStartGameWithBots);
-  socket.on('fill_bots_and_start', handleStartGameWithBots);
-  socket.on('matchmaking_timeout', handleStartGameWithBots);
+  socket.on('game_start', (data, cb) => handleStartGameWithBots(data, cb, false));
+  socket.on('fill_bots_and_start', (data, cb) => handleStartGameWithBots(data, cb, true));
+  socket.on('matchmaking_timeout', (data, cb) => handleStartGameWithBots(data, cb, true));
 
   // 2. CẬP NHẬT CẤU HÌNH TRẬN ĐẤU (game_update_config)
   socket.on(

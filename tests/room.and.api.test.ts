@@ -208,8 +208,60 @@ test('REST API — Decision Matrix: Endpoints & Enum Error Codes', async () => {
         assert.equal(res.body.code, row.expectedCode, `[Matrix Fail] ${row.caseName}: code ${res.body.code}`);
         assert.equal(res.body.message, row.expectedCode, `[Matrix Fail] ${row.caseName}: message ${res.body.message}`);
       }
+      if (row.path === '/api/health') {
+        assert.ok(res.body.stateCounters, 'GET /api/health must include stateCounters');
+        assert.ok(res.body.memory, 'GET /api/health must include memory telemetry');
+        assert.equal(typeof res.body.memory.rssMB, 'number');
+      }
     }
   } finally {
     await new Promise<void>(resolve => server.close(() => resolve()));
   }
 });
+
+test('Resource Guardrails — Zero-Residual Leak & Bounded Audio Decode Invariants', async () => {
+  const { decodeBoundedBase64Audio } = await import('../src/services/audio.service');
+
+  // 1. decodeBoundedBase64Audio phải từ chối chuỗi Base64 vượt trần TRƯỚC khi cấp phát Buffer
+  const oversizedB64 = 'A'.repeat(2000); // ~1500 bytes > maxBytes=1024
+  const rejected = decodeBoundedBase64Audio(oversizedB64, 1024);
+  assert.equal(rejected.buffer, null);
+  assert.equal(rejected.exceededMaxBytes, true);
+
+  const validB64 = Buffer.from('hello-micmixfun').toString('base64');
+  const accepted = decodeBoundedBase64Audio(validB64, 1024);
+  assert.ok(accepted.buffer);
+  assert.equal(accepted.exceededMaxBytes, false);
+
+  // 2. Phòng QUICK_MATCH và RACE_1V1 phải bị xóa NGAY LẬP TỨC (0ms, không treo cleanupTimer 30s) khi người thật cuối cùng rời đi
+  const qmRoomId = 'LEAK_TEST_QM';
+  rooms.set(qmRoomId, {
+    id: qmRoomId,
+    name: 'Quick Match Leak Test',
+    createdAt: Date.now(),
+    lastActivityAt: Date.now(),
+    hostId: 'sock_qm_1',
+    hostUserId: 'u_qm_1',
+    mode: 'QUICK_MATCH',
+    targetPlayers: 4,
+    members: new Map([
+      ['sock_qm_1', { socketId: 'sock_qm_1', userId: 'u_qm_1', userName: 'QMPlayer', avatar: '🎮', role: 'HOST', isReady: true }],
+      ['bot_1', { socketId: 'bot_1', userId: 'bot_1', userName: 'Bot Alpha', avatar: '🤖', role: 'PLAYER', isReady: true, isBot: true }]
+    ]),
+    messages: [],
+    cleanupTimer: null
+  });
+
+  const mockSock = {
+    id: 'sock_qm_1',
+    leave() {},
+    to() {
+      return { emit() {} };
+    }
+  } as any;
+
+  leaveCurrentRoom(mockSock, qmRoomId);
+  assert.equal(rooms.has(qmRoomId), false, 'QUICK_MATCH room must be destroyed immediately (0ms) when last human leaves');
+  assert.equal(gameSessions.has(qmRoomId), false, 'QUICK_MATCH gameSession must not leak after last human leaves');
+});
+

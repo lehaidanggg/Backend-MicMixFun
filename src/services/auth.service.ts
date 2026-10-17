@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import {
   MAX_USERNAME_LENGTH,
   CHALLENGE_TTL_MS,
+  MAX_CHALLENGE_NONCES,
   AUTH_TOKEN_TTL_MS,
   AUTH_SECRET,
   APP_SIGNING_SECRET,
@@ -69,6 +70,12 @@ export function computeClientFingerprint({
  * Phát hành One-Time Challenge Nonce (Hiệu lực 30 giây, dùng 1 lần duy nhất)
  */
 export function createAuthChallenge(clientIp = '0.0.0.0'): { nonce: string; expiresInMs: number } {
+  if (challengeNonces.size >= MAX_CHALLENGE_NONCES) {
+    const oldestKey = challengeNonces.keys().next().value;
+    if (oldestKey !== undefined) {
+      challengeNonces.delete(oldestKey);
+    }
+  }
   const nonce = crypto.randomBytes(16).toString('hex');
   challengeNonces.set(nonce, { ip: clientIp, createdAt: Date.now() });
   return { nonce, expiresInMs: CHALLENGE_TTL_MS };
@@ -117,7 +124,7 @@ export function verifyAppChallenge({
   }
 }
 
-// Bộ nhớ đệm chứng chỉ công khai (Public Keys) của Google Firebase
+// Bộ nhớ đệm chứng chỉ công khai (Public Keys) của Google Firebase + Singleflight Promise
 let googleCertsCache: {
   certs: Record<string, string> | null;
   expiresAt: number;
@@ -125,16 +132,21 @@ let googleCertsCache: {
   certs: null,
   expiresAt: 0
 };
+let inflightCertsPromise: Promise<Record<string, string> | null> | null = null;
 
 /**
  * Tải và cache chứng chỉ X.509 của Google để xác thực chữ ký RS256 của Firebase ID Token
+ * Sử dụng Singleflight (inflightCertsPromise) để chống Thundering Herd khi nhiều request tới cùng lúc lúc hết hạn cache
  */
 export function fetchGooglePublicCerts(): Promise<Record<string, string> | null> {
   if (googleCertsCache.certs && Date.now() < googleCertsCache.expiresAt) {
     return Promise.resolve(googleCertsCache.certs);
   }
+  if (inflightCertsPromise) {
+    return inflightCertsPromise;
+  }
   const url = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
-  return new Promise((resolve) => {
+  inflightCertsPromise = new Promise<Record<string, string> | null>((resolve) => {
     const req = https.get(url, { timeout: 3500 }, (res) => {
       let body = '';
       res.on('data', (chunk) => { body += chunk; });
@@ -150,13 +162,16 @@ export function fetchGooglePublicCerts(): Promise<Record<string, string> | null>
           };
           resolve(certs);
         } catch {
-          resolve(null);
+          resolve(googleCertsCache.certs);
         }
       });
     });
-    req.on('error', () => resolve(null));
-    req.on('timeout', () => { req.destroy(); resolve(null); });
+    req.on('error', () => resolve(googleCertsCache.certs));
+    req.on('timeout', () => { req.destroy(); resolve(googleCertsCache.certs); });
+  }).finally(() => {
+    inflightCertsPromise = null;
   });
+  return inflightCertsPromise;
 }
 
 /**

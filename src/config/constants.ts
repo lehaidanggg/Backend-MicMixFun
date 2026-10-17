@@ -8,6 +8,7 @@ export const MAX_MEMBERS_PER_ROOM = 12;
 export const MAX_BOTS_PER_ROOM = 3; // Giới hạn tối đa 3 AI Bot trong 1 phòng
 export const MAX_BOTS_PER_CLIENT_PER_ROUND = 1; // Quota 1:1 — Mỗi máy Client chỉ phải render & upload tối đa 1 Bot/vòng
 export const MAX_BOT_AUDIO_UPLOAD_BYTES = 350 * 1024; // Trần dung lượng tối đa 1 file audio Bot upload (~350KB)
+export const MAX_USER_AUDIO_UPLOAD_BYTES = 512 * 1024; // Trần dung lượng tối đa 1 file audio người chơi upload (~512KB)
 export const DEFAULT_MIN_PLAYERS_WITH_BOTS = 4; // Mặc định ghép thêm Bot cho đủ 4 người chơi (1 người + 3 Bot)
 export const RACE_1V1_PLAYERS = 2; // Chế độ 1vs1 Race luôn cố định 2 người chơi (1 vs 1)
 export const DEFAULT_MATCHMAKING_BOT_COUNT = 3; // Mặc định thêm 3 Bot khi tìm trận không có người chơi khác
@@ -34,7 +35,9 @@ export const MAX_CHAT_HISTORY_SIZE = 50;
 export const MAX_USERNAME_LENGTH = 20;
 export const MAX_CONNECTIONS_PER_IP: number = Number(process.env.MAX_CONNECTIONS_PER_IP) || 15;
 export const ROOM_CLEANUP_DELAY_MS = 30000; // 30s ân hạn reconnect trước khi xóa hẳn phòng trống
+export const ROOM_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 phút tự động thu hồi phòng CUSTOM_ROOM bị bỏ không ở IDLE/GAME_OVER
 export const CHALLENGE_TTL_MS = 30000;      // 30s hạn dùng cho One-Time Challenge Nonce
+export const MAX_CHALLENGE_NONCES = 10000;  // Trần số lượng Nonce lưu đồng thời trong RAM chống spam
 export const AUTH_TOKEN_TTL_MS: number = 7 * 24 * 60 * 60 * 1000; // 7 ngày
 
 export const AUTH_SECRET: string = process.env.AUTH_SECRET || 'micmixfun_hmac_secret_key_2026_v1';

@@ -108,18 +108,28 @@ test('Socket Handlers — Decision Matrix: Room, Media & Game Enum Error/Message
   });
   assert.equal(cbRes.code, ErrorCode.ROOM_ID_REQUIRED);
 
-  // 3. create_room valid + duplicate create_room -> ErrorCode.ROOM_ID_ALREADY_EXISTS
-  hostMock.handlers.get('create_room')!({ roomId: 'ENUM_RM', roomName: 'Enum Room' }, (r: any) => {
+  // 2b. join_room on a non-existent roomId -> ErrorCode.ROOM_NOT_FOUND
+  await playerMock.handlers.get('join_room')!({ roomId: 'TYPO_999' }, (r: any) => {
+    cbRes = r;
+  });
+  assert.equal(cbRes.success, false);
+  assert.equal(cbRes.code, ErrorCode.ROOM_NOT_FOUND);
+
+  // 3. create_room valid (immediately puts Host into room.members) + duplicate create_room -> ErrorCode.ROOM_ID_ALREADY_EXISTS
+  hostMock.handlers.get('create_room')!({ roomId: 'ENUM_RM', roomName: 'Enum Room', userName: 'HostOne' }, (r: any) => {
     cbRes = r;
   });
   assert.equal(cbRes.success, true);
+  assert.equal(cbRes.room.members.length, 1);
+  assert.equal(cbRes.room.members[0].role, 'HOST');
+  assert.equal(hostSession.currentRoomId, 'ENUM_RM');
 
   hostMock.handlers.get('create_room')!({ roomId: 'ENUM_RM' }, (r: any) => {
     cbRes = r;
   });
   assert.equal(cbRes.code, ErrorCode.ROOM_ID_ALREADY_EXISTS);
 
-  // 4. Host & Player join_room 'ENUM_RM'
+  // 4. Host & Player join_room 'ENUM_RM' (Host re-join is idempotent, Player joins as 2nd member)
   await hostMock.handlers.get('join_room')!({ roomId: 'ENUM_RM', userName: 'HostOne' }, (r: any) => {
     cbRes = r;
   });
@@ -129,6 +139,7 @@ test('Socket Handlers — Decision Matrix: Room, Media & Game Enum Error/Message
     cbRes = r;
   });
   assert.equal(cbRes.success, true);
+  assert.equal(cbRes.room.members.length, 2);
 
   // 5. Rate limit exceeded on chat & sound -> RATE_LIMIT_CHAT_EXCEEDED / RATE_LIMIT_SOUND_EXCEEDED
   allowRate = false;
@@ -216,12 +227,20 @@ test('Socket Handlers — Decision Matrix: Room, Media & Game Enum Error/Message
   assert.equal(cbRes.success, true);
   assert.equal(cbRes.removedBot.userName, 'CyberBot');
 
+  // 12b. In a 2-player Private Room (ENUM_RM), Host starts game without autoFillBots -> starts clean 2P match (0 unwanted bots)
+  hostMock.handlers.get('game_start')!({ roomId: 'ENUM_RM' }, (r: any) => {
+    cbRes = r;
+  });
+  assert.equal(cbRes.success, true);
+  assert.equal(cbRes.botsAdded, 0);
+  assert.equal(cbRes.totalPlayers, 2);
+
   destroyRoomData('ENUM_RM');
   assert.equal(rooms.has('ENUM_RM'), false);
   assert.equal(gameSessions.has('ENUM_RM'), false);
 
-  // 13. Solo Host starts game -> autoFillBots automatically spawns 3 Bots so totalPlayers = 4
-  await hostMock.handlers.get('join_room')!({ roomId: 'SOLO_RM', userName: 'SoloHost' }, (r: any) => {
+  // 13. Solo Host creates room & starts game -> automatically spawns 3 Bots so totalPlayers = 4
+  hostMock.handlers.get('create_room')!({ roomId: 'SOLO_RM', userName: 'SoloHost' }, (r: any) => {
     cbRes = r;
   });
   assert.equal(cbRes.success, true);

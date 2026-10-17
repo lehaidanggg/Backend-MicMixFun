@@ -42,6 +42,7 @@ export function registerMediaHandlers(
       }
 
       const room = rooms.get(currentRoomId)!;
+      room.lastActivityAt = Date.now();
       const chatMsg: ChatMessage = {
         id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         senderId: socket.id,
@@ -109,6 +110,7 @@ export function registerMediaHandlers(
       socket.to(currentRoomId).emit('sync_play_sound', payload);
 
       const room = rooms.get(currentRoomId)!;
+      room.lastActivityAt = Date.now();
       const soundChatMsg: ChatMessage = {
         id: `msg_sound_${Date.now()}`,
         senderId: socket.id,
@@ -154,12 +156,25 @@ export function registerMediaHandlers(
         }
         return;
       }
+      if (!checkRateLimit('share_audio_clip', 5, 10000)) {
+        if (callback) {
+          callback({
+            success: false,
+            code: ErrorCode.RATE_LIMIT_SOUND_EXCEEDED,
+            message: ErrorCode.RATE_LIMIT_SOUND_EXCEEDED
+          });
+        }
+        return;
+      }
+
+      const safeAudioData =
+        typeof audioData === 'string' && audioData.length <= 700000 ? audioData : null;
 
       console.log(`[AudioShare] 🎙️ ${currentUser.userName} chia sẻ audio clip (${duration || 0}s) trong phòng ${currentRoomId}`);
 
       const audioPayload = {
         id: `audio_${Date.now()}`,
-        audioData,
+        audioData: safeAudioData,
         audioName: audioName || currentUser.userName,
         mimeType,
         duration,
@@ -172,10 +187,13 @@ export function registerMediaHandlers(
       io.to(currentRoomId).emit('new_audio_shared', audioPayload);
 
       const room = rooms.get(currentRoomId)!;
-      const historyMeta =
-        typeof audioData === 'string' && audioData.length > 262144
-          ? { ...audioPayload, audioData: null, truncatedForMemory: true }
-          : audioPayload;
+      room.lastActivityAt = Date.now();
+      // Không lưu chuỗi Base64 audio nặng vào mảng lịch sử room.messages để tránh phình RAM (chỉ phát realtime cho người đang online)
+      const historyMeta = {
+        ...audioPayload,
+        audioData: null,
+        truncatedForMemory: true
+      };
 
       const chatMsg: ChatMessage = {
         id: `msg_clip_${Date.now()}`,

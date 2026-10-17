@@ -31,6 +31,7 @@ export function registerSocketServer(io: Server): void {
         isAuthenticated: Boolean(socket.authSession)
       }
     };
+    socket.sessionState = sessionState;
 
     // Bộ giới hạn tần suất sự kiện (Rate Limiter per Socket) chống spam/DDoS
     const rateBuckets = new Map<string, { count: number; windowStart: number }>();

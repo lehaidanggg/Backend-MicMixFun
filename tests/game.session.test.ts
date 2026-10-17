@@ -451,6 +451,27 @@ test('MimicGameSession — Multi-Human + Bot Quota 1:1, Live DSP Fallback & Pre-
     assert.equal(game.players.get('bot_1')?.roundScore, 92);
     assert.equal(game.players.get('bot_1')?.currentAttempt?.botAudioUploaded, true);
 
+    // 3b. Non-Host (s_h2) cannot submit/override audio or metrics for an unassigned LIVE_PLAYBACK_DSP Bot (bot_3)
+    const unauthorizedRes = game.submitBotAudio('s_h2', 'bot_3', null, 'audio/wav', {
+      melodyScore: 99,
+      rhythmScore: 99,
+      attackScore: 99
+    });
+    assert.equal(unauthorizedRes.success, false);
+
+    // 3c. Oversized audio (> 350KB) for bot_2 by s_h2 is not stored in RAM and cleanly falls back to LIVE_PLAYBACK_DSP
+    const oversizedAudio = 'data:audio/wav;base64,' + Buffer.alloc(360 * 1024, 1).toString('base64');
+    const oversizedRes = game.submitBotAudio('s_h2', 'bot_2', oversizedAudio, 'audio/wav', {
+      melodyScore: 80,
+      rhythmScore: 80,
+      attackScore: 80
+    });
+    assert.equal(oversizedRes.success, true);
+    assert.equal(oversizedRes.generationMode, 'LIVE_PLAYBACK_DSP');
+    assert.equal(game.getAttemptAudio('bot_2'), null);
+    assert.equal(game.players.get('bot_2')?.currentAttempt?.generationMode, 'LIVE_PLAYBACK_DSP');
+    assert.equal(game.players.get('bot_2')?.currentAttempt?.requiresClientUpload, false);
+
     // 4. If s_h1 disconnects mid-round, s_h2 already has 1 Bot (bot_2), so bot_1 switches to LIVE_PLAYBACK_DSP instead of overloading s_h2!
     game.removePlayer('s_h1');
     const assignmentsAfterLeave = game.getBotGenerationAssignments();
@@ -458,6 +479,11 @@ test('MimicGameSession — Multi-Human + Bot Quota 1:1, Live DSP Fallback & Pre-
     assert.equal(assignmentsAfterLeave[0].generationMode, 'LIVE_PLAYBACK_DSP');
     assert.equal(assignmentsAfterLeave[1].assignedGeneratorSocketId, 's_h2');
     assert.equal(assignmentsAfterLeave[1].generationMode, 'CLIENT_UPLOAD');
+    assert.equal(
+      game.currentPayload.botAssignments?.[0]?.assignedGeneratorSocketId,
+      null,
+      'currentPayload.botAssignments must stay in sync after removePlayer()'
+    );
   } finally {
     game.destroy();
   }
@@ -483,6 +509,19 @@ test('MimicGameSession — Mid-Game Player Leave: QUICK_MATCH Continues vs RACE_
     qmGame.removePlayer('s_2');
     assert.equal(qmGame.state, GAME_STATES.USER_RECORDING);
     assert.equal(qmGame.players.size, 3);
+    // When QUICK_MATCH finishes -> emits GAME_OVER with roomDisbanded=true, duration=0 and invokes disband callback immediately
+    let qmDisbandedRoomId: string | null = null;
+    qmGame.onGameOverRematchReady = (rId) => {
+      qmDisbandedRoomId = rId;
+    };
+    qmGame.finishGame();
+    assert.equal(qmGame.state, GAME_STATES.GAME_OVER);
+    assert.equal(qmGame.currentDuration, 0);
+    assert.equal(qmGame.currentPayload.roomDisbanded, true);
+    assert.equal(qmGame.currentPayload.autoRestart, false);
+    assert.equal(qmDisbandedRoomId, 'ROOM_QM_LEAVE');
+    // Confirming ready in GAME_OVER is rejected for QUICK_MATCH (no in-room rematch)
+    assert.equal(qmGame.confirmRoundReady('s_1').success, false);
   } finally {
     qmGame.destroy();
   }
@@ -490,6 +529,10 @@ test('MimicGameSession — Mid-Game Player Leave: QUICK_MATCH Continues vs RACE_
   // Case B: RACE_1V1 (2P) -> 1 player leaves mid-game -> Immediately ends match and reports GAME_OVER (OPPONENT_LEFT_FORFEIT)!
   const raceGame = new MimicGameSession('ROOM_1V1_LEAVE', io, { gameMode: 'RACE_1V1', targetPlayers: 2 });
   try {
+    let raceDisbandedRoomId: string | null = null;
+    raceGame.onGameOverRematchReady = (rId) => {
+      raceDisbandedRoomId = rId;
+    };
     raceGame.hostId = 's_a';
     raceGame.addPlayer('s_a', 'Racer A', '👑', 'HOST', 'u_a', true, false, null);
     raceGame.addPlayer('s_b', 'Racer B', '🔥', 'PLAYER', 'u_b', true, false, null);
@@ -501,12 +544,15 @@ test('MimicGameSession — Mid-Game Player Leave: QUICK_MATCH Continues vs RACE_
     // Racer B leaves mid-game -> immediately transitions to GAME_OVER with reason = OPPONENT_LEFT_FORFEIT
     raceGame.removePlayer('s_b');
     assert.equal(raceGame.state, GAME_STATES.GAME_OVER);
+    assert.equal(raceDisbandedRoomId, 'ROOM_1V1_LEAVE');
 
     const gameOverEvt = emitted.find(
       e => e.event === 'game_state_changed' && e.payload.state === GAME_STATES.GAME_OVER && e.payload.roomId === 'ROOM_1V1_LEAVE'
     );
     assert.ok(gameOverEvt, 'Should emit GAME_OVER immediately when 1v1 opponent leaves mid-game');
     assert.equal(gameOverEvt?.payload.payload.reason, 'OPPONENT_LEFT_FORFEIT');
+    assert.equal(gameOverEvt?.payload.payload.roomDisbanded, true);
+    assert.equal(gameOverEvt?.payload.payload.autoRestart, false);
     assert.equal(gameOverEvt?.payload.payload.forfeitedByUserName, 'Racer B');
     assert.equal(gameOverEvt?.payload.payload.champion?.socketId, 's_a');
   } finally {

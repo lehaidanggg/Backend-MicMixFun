@@ -1,6 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import {
   ROOM_CLEANUP_DELAY_MS,
+  ROOM_IDLE_TIMEOUT_MS,
   CHALLENGE_TTL_MS,
   MAX_MEMBERS_PER_ROOM,
   MAX_BOTS_PER_ROOM,
@@ -12,10 +13,10 @@ import {
   MAX_CHAT_HISTORY_SIZE
 } from '../config/constants';
 import { ErrorCode, RoomCloseReasonCode, SystemMessageCode } from '../config/messages';
-import { challengeNonces } from './auth.service';
+import { challengeNonces, ipConnectionCounts, extractClientIp } from './auth.service';
 import { normalizeBotDifficulty } from './audio.service';
 import { MimicGameSession } from '../game/MimicGameSession';
-import { BotDifficulty, GameModeType, MatchmakingQueueEntry, RoomData, RoomMember } from '../types';
+import { AuthenticatedSocket, BotDifficulty, GameModeType, MatchmakingQueueEntry, RoomData, RoomMember } from '../types';
 
 // In-Memory Database Quản Lý Phòng, Game Sessions & Hàng Đợi Ghép Trận Nhanh (Matchmaking Queue)
 export const rooms = new Map<string, RoomData>();
@@ -66,6 +67,24 @@ export function isBotMember(member?: Partial<RoomMember> | null): boolean {
   return Boolean(member.isBot || String(member.socketId || '').startsWith('bot_'));
 }
 
+export function countHumanMembers(room?: RoomData | null): number {
+  if (!room || !room.members) return 0;
+  let count = 0;
+  for (const m of room.members.values()) {
+    if (!isBotMember(m)) count++;
+  }
+  return count;
+}
+
+export function countBotMembers(room?: RoomData | null): number {
+  if (!room || !room.members) return 0;
+  let count = 0;
+  for (const m of room.members.values()) {
+    if (isBotMember(m)) count++;
+  }
+  return count;
+}
+
 /**
  * Thêm 1 AI Bot vào phòng chơi
  */
@@ -99,7 +118,7 @@ export function addBotToRoom(
     };
   }
 
-  const currentBotCount = Array.from(room.members.values()).filter(m => isBotMember(m)).length;
+  const currentBotCount = countBotMembers(room);
   if (currentBotCount >= MAX_BOTS_PER_ROOM) {
     return {
       success: false,
@@ -707,52 +726,54 @@ export function drainMatchmakingQueueIntoRoom(roomId: string): number {
 }
 
 /**
- * Mở lại phòng sau khi kết thúc trận (GAME_OVER) ở chế độ Quick Match hoặc 1vs1 Race:
- * - Xóa các AI Bot cũ để giải phóng ghế trống cho người chơi thật mới vào.
- * - Tự động hút ngay các User đang chờ sẵn trong matchmakingQueue vào ghế trống (Queue Draining).
- * - Đặt lại trạng thái game về IDLE và bật đồng hồ đếm ngược tìm người chơi mới (nếu hết giờ chờ thì tự bù Bot và bắt đầu ván mới).
+ * Xử lý sau khi kết thúc trận (GAME_OVER) ở chế độ Quick Match hoặc 1vs1 Race:
+ * - Ngay sau khi gửi màn kết quả GAME_OVER cho tất cả người chơi, hủy phòng tạm thời này.
+ * - Tách các socket khỏi phòng và đặt lại `sessionState.currentRoomId = null` để trả người chơi về trạng thái Online
+ *   (không giữ ở sảnh chờ, không tự động restart game mới hay tự động đẩy vào hàng đợi).
  */
-export function reopenRoomForMatchmaking(roomId: string, waitMs: number = DEFAULT_MATCHMAKING_WAIT_MS): void {
+export function reopenRoomForMatchmaking(roomId: string): void {
   const targetId = String(roomId || '').trim().toUpperCase();
   const room = rooms.get(targetId);
   const game = gameSessions.get(targetId);
-  if (!room || !game) return;
+  if (!room && !game) return;
 
-  const mode: GameModeType = room.mode || game.gameMode || 'QUICK_MATCH';
+  const mode: GameModeType = (room && room.mode) || (game && game.gameMode) || 'QUICK_MATCH';
   if (mode !== 'QUICK_MATCH' && mode !== 'RACE_1V1') return;
 
-  const humanMembers = Array.from(room.members.values()).filter(m => !isBotMember(m));
-  if (humanMembers.length === 0) return;
-
-  // Xóa các Bot cũ để nhường ghế tìm người chơi thật mới
-  for (const [memberId, member] of Array.from(room.members.entries())) {
-    if (isBotMember(member)) {
-      room.members.delete(memberId);
-      game.players.delete(memberId);
+  if (room) {
+    clearRoomMatchmakingTimers(room);
+    if (room.cleanupTimer) {
+      clearTimeout(room.cleanupTimer);
+      room.cleanupTimer = null;
     }
+    if (room.members && ioInstance) {
+      for (const [sockId] of room.members.entries()) {
+        const sock = ioInstance.sockets.sockets.get(sockId) as AuthenticatedSocket | undefined;
+        if (sock) {
+          sock.leave(targetId);
+          if (sock.sessionState && sock.sessionState.currentRoomId === targetId) {
+            sock.sessionState.currentRoomId = null;
+          }
+        }
+      }
+    }
+    room.members.clear();
+    if (Array.isArray(room.messages)) {
+      room.messages.length = 0;
+    }
+    rooms.delete(targetId);
   }
 
-  game.stopTimer();
-  game.state = 'IDLE';
-
-  const targetPlayers = mode === 'RACE_1V1' ? RACE_1V1_PLAYERS : DEFAULT_MIN_PLAYERS_WITH_BOTS;
-  room.mode = mode;
-  room.targetPlayers = targetPlayers;
-
-  // Hút ngay các User đang chờ sẵn trong matchmakingQueue vào ghế trống của phòng vừa mở lại!
-  const drained = drainMatchmakingQueueIntoRoom(targetId);
-  const currentHumans = Array.from(room.members.values()).filter(m => !isBotMember(m)).length;
+  if (game) {
+    game.stopTimer();
+    game.clearRoundAudioData();
+    game.disconnectedPlayers.clear();
+    gameSessions.delete(targetId);
+  }
 
   console.log(
-    `[Matchmaking] 🔄 Phòng ${targetId} (${mode}) mở lại sau trận (Đã hút ${drained} người từ Queue -> ${currentHumans}/${targetPlayers} người thật, chờ ${waitMs}ms)...`
+    `[Matchmaking] 🏁 Trận đấu [${mode}] tại phòng "${targetId}" đã kết thúc (GAME_OVER) -> Đã hủy phòng & trả người chơi về trạng thái Online.`
   );
-
-  startRoomMatchmakingCountdown(targetId, {
-    waitMs,
-    mode,
-    targetPlayers,
-    autoStart: true
-  });
 }
 
 /**
@@ -783,7 +804,7 @@ export function findAvailableMatchmakingRoom(
     const isIdle = !game || game.state === 'IDLE';
     if (!isIdle) continue;
 
-    const humanCount = Array.from(room.members.values()).filter(m => !isBotMember(m)).length;
+    const humanCount = countHumanMembers(room);
     if (humanCount > 0) {
       candidates.push({
         room,
@@ -852,12 +873,15 @@ export function destroyRoomData(
     });
   }
 
-  // 2. Tách tất cả các socket đang kết nối ra khỏi room
+  // 2. Tách tất cả các socket đang kết nối ra khỏi room & reset currentRoomId về null
   if (room && room.members && ioInstance) {
     for (const [sockId] of room.members.entries()) {
-      const sock = ioInstance.sockets.sockets.get(sockId);
+      const sock = ioInstance.sockets.sockets.get(sockId) as AuthenticatedSocket | undefined;
       if (sock) {
         sock.leave(targetId);
+        if (sock.sessionState && sock.sessionState.currentRoomId === targetId) {
+          sock.sessionState.currentRoomId = null;
+        }
       }
     }
     room.members.clear();
@@ -920,19 +944,19 @@ export function leaveCurrentRoom(sock: Socket, roomId: string, fallbackUser: Par
     if (game) {
       game.stopTimer();
       game.clearRoundAudioData();
-      if (game.disconnectedPlayers.size === 0) {
-        destroyRoomData(roomId, RoomCloseReasonCode.ALL_MEMBERS_LEFT);
-        return;
-      }
+    }
+
+    // Với QUICK_MATCH và RACE_1V1 (hoặc khi có game session và không còn người chơi chờ reconnect) -> Hủy phòng ngay lập tức (0ms)!
+    const isMatchmakingMode = room.mode === 'QUICK_MATCH' || room.mode === 'RACE_1V1';
+    if (isMatchmakingMode || (game && game.disconnectedPlayers.size === 0)) {
+      destroyRoomData(roomId, RoomCloseReasonCode.ALL_MEMBERS_LEFT);
+      return;
     }
 
     if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
     room.cleanupTimer = setTimeout(() => {
       const checkRoom = rooms.get(roomId);
-      const checkHumans = checkRoom
-        ? Array.from(checkRoom.members.values()).filter(m => !isBotMember(m))
-        : [];
-      if (checkRoom && checkHumans.length === 0) {
+      if (checkRoom && countHumanMembers(checkRoom) === 0) {
         destroyRoomData(roomId, RoomCloseReasonCode.EMPTY_ROOM_TIMEOUT);
       }
     }, ROOM_CLEANUP_DELAY_MS);
@@ -1015,7 +1039,7 @@ export function leaveCurrentRoom(sock: Socket, roomId: string, fallbackUser: Par
 }
 
 /**
- * Định kỳ mỗi 60s dọn dẹp các dữ liệu rớt mạng quá hạn (> 120s), Challenge Nonce hết hạn và phòng mồ côi
+ * Định kỳ mỗi 60s dọn dẹp các dữ liệu rớt mạng quá hạn (> 120s), Challenge Nonce hết hạn, Ghost Sockets, đối soát IP counts và phòng mồ côi / treo quá hạn
  */
 export function startPeriodicGcTimer(): ReturnType<typeof setInterval> {
   const timer = setInterval(() => {
@@ -1028,7 +1052,25 @@ export function startPeriodicGcTimer(): ReturnType<typeof setInterval> {
       }
     }
 
-    // 2. Dọn dẹp dữ liệu người chơi rớt mạng quá hạn (> 120s) và phòng mồ côi
+    // 1b. Đối soát tự chữa lành (Self-healing) bộ đếm kết nối theo IP từ danh sách socket thực tế đang sống
+    if (ioInstance && ioInstance.sockets && ioInstance.sockets.sockets) {
+      ipConnectionCounts.clear();
+      for (const sock of ioInstance.sockets.sockets.values()) {
+        if (!sock.disconnected) {
+          const ip = (sock as AuthenticatedSocket).clientIp || extractClientIp(sock);
+          ipConnectionCounts.set(ip, (ipConnectionCounts.get(ip) || 0) + 1);
+        }
+      }
+    }
+
+    // 2. Dọn dẹp Ghost Socket trong hàng đợi matchmakingQueue
+    for (const [sockId, entry] of matchmakingQueue.entries()) {
+      if (!entry.socket || entry.socket.disconnected) {
+        cancelMatchmakingForSocket(sockId);
+      }
+    }
+
+    // 3. Dọn dẹp dữ liệu người chơi rớt mạng quá hạn (> 120s) và phòng mồ côi trong gameSessions
     for (const [roomId, game] of gameSessions.entries()) {
       if (game && game.disconnectedPlayers) {
         for (const [uid, saved] of game.disconnectedPlayers.entries()) {
@@ -1038,11 +1080,41 @@ export function startPeriodicGcTimer(): ReturnType<typeof setInterval> {
         }
       }
       const room = rooms.get(roomId);
-      const humanCount = room
-        ? Array.from(room.members.values()).filter(m => !isBotMember(m)).length
-        : 0;
+      const humanCount = countHumanMembers(room);
       if (!room || (humanCount === 0 && !room.cleanupTimer)) {
         destroyRoomData(roomId, RoomCloseReasonCode.GC_ORPHAN_ROOM);
+      }
+    }
+
+    // 4. Quét Ghost Sockets trong phòng & thu hồi các phòng trống hoặc treo IDLE/GAME_OVER quá hạn (ROOM_IDLE_TIMEOUT_MS)
+    for (const [roomId, room] of rooms.entries()) {
+      const game = gameSessions.get(roomId);
+
+      if (ioInstance && ioInstance.sockets && ioInstance.sockets.sockets) {
+        for (const [sockId, member] of room.members.entries()) {
+          if (isBotMember(member)) continue;
+          const liveSock = ioInstance.sockets.sockets.get(sockId);
+          if (liveSock && liveSock.disconnected) {
+            room.members.delete(sockId);
+            if (game) game.removePlayer(sockId);
+          }
+        }
+      }
+
+      const humanCount = countHumanMembers(room);
+      if (humanCount === 0 && !room.cleanupTimer) {
+        destroyRoomData(roomId, RoomCloseReasonCode.GC_ORPHAN_ROOM);
+        continue;
+      }
+
+      const lastActive = room.lastActivityAt || room.createdAt || now;
+      const isGameIdleOrOver = !game || game.state === 'IDLE' || game.state === 'GAME_OVER';
+      if (isGameIdleOrOver && now - lastActive > ROOM_IDLE_TIMEOUT_MS) {
+        destroyRoomData(
+          roomId,
+          RoomCloseReasonCode.EMPTY_ROOM_TIMEOUT,
+          SystemMessageCode.SYS_HOST_CLOSED_ROOM
+        );
       }
     }
   }, 60000);

@@ -52,9 +52,13 @@ MediaRecorder(context).apply {
     }
     ```
 
-### 1.3. Chốt chặn chỉ gửi 1 lần mỗi vòng (Single-Submit Guard)
+### 1.3. Chốt chặn chỉ gửi 1 lần mỗi vòng & Giới hạn dung lượng tối đa (`decodeBoundedBase64Audio`)
 * Đặt cờ `hasSubmittedCurrentRound = true` ngay khi gọi `socket.emit('game_submit_audio', ...)`.
 * Không cho phép gọi lại `game_submit_audio` cho đến khi nhận được `game_state_changed` của vòng mới.
+* **Ngưỡng bảo vệ bộ nhớ trên Server (`decodeBoundedBase64Audio`)**:
+  * `game_submit_audio` & `share_audio_clip`: Tối đa **`512 KB`** (`MAX_USER_AUDIO_UPLOAD_BYTES`).
+  * `game_submit_bot_audio`: Tối đa **`350 KB`** (`MAX_BOT_AUDIO_UPLOAD_BYTES`).
+  * Các payload vượt ngưỡng sẽ bị Server từ chối ngay trước khi cấp phát `Buffer` (`AUDIO_PAYLOAD_TOO_LARGE`).
 
 ---
 
@@ -78,11 +82,11 @@ Thay vì bắt Server phải giải mã (decode) và chạy biến đổi Fourie
        }
      }
      ```
-* **Lợi ích cho Server**: Server chỉ mất `< 0.1ms` để kiểm tra chéo và tổng hợp bảng xếp hạng thay vì tốn CPU giải mã lại từng file âm thanh.
+* **Lợi ích cho Server**: Server chỉ mất `< 0.1ms` để kiểm tra chéo (single-pass decode) và tổng hợp bảng xếp hạng thay vì tốn CPU giải mã lại từng file âm thanh.
 
 ---
 
-## 3. 🔊 Tối Ưu Tải & Phát Âm Thanh (Audio Caching & Lazy Streaming)
+## 3. 🔊 Tối Ưu Tải & Phát Âm Thanh (Audio Caching, Lazy Streaming & 1:1 Bot DSP)
 
 ### 3.1. Cache kho âm thanh mẫu (`/downloaded_sounds/*`)
 * Các tệp âm thanh mẫu trong game là **bất biến (immutable)**.
@@ -90,13 +94,18 @@ Thay vì bắt Server phải giải mã (decode) và chạy biến đổi Fourie
 * **Web**: Tận dụng HTTP Cache của trình duyệt hoặc `CacheStorage` (Service Worker).
 * **Danh mục `/api/mimic-packs` & `/api/sounds`**: Chỉ fetch **1 lần duy nhất** khi khởi động ứng dụng và lưu vào biến toàn cục / Local Storage.
 
-### 3.2. Sử dụng HTTP Stream URL ở pha `SHOWDOWN_REVEAL`
+### 3.2. Sử dụng HTTP Stream URL ở pha `SHOWDOWN_REVEAL` (Ngưỡng `4KB`)
 * Ở pha `SHOWDOWN_REVEAL`, mỗi phần tử trong `payload.attempts` có cung cấp:
   * `audioStreamUrl`: `/api/attempts/:roomId/:socketId?r=...` (Endpoint stream nhị phân trực tiếp qua HTTP).
-  * `audioUrl`: Dữ liệu Base64 (nếu bản thu nhỏ `< 64KB`) hoặc đường dẫn HTTP stream (nếu bản thu lớn `> 64KB`).
+  * `audioUrl`: Chỉ giữ inline Base64 nếu bản thu siêu nhỏ (`< 4KB` / `4096` ký tự), còn lại **mặc định trỏ sang đường dẫn HTTP stream (`/api/attempts/:roomId/:socketId?r=...`)** để giữ gói JSON của `game_state_changed` luôn nhẹ (`~2KB`), không làm nghẽn Socket.IO.
 * **Lưu ý cho Client**:
-  * Không tự động tải và phát đồng loạt tất cả bản thu của 12 người chơi cùng lúc.
+  * Không tự động tải và phát đồng loạt tất cả bản thu của mọi người chơi cùng lúc.
   * Sử dụng `preload="metadata"` hoặc `preload="none"` trên thẻ `<audio>` (hoặc chỉ khởi tạo `MediaPlayer` trên Android khi người dùng bấm nút **Nghe lại** của người chơi đó).
+
+### 3.3. Quota 1:1 khi Gen Sound cho AI Bot (`CLIENT_UPLOAD` vs `LIVE_PLAYBACK_DSP`)
+* Ngay từ đầu vòng (`5.0 THEME_SELECTION`), Server gửi danh sách `botAssignments`:
+  * **Mỗi máy Client chỉ chịu trách nhiệm render & upload tối đa `1 Bot` mỗi vòng** (`botGenerationMode: "CLIENT_UPLOAD"` khi `assignedGeneratorSocketId === socket.id`).
+  * Các Bot dư ra (khi số Bot nhiều hơn số người thật trong phòng) có `botGenerationMode: "LIVE_PLAYBACK_DSP"`. Với các Bot này, Client **không cần render file hay upload lên Server**; khi người chơi bấm nghe ở màn `SHOWDOWN_REVEAL`, Client chỉ cần phát trực tiếp `targetSound.url` qua bộ lọc `botAudioEffects` thời gian thực.
 
 ---
 
@@ -111,11 +120,11 @@ Thay vì bắt Server phải giải mã (decode) và chạy biến đổi Fourie
 
 ---
 
-## 5. 🔄 Quản Lý Kết Nối, `userId` & Tránh Rò Rỉ Socket (Connection Lifecycle)
+## 5. 🔄 Quản Lý Kết Nối, `userId`, Giải Tán Phòng Tự Động & Tránh Rò Rỉ Socket
 
 1. **Định danh cố định `userId`**:
    * Khi khởi chạy lần đầu, Client tự sinh 1 mã `userId` (ví dụ `UUID.randomUUID()`) và lưu vào `localStorage` (Web) hoặc `SharedPreferences` (Android).
-   * Luôn gửi kèm `userId` trong payload của `join_room`:
+   * Luôn gửi kèm `userId` trong payload của `join_room` / `quick_match` / `race_1v1`:
      ```json
      {
        "roomId": "MIMIC99",
@@ -126,11 +135,15 @@ Thay vì bắt Server phải giải mã (decode) và chạy biến đổi Fourie
      ```
    * Nhờ `userId`, nếu người chơi bị rớt mạng 3G/4G trong vài giây rồi tự kết nối lại, Server sẽ tự động khôi phục toàn bộ `totalScore`, `roundScore` và trạng thái bài thi mà không tạo ra người chơi rác trong phòng.
 
-2. **Chỉ duy trì 1 kết nối Socket (Singleton Socket Instance)**:
+2. **Xử lý khi phòng `QUICK_MATCH` / `RACE_1V1` giải tán ngay ở `5.10 GAME_OVER` (`roomDisbanded: true`)**:
+   * Đối với 2 chế độ tìm trận tự động (`QUICK_MATCH` 4 người và `RACE_1V1` 2 người), ngay khi Server phát sự kiện `5.10 GAME_OVER`, phòng chơi đã được **xóa sổ ngay lập tức trên Server (`roomDisbanded: true`, `autoRestart: false`, `duration: 0`)** và người chơi trở về trạng thái **Online** (ngoài phòng).
+   * Client vẫn hiển thị bảng tổng kết Podium từ dữ liệu trong gói `GAME_OVER` vừa nhận, nhưng **không gọi các API của phòng cũ nữa**. Khi người dùng bấm *"Chơi Tiếp / Tìm Trận Mới"*, Client gọi lại `quick_match` hoặc `race_1v1`.
+
+3. **Chỉ duy trì 1 kết nối Socket (Singleton Socket Instance)**:
    * Trên Android, khởi tạo Socket.IO bên trong `Singleton Repository` hoặc `Service`, **không khởi tạo lại `IO.socket()` trong `Activity.onCreate()` hay `Fragment`** mỗi khi xoay màn hình.
    * Khi người dùng thoát hẳn khỏi màn hình chơi game, gọi `socket.emit('leave_room')` trước khi `socket.disconnect()` để Server giải phóng RAM của phòng ngay lập tức thay vì phải giữ trạng thái chờ timeout.
 
-3. **Ràng buộc dữ liệu đầu vào ngay tại UI (Client-side Validation)**:
+4. **Ràng buộc dữ liệu đầu vào ngay tại UI (Client-side Validation)**:
    * Giới hạn ô nhập `userName` tối đa **20 ký tự**, `roomId` tối đa **16 ký tự**, tin nhắn chat tối đa **500 ký tự** trước khi emit lên Server.
 
 ---
