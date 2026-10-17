@@ -1,5 +1,10 @@
 import { Server } from 'socket.io';
-import { ipConnectionCounts, extractClientIp } from '../services/auth.service';
+import {
+  ipConnectionCounts,
+  extractClientIp,
+  extractClientLanguage,
+  generateRandomPlayerProfile
+} from '../services/auth.service';
 import { leaveCurrentRoom, cancelMatchmakingForSocket } from '../services/room.service';
 import { socketAuthMiddleware } from './auth.middleware';
 import { registerRoomHandlers } from './room.handler';
@@ -16,18 +21,25 @@ export function registerSocketServer(io: Server): void {
     const clientIp = socket.clientIp || extractClientIp(socket);
     ipConnectionCounts.set(clientIp, (ipConnectionCounts.get(clientIp) || 0) + 1);
 
+    const clientLang = extractClientLanguage(socket);
+    const defaultProfile = socket.authSession
+      ? null
+      : generateRandomPlayerProfile({ lang: clientLang });
+
     console.log(
-      `[Socket] 🟢 Kết nối mới: ${socket.id} (IP: ${clientIp})${socket.authSession ? ` (Auth UID: ${socket.authSession.uid})` : ''}`
+      `[Socket] 🟢 Kết nối mới: ${socket.id} (IP: ${clientIp}, Lang: ${clientLang})${socket.authSession ? ` (Auth UID: ${socket.authSession.uid})` : ''}`
     );
 
     const sessionState: SocketSessionState = {
       currentRoomId: null,
+      lang: clientLang,
       currentUser: {
         socketId: socket.id,
         userId: socket.authSession ? socket.authSession.uid : null,
         firebaseUid: socket.authSession ? (socket.authSession.fbUid || null) : null,
-        userName: socket.authSession ? socket.authSession.name : `User_${socket.id.substring(0, 4)}`,
-        avatar: socket.authSession ? socket.authSession.avatar : '🎵',
+        userName: socket.authSession ? socket.authSession.name : defaultProfile!.userName,
+        avatar: socket.authSession ? socket.authSession.avatar : defaultProfile!.avatar,
+        lang: clientLang,
         isAuthenticated: Boolean(socket.authSession)
       }
     };

@@ -3,6 +3,8 @@ import { ErrorCode } from '../config/messages';
 import {
   ipConnectionCounts,
   extractClientIp,
+  extractClientLanguage,
+  generateRandomPlayerProfile,
   computeClientFingerprint,
   verifyAuthToken,
   verifyFirebaseIdToken
@@ -52,13 +54,15 @@ export async function socketAuthMiddleware(
       } else {
         const fbDecoded = await verifyFirebaseIdToken(rawToken);
         if (fbDecoded) {
+          const clientLang = extractClientLanguage(socket);
+          const randProfile = generateRandomPlayerProfile({ lang: clientLang });
           socket.authSession = {
             uid: fbDecoded.uid,
             fbUid: fbDecoded.firebaseUid,
             provider: 'firebase_anonymous',
             fp: socketFp,
-            name: `User_${fbDecoded.firebaseUid.slice(0, 4)}`,
-            avatar: '🎧',
+            name: randProfile.userName,
+            avatar: randProfile.avatar,
             exp: fbDecoded.exp
           };
         }

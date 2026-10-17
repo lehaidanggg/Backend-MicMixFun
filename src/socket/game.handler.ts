@@ -21,7 +21,10 @@ export function registerGameHandlers(
       autoFillBots,
       minPlayers = DEFAULT_MIN_PLAYERS_WITH_BOTS,
       botCount,
-      botDifficulty
+      botDifficulty,
+      lang,
+      language,
+      locale
     }: Record<string, any> = {},
     callback?: (res: Record<string, unknown>) => void,
     forceFillDefault = false
@@ -49,6 +52,10 @@ export function registerGameHandlers(
       return;
     }
     room.lastActivityAt = Date.now();
+    const explicitLang = lang || language || locale || sessionState.lang || currentUser.lang || room.lang;
+    if (explicitLang) {
+      room.lang = String(explicitLang);
+    }
 
     if (room.hostId !== socket.id) {
       socket.emit('game_error', {
@@ -95,12 +102,13 @@ export function registerGameHandlers(
     let botsAdded = 0;
     const difficulty = botDifficulty ? (String(botDifficulty).toUpperCase() as BotDifficulty) : undefined;
     if (typeof botCount === 'number' && botCount > 0) {
-      const filled = fillRoomWithBots(targetRoom, { botCount, difficulty });
+      const filled = fillRoomWithBots(targetRoom, { botCount, difficulty, lang: room.lang });
       botsAdded = filled.botsAdded;
     } else if (shouldAutoFill) {
       const filled = fillRoomWithBots(targetRoom, {
         minPlayers: Number(minPlayers) || DEFAULT_MIN_PLAYERS_WITH_BOTS,
-        difficulty
+        difficulty,
+        lang: room.lang
       });
       botsAdded = filled.botsAdded;
     }

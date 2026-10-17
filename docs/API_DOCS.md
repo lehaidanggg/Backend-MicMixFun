@@ -29,8 +29,9 @@ Tài liệu chính thức dành cho đội phát triển **Client (Android / iOS
    - Hỗ trợ cấu hình số vòng (`3, 5, 7, 10` vòng) và thời lượng thu âm (`3 - 15s` hoặc tự động khớp theo độ dài file âm thanh mẫu).
    - Chu trình 9 trạng thái: `IDLE` ➔ `THEME_SELECTION` (3.5s) ➔ `PLAYING_SAMPLE` (theo độ dài file mẫu, hỗ trợ đồng bộ phát xong sớm qua `sample_playback_done`) ➔ `PREPARE_RECORDING` (3s lấy hơi) ➔ `USER_RECORDING` (thu âm & nộp bài) ➔ `UPLOADING_SOUND` (3s đồng bộ) ➔ `SHOWDOWN_REVEAL` (30s nghe lại + thả emoji + bấm `confirm_showdown_skip`) ➔ `AI_SCORING` (4s chấm điểm hồi hộp) ➔ `ROUND_RESULT` (7s Podium vòng) ➔ `BREAK_TIME` (11s nghỉ giải lao / `confirm_next_round_ready`) ➔ `GAME_OVER`.
 
-5. **Hệ Thống AI Bot Thông Minh 3 Cấp Độ (`EASY` / `NORMAL` / `HARD`)**:
-   - Quản lý Bot thủ công (`add_bot`, `remove_bot`) hoặc tự động điền đủ 4 người chơi khi bắt đầu (`game_start` với `autoFillBots: true`).
+5. **Hệ Thống AI Bot Thông Minh 3 Cấp Độ (`EASY` / `NORMAL` / `HARD`) & Tên Người Thật Đa Ngôn Ngữ**:
+   - Quản lý Bot thủ công (`add_bot`, `remove_bot`) hoặc tự động điền đủ người chơi khi bắt đầu (`game_start` với `autoFillBots: true`).
+   - **Tên & Avatar AI Bot như người thật theo ngôn ngữ App (`vi`, `en`, `ja`, `ko`, `th`, `id`, `es`)**: Server tự động sinh tên người thật tự nhiên (không có chữ `"Bot"`, không dùng icon `'🤖'`) và xáo trộn ngẫu nhiên bằng **CSPRNG (`crypto.randomInt`)** để mỗi phòng/mỗi máy luôn có danh sách đối thủ và Avatar khác nhau.
    - Hỗ trợ đồng thời **Quota 1:1 Client Upload (`game_submit_bot_audio` <= 350KB)** và **Live Playback DSP (`LIVE_PLAYBACK_DSP` 0% CPU/RAM Server)**.
 
 6. **Media, Soundboard Đồng Bộ, Chat & Live Mic Stream**:
@@ -133,9 +134,10 @@ Base URL:
 | :--- | :--- | :--- |
 | `GET` | `/` | Kiểm tra nhanh trạng thái hoạt động của dịch vụ |
 | `GET` | `/api/health` | Health Check kèm thống kê số phòng và số kết nối Socket đang hoạt động |
+| `GET` / `POST` | `/api/profile/random` | Sinh ngẫu nhiên (CSPRNG `crypto.randomInt`) Tên người chơi + Avatar theo ngôn ngữ App (`?lang=vi\|en\|ja\|ko\|th\|id\|es`) |
 | `GET` | `/api/auth/challenge` | Phát hành mã `nonce` dùng 1 lần (hiệu lực 30s) chống Replay Attack |
-| `POST` | `/api/auth/firebase` | Xác thực Firebase ID Token (`RS256`) và đổi lấy `authToken` gắn Fingerprint |
-| `POST` | `/api/auth/guest` | Cấp mới hoặc gia hạn Guest Session Token (`HMAC-SHA256`) |
+| `POST` | `/api/auth/firebase` | Xác thực Firebase ID Token (`RS256`) và đổi lấy `authToken` gắn Fingerprint (tự động random tên/avatar nếu để trống) |
+| `POST` | `/api/auth/guest` | Cấp mới hoặc gia hạn Guest Session Token (`HMAC-SHA256`, tự động random tên/avatar theo `lang` nếu để trống) |
 | `GET` | `/api/auth/verify` | Kiểm tra tính hợp lệ và Fingerprint của `authToken` hoặc `firebaseIdToken` |
 | `GET` | `/api/rooms` | Lấy danh sách các phòng đang mở trên Server |
 | `GET` | `/api/mimic-packs` | Lấy danh sách 9 chủ đề âm thanh (`SOUND_PACKS`) dùng trong Mimic Party |
@@ -174,6 +176,20 @@ Base URL:
   }
   ```
 
+#### 1b) `GET /api/profile/random` (hoặc `POST /api/profile/random`) — Random Tên & Avatar bất kỳ theo ngôn ngữ App (CSPRNG)
+* **Query Params / Body**: `?lang=vi` (Hỗ trợ: `vi`, `en`, `ja`, `ko`, `th`, `id`, `es`; nếu không truyền sẽ tự đọc từ header `Accept-Language`).
+* **Mô tả**: Sử dụng `crypto.randomInt()` (Cryptographically Secure RNG) trên Server để mỗi thiết bị mới cài App hoặc mỗi lần bấm nút xúc xắc Random luôn nhận được Tên người chơi và Avatar hoàn toàn khác nhau, không bao giờ bị trùng lặp cố định giữa 2 máy.
+* **Response (`200 OK`)**:
+  ```json
+  {
+    "success": true,
+    "userName": "Minh Khôi",
+    "avatar": "🦊",
+    "lang": "vi",
+    "avatars": ["🦊", "🐼", "🐯", "🦁", "🐱", "🐶", "🐸", "🐨", "🦄", "🐲", "..."]
+  }
+  ```
+
 #### 2) `GET /api/auth/challenge` — Lấy One-Time Challenge Nonce
 * **Response (`200 OK`)**:
   ```json
@@ -191,15 +207,17 @@ Base URL:
   ```json
   {
     "firebaseIdToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6...",
-    "userName": "Alex",
+    "userName": "Minh Khôi",
     "avatar": "🦊",
+    "lang": "vi",
+    "randomProfile": false,
     "deviceId": "android-pixel-8-pro",
     "nonce": "a4f891c2e7b03d561290ef84a1c3b5d7",
     "timestamp": 1760494800000,
     "appSignature": "<HMAC_SHA256(nonce:timestamp:firebaseUid, APP_SIGNING_SECRET)>"
   }
   ```
-  *(Lưu ý: `nonce`, `timestamp`, `appSignature` là tuỳ chọn nâng cao khi bật xác thực Challenge-Response).*
+  *(Lưu ý: Nếu không truyền `userName` / `avatar` hoặc đặt `"randomProfile": true`, Server sẽ tự động sinh ngẫu nhiên Tên + Avatar bằng CSPRNG theo ngôn ngữ `lang`).*
 * **Response (`200 OK`)**:
   ```json
   {
@@ -209,11 +227,13 @@ Base URL:
     "provider": "firebase_anonymous",
     "authToken": "eyJ1aWQiOiJmYl85eFl6QWJDZEVmR2gxMjMi...<signature>",
     "expiresAt": 1761099600000,
+    "lang": "vi",
     "user": {
       "userId": "fb_9xYzAbCdEfGh123",
       "firebaseUid": "9xYzAbCdEfGh123",
-      "userName": "Alex",
-      "avatar": "🦊"
+      "userName": "Minh Khôi",
+      "avatar": "🦊",
+      "lang": "vi"
     }
   }
   ```
@@ -225,13 +245,16 @@ Base URL:
 * **Request Body**:
   ```json
   {
-    "userName": "Alex",
-    "avatar": "🎧",
+    "userName": "Minh Khôi",
+    "avatar": "🦊",
+    "lang": "vi",
+    "randomProfile": false,
     "deviceId": "android-pixel-8-pro",
     "authToken": "<token_cũ_nếu_muốn_gia_hạn>",
     "firebaseIdToken": "<tuỳ_chọn_nếu_muốn_gắn_kèm_firebase>"
   }
   ```
+  *(Lưu ý: Nếu cài App lần đầu chưa có tên/avatar, chỉ cần gửi `{ "lang": "vi", "deviceId": "..." }` — Server sẽ tự random tên + avatar khác nhau cho từng máy bằng `crypto.randomInt`).*
 * **Response (`200 OK`)**:
   ```json
   {
@@ -241,11 +264,13 @@ Base URL:
     "provider": "guest",
     "authToken": "eyJ1aWQiOiJ1XzhmOWQyYTFiNGMzZTVmNjAi...<signature>",
     "expiresAt": 1761099600000,
+    "lang": "vi",
     "user": {
       "userId": "u_8f9d2a1b4c3e5f60",
       "firebaseUid": null,
-      "userName": "Alex",
-      "avatar": "🎧"
+      "userName": "Minh Khôi",
+      "avatar": "🦊",
+      "lang": "vi"
     }
   }
   ```
@@ -397,7 +422,7 @@ Base URL:
 ## 4. ⚡ Đặc Tả Đầy Đủ Giao Thức Socket.IO (Socket Specifications)
 
 ### 4.0. Kết Nối Handshake (`io.connect`)
-Khi khởi tạo kết nối Socket.IO, Client có thể truyền thông tin xác thực trong `auth`:
+Khi khởi tạo kết nối Socket.IO, Client có thể truyền thông tin xác thực và ngôn ngữ App (`lang`) trong `auth`:
 ```javascript
 const socket = io("https://micmixfun.up.railway.app", {
   transports: ["websocket"],
@@ -405,6 +430,7 @@ const socket = io("https://micmixfun.up.railway.app", {
     token: "<authToken_HMAC>",           // Hoặc dùng trường authToken
     firebaseIdToken: "<firebase_jwt>",   // Tuỳ chọn nếu dùng Firebase Auth
     deviceId: "android-device-id-001",   // Dùng để đối chiếu Client Fingerprint
+    lang: "vi",                          // Ngôn ngữ của App ("vi", "en", "ja", "ko", "th", "id", "es") để Server sinh tên AI Bot & tên mặc định theo ngôn ngữ
     nonce: "<challenge_nonce>",          // Tuỳ chọn Challenge-Response
     timestamp: 1760494800000,
     appSignature: "<hmac_signature>"
@@ -416,26 +442,27 @@ const socket = io("https://micmixfun.up.railway.app", {
 
 ### 4.1. Sự Kiện Client Gửi Lên Server (`Client ➔ Server`)
 
-#### Nhóm A — Xác Thực & Quản Lý Phòng (`room.handler.ts`)
+#### Nhóm A — Xác Thực, Random Profile & Quản Lý Phòng (`room.handler.ts`)
 
 | Event Name | Payload Gửi Lên | Callback Response (`ack`) | Mô tả |
 | :--- | :--- | :--- | :--- |
-| `auth_guest` / `auth_firebase` | `{ userName, avatar, authToken?, firebaseIdToken? }` | `{ success: true, userId, firebaseUid, provider, authToken, expiresAt, user }` | Xác thực hoặc đổi tên/avatar trực tiếp trên kết nối Socket |
-| `create_room` | `{ roomId?, roomName?, userName?, avatar? }` | `{ success: true, roomId, roomName, hostId, mode: "CUSTOM_ROOM", authToken, expiresAt, room, user, gameState }` | **Tạo phòng riêng (`CUSTOM_ROOM`)**: Tự động thoát sạch mọi phòng cũ (`QUICK_MATCH` / `RACE_1V1` / `CUSTOM_ROOM`), bỏ qua `roomId` cũ của phòng Matchmaking nếu Client gửi nhầm, đưa người tạo vào phòng mới làm `HOST` (`isReady: true`) và khởi tạo `MimicGameSession` ngay trong 1 bước |
-| `join_room` | `{ roomId, userName, avatar, userId?, authToken?, firebaseIdToken?, createIfNotExists?: false }` | `{ success: true, authToken, expiresAt, restoredSession: false, room, user, gameState }` | **Vào phòng riêng (`CUSTOM_ROOM`) theo mã Code**: Chỉ cho phép vào phòng `CUSTOM_ROOM` khi nhập đúng mã phòng. **Bỏ hoàn toàn cơ chế tự động Reconnect**: Đã thoát phòng là thoát hẳn! Mọi lệnh `join_room` vào phòng `QUICK_MATCH` hoặc `RACE_1V1` đều bị chặn tuyệt đối (`ROOM_NOT_FOUND`) |
+| `random_profile` (hoặc `get_random_profile`) | `{ lang?: "vi"\|"en"\|"ja"\|"ko"\|"th"\|"id"\|"es" }` | `{ success: true, userName, avatar, lang, avatars }` | **Random Tên & Avatar bất kỳ (CSPRNG `crypto.randomInt`)**: Trả về tên người chơi theo ngôn ngữ `lang` và 1 Avatar ngẫu nhiên (không bao giờ trùng lặp cố định giữa 2 máy) |
+| `auth_guest` / `auth_firebase` | `{ userName?, avatar?, lang?, randomProfile?: boolean, authToken?, firebaseIdToken? }` | `{ success: true, userId, firebaseUid, provider, authToken, expiresAt, lang, user }` | Xác thực hoặc đổi tên/avatar trực tiếp trên kết nối Socket (nếu để trống `userName`/`avatar` hoặc `randomProfile: true`, Server tự sinh ngẫu nhiên theo `lang`) |
+| `create_room` | `{ roomId?, roomName?, userName?, avatar?, lang?, randomProfile?: boolean }` | `{ success: true, roomId, roomName, hostId, mode: "CUSTOM_ROOM", lang, room, user, gameState }` | **Tạo phòng riêng (`CUSTOM_ROOM`)**: Tự động thoát sạch mọi phòng cũ (`QUICK_MATCH` / `RACE_1V1` / `CUSTOM_ROOM`), bỏ qua `roomId` cũ của phòng Matchmaking nếu Client gửi nhầm, đưa người tạo vào phòng mới làm `HOST` (`isReady: true`) và khởi tạo `MimicGameSession` ngay trong 1 bước |
+| `join_room` | `{ roomId, userName?, avatar?, lang?, userId?, authToken?, firebaseIdToken?, createIfNotExists?: false }` | `{ success: true, authToken, expiresAt, restoredSession: false, room, user, gameState }` | **Vào phòng riêng (`CUSTOM_ROOM`) theo mã Code**: Chỉ cho phép vào phòng `CUSTOM_ROOM` khi nhập đúng mã phòng. **Bỏ hoàn toàn cơ chế tự động Reconnect**: Đã thoát phòng là thoát hẳn! Mọi lệnh `join_room` vào phòng `QUICK_MATCH` hoặc `RACE_1V1` đều bị chặn tuyệt đối (`ROOM_NOT_FOUND`) |
 | `leave_room` | `{}` | `{ success: true }` | **Rời khỏi phòng hiện tại dứt điểm** (không lưu trạng thái chờ reconnect; nếu không còn người thật nào trong phòng thì hủy phòng ngay lập tức `0ms`) |
 | `close_room` | `{ roomId? }` | `{ success: true, roomId, cleared: true }` | **(Chỉ Host)** Đóng phòng ngay lập tức và giải phóng toàn bộ RAM |
 | `player_ready_toggle` | `{ roomId?, isReady?: boolean }` | `{ success: true, isReady }` | Bật / tắt trạng thái sẵn sàng tại sảnh chờ (hoặc xác nhận Accept nếu đang ở Popup Find Match) |
 | `kick_player` | `{ roomId?, targetSocketId }` | `{ success: true }` | **(Chỉ Host)** Mời người chơi hoặc xóa AI Bot khỏi phòng |
-| `add_bot` | `{ roomId?, difficulty?: "EASY"\|"NORMAL"\|"HARD", botName?, avatar? }` | `{ success: true, bot, members }` | **(Chỉ Host)** Thêm 1 AI Bot vào phòng khi ở trạng thái `IDLE` / `GAME_OVER` |
+| `add_bot` | `{ roomId?, difficulty?: "EASY"\|"NORMAL"\|"HARD", botName?, avatar?, lang? }` | `{ success: true, bot, members }` | **(Chỉ Host)** Thêm 1 AI Bot vào phòng khi ở trạng thái `IDLE` / `GAME_OVER` (tự sinh tên người thật theo `lang` của phòng nếu không truyền `botName`) |
 | `remove_bot` | `{ roomId?, botSocketId? }` | `{ success: true, removedBot, members }` | **(Chỉ Host)** Xóa 1 AI Bot khỏi phòng (nếu không truyền `botSocketId` sẽ xóa Bot cuối) |
 
 #### Nhóm B — Tìm Trận Nhanh / Smart Matchmaking & Popup Find Match (`room.handler.ts`) — Hỗ Trợ `QUICK_MATCH` (4P) & `RACE_1V1` (2P)
 
 | Event Name | Payload Gửi Lên | Callback Response (`ack`) | Mô tả |
 | :--- | :--- | :--- | :--- |
-| `find_match` (hoặc `quick_match`) | `{ userName?, avatar?, mode?: "QUICK_MATCH"\|"RACE_1V1", botCount?: 3, botDifficulty?, autoStart?: true, waitMs?: 10000, waitForPlayers?: true, acceptWaitMs?: 5000, requireAccept?: true }` | `{ success: true, searching, state: "FINDING_MATCH"\|"MATCH_FOUND", showMatchFoundPopup, acceptedCount, totalPlayers, targetPlayers, acceptedSocketIds, allAccepted, matchedWithHumans, timedOutToBots?, botsAdded, autoStarted, roomId, room, user, gameState }` | Tìm trận nhanh **4 Người (`QUICK_MATCH`)**: Ưu tiên Best-Fit (`3/4 ➔ 2/4 ➔ 1/4`) + FIFO. Chờ cơ bản `10s`; khi tìm được thêm người thật (`2/4` hoặc `3/4`) lúc đồng hồ `< 5s` thì tự **cộng giờ mềm `+5s`** (trần tối đa `16s`). Hết giờ tự bù `(4 - N)` AI Bot. Khi đủ `4/4` người (người thật hoặc người thật + Bot), Server bắn `match_found` & `match_accept_updated` để hiển thị **Popup Find Match + số người đã Accept (`acceptedCount / totalPlayers`)** |
-| `race_1v1` (hoặc `find_1v1_match`) | `{ userName?, avatar?, botDifficulty?, autoStart?: true, waitMs?: 8000, waitForPlayers?: true, acceptWaitMs?: 5000, requireAccept?: true }` | `{ success: true, searching, state: "FINDING_MATCH"\|"MATCH_FOUND", showMatchFoundPopup, acceptedCount, totalPlayers: 2, targetPlayers: 2, acceptedSocketIds, allAccepted, mode: "RACE_1V1", matchedWithHumans, timedOutToBots?, botsAdded, autoStarted, roomId, room, user, gameState }` | Tìm trận **Đấu Tay Đôi `1vs1 Race` (`2 Người`)**: Khóa cứng `targetPlayers = 2`. Ghép đủ `2/2` người thật (hoặc hết `8s` chờ tự bù `1 AI Bot`) sẽ bắn `match_found` & `match_accept_updated` để hiển thị **Popup Find Match + số người đã Accept (`acceptedCount / 2`)** |
+| `find_match` (hoặc `quick_match`) | `{ userName?, avatar?, lang?: "vi"\|"en"\|..., mode?: "QUICK_MATCH"\|"RACE_1V1", botCount?: 3, botDifficulty?, autoStart?: true, waitMs?: 10000, waitForPlayers?: true, acceptWaitMs?: 5000, requireAccept?: true }` | `{ success: true, searching, state: "FINDING_MATCH"\|"MATCH_FOUND", showMatchFoundPopup, acceptedCount, totalPlayers, targetPlayers, acceptedSocketIds, allAccepted, matchedWithHumans, timedOutToBots?, botsAdded, autoStarted, roomId, room, user, gameState }` | Tìm trận nhanh **4 Người (`QUICK_MATCH`)**: Ưu tiên Best-Fit (`3/4 ➔ 2/4 ➔ 1/4`) + FIFO. Chờ cơ bản `10s`; khi tìm được thêm người thật (`2/4` hoặc `3/4`) lúc đồng hồ `< 5s` thì tự **cộng giờ mềm `+5s`** (trần tối đa `16s`). Hết giờ tự bù `(4 - N)` AI Bot mang **tên người thật theo ngôn ngữ `lang` của phòng**. Khi đủ `4/4` người, Server bắn `match_found` & `match_accept_updated` để hiển thị **Popup Find Match + số người đã Accept (`acceptedCount / totalPlayers`)** |
+| `race_1v1` (hoặc `find_1v1_match`) | `{ userName?, avatar?, lang?: "vi"\|"en"\|..., botDifficulty?, autoStart?: true, waitMs?: 8000, waitForPlayers?: true, acceptWaitMs?: 5000, requireAccept?: true }` | `{ success: true, searching, state: "FINDING_MATCH"\|"MATCH_FOUND", showMatchFoundPopup, acceptedCount, totalPlayers: 2, targetPlayers: 2, acceptedSocketIds, allAccepted, mode: "RACE_1V1", matchedWithHumans, timedOutToBots?, botsAdded, autoStarted, roomId, room, user, gameState }` | Tìm trận **Đấu Tay Đôi `1vs1 Race` (`2 Người`)**: Khóa cứng `targetPlayers = 2`. Ghép đủ `2/2` người thật (hoặc hết `8s` chờ tự bù `1 AI Bot` tên người thật theo `lang`) sẽ bắn `match_found` & `match_accept_updated` để hiển thị **Popup Find Match + số người đã Accept (`acceptedCount / 2`)** |
 | `accept_match` (hoặc `confirm_match_accept`, `match_accept`) | `{ roomId? }` | `{ success: true, roomId, acceptedCount, totalPlayers, targetPlayers, acceptedSocketIds, allAccepted, autoStarted, members }` | **Xác nhận Accept trên Popup Find Match**: Khi người chơi bấm nút **"ACCEPT"**, Server tăng `acceptedCount`, broadcast `match_accept_updated` (`acceptedCount / totalPlayers`) cho toàn phòng. AI Bot luôn được đánh dấu `isAccepted = true` ngay từ đầu. Khi **100% người chơi đã Accept** (`acceptedCount === totalPlayers`) hoặc hết `5s` đếm ngược Accept, Server phát `match_all_accepted` và bắt đầu ngay Step `5.0 THEME_SELECTION` |
 | `cancel_match` (hoặc `cancel_quick_match`, `decline_match`) | `{}` (hoặc không truyền data) | `{ success: true, cancelled: boolean, cancelledFromPreStartRoom: boolean, searching: false, state: "IDLE", showMatchFoundPopup: false, systemMessage: "SYS_MATCHMAKING_CANCELLED" }` | **Unified Cancel / Decline Match**: Hủy tìm trận khi đang đứng lẻ `1/4` trong Queue, khi đang ở phòng chờ `2/4`, `3/4`, hoặc khi từ chối ở Popup Find Match trước khi trận đấu bắt đầu |
 | `get_matchmaking_state` | `{}` | `{ searching: boolean, state: "FINDING_MATCH"\|"MATCH_FOUND"\|"IDLE", showMatchFoundPopup: boolean, acceptedCount, totalPlayers, roomId?, mode, currentPlayers, targetPlayers, members, waitMs, remainingMs, timeRemaining, elapsedSeconds, totalDuration, progressPercent, startedAt, endsAt }` | Lấy trạng thái đồng hồ tìm trận / Popup Find Match (`acceptedCount / totalPlayers`) và danh sách ghế Avatar (`members`) hiện tại từ Server |
@@ -444,7 +471,7 @@ const socket = io("https://micmixfun.up.railway.app", {
 
 | Event Name | Payload Gửi Lên | Callback Response (`ack`) | Mô tả |
 | :--- | :--- | :--- | :--- |
-| `game_start` (hoặc `fill_bots_and_start`, `matchmaking_timeout`) | `{ roomId?, requireAllReady?: false, autoFillBots?: boolean, minPlayers?: 4, botCount?, botDifficulty? }` | `{ success: true, botsAdded, totalPlayers }` | **(Chỉ Host)** Bắt đầu trận đấu. Với `CUSTOM_ROOM` đã có từ 2 thành viên trở lên (`>= 2`), Server **không tự động chèn AI Bot** (trừ khi Host truyền rõ `autoFillBots: true`, `botCount > 0` hoặc gọi `fill_bots_and_start`). Nếu chỉ có 1 mình Host thì tự bù thêm Bot cho đủ 4 người |
+| `game_start` (hoặc `fill_bots_and_start`, `matchmaking_timeout`) | `{ roomId?, requireAllReady?: false, autoFillBots?: boolean, minPlayers?: 4, botCount?, botDifficulty?, lang? }` | `{ success: true, botsAdded, totalPlayers }` | **(Chỉ Host)** Bắt đầu trận đấu. Với `CUSTOM_ROOM` đã có từ 2 thành viên trở lên (`>= 2`), Server **không tự động chèn AI Bot** (trừ khi Host truyền rõ `autoFillBots: true`, `botCount > 0` hoặc gọi `fill_bots_and_start`). Nếu chỉ có 1 mình Host thì tự bù thêm Bot (tên người thật theo `lang`) cho đủ 4 người |
 | `game_update_config` | `{ roomId?, totalRounds?: 3\|5\|7\|10, recordDuration?: 3..15, useCustomRecordDuration?: boolean }` | `{ success: true, totalRounds, recordDuration }` | **(Chỉ Host)** Cập nhật số vòng đấu và thời gian thu âm khi ở sảnh chờ |
 | `sample_playback_done` | `{ roomId? }` | — | Ghi nhận thiết bị đã phát xong file âm thanh mẫu (Server vẫn giữ đúng bộ đếm `PLAYING_SAMPLE` trước khi sang `PREPARE_RECORDING`) |
 | `game_submit_audio` | `{ roomId?, botSocketId?, audioData: "data:audio/webm;base64,...", mimeType?: "audio/webm", metrics?: { matchPct?, melodyScore?, pitchScore?, rhythmScore?, energyScore?, attackScore?, activeRatio? } }` | `{ success: true, evaluation: { totalScore, pitchScore, melodyScore, rhythmScore, energyScore, attackScore, grade, remark } }` | Nộp bản thu âm nhại giọng của User (tối đa `512KB`). Server giải mã 1 lần qua `decodeBoundedBase64Audio`, chấm điểm theo chuẩn Figma (`Melody 50% · Rhythm 30% · Attack 20%`) và lưu vào `audioStore` để phát qua `/api/attempts/:roomId/:socketId` |
@@ -475,11 +502,11 @@ const socket = io("https://micmixfun.up.railway.app", {
 * **`user_joined`**: Broadcast khi có người chơi hoặc Bot mới vào phòng:
   ```json
   {
-    "user": { "socketId": "...", "userId": "...", "userName": "Alex", "avatar": "🦊", "role": "PLAYER", "isReady": false },
+    "user": { "socketId": "...", "userId": "...", "userName": "Minh Khôi", "avatar": "🦊", "role": "PLAYER", "isReady": false },
     "members": [ ... ],
     "systemMessage": "SYS_PLAYER_JOINED_ROOM",
     "messageCode": "SYS_PLAYER_JOINED_ROOM",
-    "messageParams": { "userName": "Alex", "role": "PLAYER" }
+    "messageParams": { "userName": "Minh Khôi", "role": "PLAYER" }
   }
   ```
 * **`user_left`**: Broadcast khi có thành viên rời phòng (`{ socketId, userName, members, systemMessage: "SYS_USER_LEFT_ROOM", messageParams }`).
@@ -501,8 +528,8 @@ const socket = io("https://micmixfun.up.railway.app", {
     "acceptedCount": 0,
     "totalPlayers": 2,
     "members": [
-      { "socketId": "...", "userName": "Player1", "avatar": "🎧", "role": "HOST", "isBot": false, "isAccepted": false },
-      { "socketId": "...", "userName": "Player2", "avatar": "🦊", "role": "PLAYER", "isBot": false, "isAccepted": false }
+      { "socketId": "...", "userName": "Minh Khôi", "avatar": "🎧", "role": "HOST", "isBot": false, "isAccepted": false },
+      { "socketId": "...", "userName": "Thảo Vy", "avatar": "🦊", "role": "PLAYER", "isBot": false, "isAccepted": false }
     ],
     "waitMs": 10000,
     "remainingMs": 10000,
@@ -552,6 +579,7 @@ const socket = io("https://micmixfun.up.railway.app", {
 * **`match_found` / `matchmaking_found` / `match_accept_updated` (Show Popup Find Match + Số Người Đã Accept)**:
   - Broadcast ngay khi phòng đã gom đủ số người chơi mục tiêu (`4/4` ở `QUICK_MATCH` hoặc `2/2` ở `RACE_1V1`, bao gồm cả người thật lẫn AI Bot được bù khi hết giờ tìm trận), và mỗi khi có người chơi bấm nút Accept (`accept_match`).
   - **AI Bot luôn được đánh dấu `isAccepted: true` ngay từ đầu** (ví dụ: 1 người thật + 3 AI Bot sẽ hiển thị ngay `acceptedCount: 3, totalPlayers: 4`).
+  - **Tên & Avatar của AI Bot là tên người thật ngẫu nhiên theo ngôn ngữ `lang` của phòng** (không có chữ `"Bot"`, không dùng icon `'🤖'`).
   - Client dùng sự kiện này để bật **Popup Find Match** và hiển thị bộ đếm **`acceptedCount / totalPlayers`** (ví dụ: `"3/4 Players Accepted"`) cùng trạng thái tích xanh của từng thành viên trong `members[i].isAccepted`:
   ```json
   {
@@ -566,7 +594,7 @@ const socket = io("https://micmixfun.up.railway.app", {
     "targetPlayers": 4,
     "totalPlayers": 4,
     "acceptedCount": 3,
-    "acceptedSocketIds": ["bot_1", "bot_2", "bot_3"],
+    "acceptedSocketIds": ["bot_a1b2c", "bot_d3e4f", "bot_98a7b"],
     "allAccepted": false,
     "matchedWithHumans": false,
     "timedOutToBots": true,
@@ -576,10 +604,10 @@ const socket = io("https://micmixfun.up.railway.app", {
     "remainingMs": 5000,
     "timeRemaining": 5,
     "members": [
-      { "socketId": "sock_u1", "userName": "Alex", "avatar": "🎧", "role": "HOST", "isBot": false, "isAccepted": false, "isReady": false },
-      { "socketId": "bot_1", "userName": "Bot Alpha", "avatar": "🤖", "role": "PLAYER", "isBot": true, "isAccepted": true, "isReady": true },
-      { "socketId": "bot_2", "userName": "Bot Meow", "avatar": "🐱", "role": "PLAYER", "isBot": true, "isAccepted": true, "isReady": true },
-      { "socketId": "bot_3", "userName": "Bot Shib", "avatar": "🐶", "role": "PLAYER", "isBot": true, "isAccepted": true, "isReady": true }
+      { "socketId": "sock_u1", "userName": "Minh Khôi", "avatar": "🎧", "role": "HOST", "isBot": false, "isAccepted": false, "isReady": false },
+      { "socketId": "bot_a1b2c", "userName": "Thảo Vy", "avatar": "🐱", "role": "PLAYER", "isBot": true, "isAccepted": true, "isReady": true },
+      { "socketId": "bot_d3e4f", "userName": "Hoàng Nam", "avatar": "🦁", "role": "PLAYER", "isBot": true, "isAccepted": true, "isReady": true },
+      { "socketId": "bot_98a7b", "userName": "Bảo Ngọc", "avatar": "🐰", "role": "PLAYER", "isBot": true, "isAccepted": true, "isReady": true }
     ]
   }
   ```

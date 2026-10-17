@@ -193,3 +193,48 @@ $$\text{totalScore} = \text{round}(\text{pitchScore} \times 0.50 + \text{rhythmS
 | **2. Gửi file `audio/wav` (16-bit PCM) không kèm `metrics`** | Server tự đọc sóng âm 16-bit PCM (`RIFF...WAVE...data`), lấy mẫu `1,024` điểm để tính năng lượng `RMS`, tỷ lệ có tiếng `activeRatio`, tần số cắt điểm 0 (`ZCR`) và đỉnh bật âm (`Attack Peaks`). Nếu `activeRatio < 0.04` hoặc `rms < 0.008` ➔ phạt **`15đ` (`Grade F`)** | Dùng khi Client thu trực tiếp PCM `.wav` (16kHz–24kHz Mono, dung lượng `~64KB–288KB`) mà chưa kịp chạy DSP tính `metrics` dưới máy (`~72,500 sound/giây`) |
 | **3. Gửi file nén (`audio/webm`, `audio/mp4`, `audio/aac`) không kèm `metrics`** | Server lấy mẫu `256` bước trên Buffer nén để đo độ đa dạng byte (`uniqueBytes / 256`) và độ biến thiên biên độ (`avgDelta`). Nếu `uniqueBytes < 4` ➔ phạt **`10đ` (`Grade F`)** | Dùng làm fallback khi thiết bị thu AAC/Opus nén (`~60KB–128KB`). Lưu ý: nếu thu định dạng nén, Client **nên tính và gửi kèm `metrics`** để điểm số phản ánh sát nhất cao độ và nhịp điệu |
 | **4. AI Bot (`LIVE_PLAYBACK_DSP` & `CLIENT_UPLOAD`)** | Mỗi máy người thật chỉ cần render & upload tối đa **1 Bot/vòng** (`MAX_BOTS_PER_CLIENT_PER_ROUND = 1`, trần `350KB`). Các Bot còn lại dùng `LIVE_PLAYBACK_DSP` phát trực tiếp từ CDN kèm `botAudioEffects` | Nếu máy Client yếu hoặc mạng chậm không kịp upload file WAV của Bot, chỉ cần gửi `metrics` nhẹ (`< 200 bytes`) hoặc để Server tự fallback sang `LIVE_PLAYBACK_DSP` |
+
+---
+
+## 8. 🎲 Chuẩn Hóa Random Tên & Avatar Người Chơi / AI Bot Theo Ngôn Ngữ App (`vi`, `en`, `ja`, `ko`, `th`, `id`, `es`)
+
+### 8.1. Tên & Avatar AI Bot Như Người Thật (100% Do Server Sinh Theo Ngôn Ngữ App)
+* Toàn bộ AI Bot khi tự động bù vào phòng (`quick_match`, `race_1v1`, `game_start`) hoặc khi Host thêm thủ công (`add_bot`) đều được **Server sinh tự động bằng tên người thật** theo ngôn ngữ của phòng (`lang`) và dùng bộ 36+ Avatar người chơi sôi động (không còn tiền tố `"Bot ..."` và không dùng icon `'🤖'`).
+* **Cách Client truyền ngôn ngữ hiện tại của App lên Server**:
+  1. **Khi khởi tạo Socket Handshake** (`auth.lang`):
+     ```javascript
+     const socket = io("https://micmixfun.up.railway.app", {
+       transports: ["websocket"],
+       auth: {
+         token: authToken,
+         deviceId: deviceId,
+         lang: currentAppLanguage // "vi" | "en" | "ja" | "ko" | "th" | "id" | "es"
+       }
+     });
+     ```
+  2. **Hoặc truyền trực tiếp trong payload của sự kiện tìm trận / tạo phòng**:
+     ```json
+     {
+       "userName": "Minh Khôi",
+       "avatar": "🦊",
+       "lang": "vi"
+     }
+     ```
+
+### 8.2. Chống Trùng Lặp Tên & Avatar Mặc Định Khi Cài App Trên Nhiều Thiết Bị (`CSPRNG`)
+* **Không dùng seed cố định hoặc phần tử `list[0]` ở Client** khi khởi tạo hồ sơ người chơi lần đầu cài App.
+* **Cách 1 (Khuyên dùng — Lấy Profile ngẫu nhiên từ Server bằng `crypto.randomInt`)**:
+  * Gọi `GET /api/profile/random?lang=vi` (hoặc emit Socket `random_profile` với `{ lang: "vi" }`) mỗi khi mở App lần đầu hoặc khi người dùng bấm nút xúc xắc Random:
+    ```json
+    {
+      "success": true,
+      "userName": "Thảo Vy",
+      "avatar": "🐱",
+      "lang": "vi",
+      "avatars": ["🦊", "🐼", "🐯", "🦁", "🐱", "🐶", "🐸", "🐨", "🦄", "🐲"]
+    }
+    ```
+  * Hoặc khi gọi `POST /api/auth/guest` / `POST /api/auth/firebase` lần đầu mà người dùng chưa tự đặt tên, chỉ cần không truyền `userName`/`avatar` (hoặc truyền `"randomProfile": true, "lang": "vi"`), Server sẽ tự sinh ngẫu nhiên Tên + Avatar riêng biệt cho từng thiết bị.
+* **Cách 2 (Nếu Client tự random cục bộ trên Android/iOS)**:
+  * Bắt buộc dùng `java.security.SecureRandom()` (hoặc `kotlin.random.Random.Default` không truyền seed cố định) thay vì `Random(seed)` cố định.
+

@@ -16,7 +16,10 @@ import {
   verifyFirebaseIdToken,
   verifyAuthToken,
   issueAuthToken,
-  generateSecureUserId
+  generateSecureUserId,
+  generateRandomPlayerProfile,
+  normalizeLanguageCode,
+  PLAYER_AVATAR_POOL
 } from '../services/auth.service';
 import {
   rooms,
@@ -51,9 +54,34 @@ export function registerRoomHandlers(
   setIoInstance(io);
   const { currentUser } = sessionState;
 
+  // 0a. RANDOM TÊN & AVATAR NGẪU NHIÊN QUA SOCKET (random_profile / get_random_profile)
+  const handleRandomProfile = (
+    { lang, language, locale }: Record<string, any> = {},
+    callback?: (res: Record<string, unknown>) => void
+  ): void => {
+    const resolvedLang = normalizeLanguageCode(
+      lang || language || locale || sessionState.lang || currentUser.lang
+    );
+    sessionState.lang = resolvedLang;
+    currentUser.lang = resolvedLang;
+    const profile = generateRandomPlayerProfile({ lang: resolvedLang });
+    const resPayload = {
+      success: true,
+      userName: profile.userName,
+      avatar: profile.avatar,
+      lang: profile.lang,
+      avatars: PLAYER_AVATAR_POOL
+    };
+    socket.emit('random_profile_generated', resPayload);
+    if (callback) callback(resPayload);
+  };
+
+  socket.on('random_profile', handleRandomProfile);
+  socket.on('get_random_profile', handleRandomProfile);
+
   // 0. XÁC THỰC USER QUA SOCKET (auth_guest & auth_firebase)
   async function handleSocketAuth(
-    { userName, avatar, authToken, firebaseIdToken }: Record<string, any> = {},
+    { userName, avatar, authToken, firebaseIdToken, lang, language, locale, randomProfile }: Record<string, any> = {},
     callback?: (res: Record<string, unknown>) => void
   ): Promise<void> {
     let fbDecoded = null;
@@ -64,8 +92,22 @@ export function registerRoomHandlers(
     const uid = fbDecoded ? fbDecoded.uid : (verified ? verified.uid : generateSecureUserId());
     const fbUid = fbDecoded ? fbDecoded.firebaseUid : (verified ? verified.fbUid : null);
     const provider = fbDecoded ? 'firebase_anonymous' : (verified ? (verified.provider || 'guest') : 'guest');
-    const cleanName = sanitizeUserName(userName || (verified && verified.name), uid);
-    const cleanAvatar = avatar || (verified && verified.avatar) || '🎧';
+
+    const resolvedLang = normalizeLanguageCode(
+      lang || language || locale || sessionState.lang || currentUser.lang
+    );
+    sessionState.lang = resolvedLang;
+    currentUser.lang = resolvedLang;
+
+    const rawName = randomProfile ? '' : String(userName || (verified && verified.name) || '').trim();
+    const rawAvatar = randomProfile ? '' : String(avatar || (verified && verified.avatar) || '').trim();
+    const generatedFallback =
+      !rawName || !rawAvatar ? generateRandomPlayerProfile({ lang: resolvedLang }) : null;
+
+    const cleanName = rawName
+      ? sanitizeUserName(rawName, uid)
+      : generatedFallback!.userName;
+    const cleanAvatar = rawAvatar || generatedFallback!.avatar;
 
     const issued = issueAuthToken({
       userId: uid,
@@ -80,6 +122,7 @@ export function registerRoomHandlers(
     currentUser.firebaseUid = issued.payload.fbUid;
     currentUser.userName = issued.payload.name;
     currentUser.avatar = issued.payload.avatar;
+    currentUser.lang = resolvedLang;
     currentUser.isAuthenticated = true;
 
     if (callback) {
@@ -90,11 +133,13 @@ export function registerRoomHandlers(
         provider: issued.payload.provider,
         authToken: issued.token,
         expiresAt: issued.payload.exp,
+        lang: resolvedLang,
         user: {
           userId: issued.payload.uid,
           firebaseUid: issued.payload.fbUid,
           userName: issued.payload.name,
-          avatar: issued.payload.avatar
+          avatar: issued.payload.avatar,
+          lang: resolvedLang
         }
       });
     }
@@ -107,7 +152,7 @@ export function registerRoomHandlers(
   socket.on(
     'create_room',
     (
-      { roomId, roomName, userName, avatar }: Record<string, any> = {},
+      { roomId, roomName, userName, avatar, lang, language, locale, randomProfile }: Record<string, any> = {},
       callback?: (res: Record<string, unknown>) => void
     ) => {
       try {
@@ -145,8 +190,21 @@ export function registerRoomHandlers(
           generatedRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
         }
 
-        const cleanUserName = sanitizeUserName(userName || currentUser.userName, socket.id);
-        const cleanAvatar = avatar || currentUser.avatar || '🎧';
+        const resolvedLang = normalizeLanguageCode(
+          lang || language || locale || sessionState.lang || currentUser.lang
+        );
+        sessionState.lang = resolvedLang;
+        currentUser.lang = resolvedLang;
+
+        const rawName = randomProfile ? '' : String(userName || currentUser.userName || '').trim();
+        const rawAvatar = randomProfile ? '' : String(avatar || currentUser.avatar || '').trim();
+        const generatedFallback =
+          !rawName || !rawAvatar ? generateRandomPlayerProfile({ lang: resolvedLang }) : null;
+
+        const cleanUserName = rawName
+          ? sanitizeUserName(rawName, socket.id)
+          : generatedFallback!.userName;
+        const cleanAvatar = rawAvatar || generatedFallback!.avatar;
         const safeRoomName = String(roomName || cleanUserName).trim().slice(0, 40);
 
         if (rooms.has(generatedRoomId)) {
@@ -174,6 +232,7 @@ export function registerRoomHandlers(
           hostId: socket.id,
           hostUserId: resolvedUserId,
           mode: 'CUSTOM_ROOM',
+          lang: resolvedLang,
           targetPlayers: MAX_MEMBERS_PER_ROOM,
           members: new Map(),
           messages: [],
@@ -187,6 +246,7 @@ export function registerRoomHandlers(
         currentUser.userId = resolvedUserId;
         currentUser.userName = cleanUserName;
         currentUser.avatar = cleanAvatar;
+        currentUser.lang = resolvedLang;
         currentUser.role = 'HOST';
         currentUser.isReady = true;
         currentUser.isAccepted = true;
@@ -209,6 +269,7 @@ export function registerRoomHandlers(
           name: safeRoomName,
           hostId: socket.id,
           mode: 'CUSTOM_ROOM' as const,
+          lang: resolvedLang,
           targetPlayers: MAX_MEMBERS_PER_ROOM,
           members: getRoomMembersArray(newRoom),
           messages: []
@@ -220,6 +281,7 @@ export function registerRoomHandlers(
           roomName: safeRoomName,
           hostId: socket.id,
           mode: 'CUSTOM_ROOM',
+          lang: resolvedLang,
           room: roomSnapshot,
           user: currentUser,
           gameState: game.getStateSnapshot()
@@ -254,6 +316,10 @@ export function registerRoomHandlers(
         authToken,
         firebaseIdToken,
         firebaseToken,
+        lang,
+        language,
+        locale,
+        randomProfile,
         createIfNotExists = false
       }: Record<string, any> = {},
       callback?: (res: Record<string, unknown>) => void
@@ -309,6 +375,12 @@ export function registerRoomHandlers(
           }
         }
 
+        const resolvedLang = normalizeLanguageCode(
+          lang || language || locale || sessionState.lang || currentUser.lang
+        );
+        sessionState.lang = resolvedLang;
+        currentUser.lang = resolvedLang;
+
         // Nếu phòng không tồn tại: chỉ tạo mới nếu createIfNotExists=true, ngược lại báo lỗi ROOM_NOT_FOUND
         if (!rooms.has(targetRoomId)) {
           if (!createIfNotExists) {
@@ -334,6 +406,7 @@ export function registerRoomHandlers(
             hostId: socket.id,
             hostUserId: resolvedUserId,
             mode: 'CUSTOM_ROOM',
+            lang: resolvedLang,
             targetPlayers: MAX_MEMBERS_PER_ROOM,
             members: new Map(),
             messages: [],
@@ -344,6 +417,9 @@ export function registerRoomHandlers(
 
         const room = rooms.get(targetRoomId)!;
         room.lastActivityAt = Date.now();
+        if (!room.lang) {
+          room.lang = resolvedLang;
+        }
 
         // Chặn tuyệt đối join_room vào phòng QUICK_MATCH hoặc RACE_1V1 (kể cả reconnect): đã out là out hẳn!
         if (room.mode === 'QUICK_MATCH' || room.mode === 'RACE_1V1') {
@@ -364,8 +440,15 @@ export function registerRoomHandlers(
           return;
         }
 
-        const cleanName = sanitizeUserName(userName || (verifiedToken && verifiedToken.name), socket.id);
-        const cleanAvatar = avatar || (verifiedToken && verifiedToken.avatar) || '🎧';
+        const rawName = randomProfile ? '' : String(userName || (verifiedToken && verifiedToken.name) || '').trim();
+        const rawAvatar = randomProfile ? '' : String(avatar || (verifiedToken && verifiedToken.avatar) || '').trim();
+        const generatedFallback =
+          !rawName || !rawAvatar ? generateRandomPlayerProfile({ lang: resolvedLang }) : null;
+
+        const cleanName = rawName
+          ? sanitizeUserName(rawName, socket.id)
+          : generatedFallback!.userName;
+        const cleanAvatar = rawAvatar || generatedFallback!.avatar;
         const issuedAuth = issueAuthToken({
           userId: resolvedUserId,
           firebaseUid: resolvedFbUid,
@@ -413,6 +496,7 @@ export function registerRoomHandlers(
         if (!room.hostId || (room.members.size === 0 && !room.members.has(room.hostId))) {
           room.hostId = socket.id;
           room.hostUserId = resolvedUserId;
+          room.lang = resolvedLang;
         }
 
         const isHost = room.hostId === socket.id;
@@ -423,6 +507,7 @@ export function registerRoomHandlers(
         currentUser.firebaseUid = resolvedFbUid;
         currentUser.userName = cleanName;
         currentUser.avatar = cleanAvatar;
+        currentUser.lang = resolvedLang;
         currentUser.role = isHost ? 'HOST' : 'PLAYER';
         currentUser.isReady = isHost;
         currentUser.isAccepted = isHost;
@@ -682,7 +767,7 @@ export function registerRoomHandlers(
   socket.on(
     'add_bot',
     (
-      { roomId, difficulty, botName, avatar }: Record<string, any> = {},
+      { roomId, difficulty, botName, avatar, lang, language, locale }: Record<string, any> = {},
       callback?: (res: Record<string, unknown>) => void
     ) => {
       const targetRoom = String(roomId || sessionState.currentRoomId || '').trim().toUpperCase();
@@ -725,7 +810,13 @@ export function registerRoomHandlers(
         return;
       }
 
-      const res = addBotToRoom(targetRoom, { difficulty, botName, avatar });
+      const explicitLang = lang || language || locale || room.lang || sessionState.lang || currentUser.lang;
+      const res = addBotToRoom(targetRoom, {
+        difficulty,
+        botName,
+        avatar,
+        lang: explicitLang ? String(explicitLang) : undefined
+      });
       if (callback) callback(res);
     }
   );
@@ -795,6 +886,9 @@ export function registerRoomHandlers(
     const resolvedMode: GameModeType = entry.mode === 'RACE_1V1' ? 'RACE_1V1' : 'QUICK_MATCH';
     const resolvedTargetPlayers =
       entry.targetPlayers || (resolvedMode === 'RACE_1V1' ? RACE_1V1_PLAYERS : DEFAULT_MIN_PLAYERS_WITH_BOTS);
+    const resolvedLang = normalizeLanguageCode(
+      entry.lang || entry.sessionState.lang || entry.sessionState.currentUser.lang
+    );
 
     const newRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
     const room: RoomData = {
@@ -805,6 +899,7 @@ export function registerRoomHandlers(
       hostId: entry.socket.id,
       hostUserId: entry.userId,
       mode: resolvedMode,
+      lang: resolvedLang,
       targetPlayers: resolvedTargetPlayers,
       members: new Map(),
       messages: [],
@@ -819,6 +914,7 @@ export function registerRoomHandlers(
     userObj.userId = entry.userId;
     userObj.userName = entry.userName;
     userObj.avatar = entry.avatar;
+    userObj.lang = resolvedLang;
     userObj.role = 'HOST';
     userObj.isReady = false;
     userObj.isAccepted = false;
@@ -841,7 +937,8 @@ export function registerRoomHandlers(
       autoStart: entry.autoStart !== false,
       difficulty: entry.botDifficulty,
       acceptWaitMs: entry.acceptWaitMs,
-      requireAccept: entry.requireAccept
+      requireAccept: entry.requireAccept,
+      lang: resolvedLang
     });
 
     console.log(
@@ -861,6 +958,7 @@ export function registerRoomHandlers(
       success: true,
       searching: false,
       mode: resolvedMode,
+      lang: resolvedLang,
       targetPlayers: resolvedTargetPlayers,
       matchedWithHumans: false,
       timedOutToBots: true,
@@ -872,6 +970,7 @@ export function registerRoomHandlers(
         name: room.name,
         hostId: room.hostId,
         mode: resolvedMode,
+        lang: resolvedLang,
         targetPlayers: resolvedTargetPlayers,
         members: getRoomMembersArray(room),
         messages: room.messages.slice(-MAX_CHAT_HISTORY_SIZE)
@@ -902,7 +1001,11 @@ export function registerRoomHandlers(
       waitMs,
       waitForPlayers = true,
       acceptWaitMs,
-      requireAccept
+      requireAccept,
+      lang,
+      language,
+      locale,
+      randomProfile
     }: Record<string, any> = {},
     callback?: (res: Record<string, unknown>) => void
   ): Promise<void> => {
@@ -926,21 +1029,40 @@ export function registerRoomHandlers(
         typeof acceptWaitMs === 'number' && acceptWaitMs >= 0 ? Math.min(30000, acceptWaitMs) : undefined;
       const resolvedRequireAccept = typeof requireAccept === 'boolean' ? requireAccept : undefined;
 
+      const resolvedLang = normalizeLanguageCode(
+        lang || language || locale || sessionState.lang || currentUser.lang
+      );
+      sessionState.lang = resolvedLang;
+      currentUser.lang = resolvedLang;
+
       const verifiedToken = socket.authSession || null;
       const resolvedUserId = (verifiedToken && verifiedToken.uid) || currentUser.userId || generateSecureUserId();
-      const cleanName = sanitizeUserName(userName || (verifiedToken && verifiedToken.name) || currentUser.userName, socket.id);
-      const cleanAvatar = avatar || (verifiedToken && verifiedToken.avatar) || currentUser.avatar || '🎧';
+      const rawName = randomProfile
+        ? ''
+        : String(userName || (verifiedToken && verifiedToken.name) || currentUser.userName || '').trim();
+      const rawAvatar = randomProfile
+        ? ''
+        : String(avatar || (verifiedToken && verifiedToken.avatar) || currentUser.avatar || '').trim();
+      const generatedFallback =
+        !rawName || !rawAvatar ? generateRandomPlayerProfile({ lang: resolvedLang }) : null;
+
+      const cleanName = rawName
+        ? sanitizeUserName(rawName, socket.id)
+        : generatedFallback!.userName;
+      const cleanAvatar = rawAvatar || generatedFallback!.avatar;
 
       currentUser.socketId = socket.id;
       currentUser.userId = resolvedUserId;
       currentUser.userName = cleanName;
       currentUser.avatar = cleanAvatar;
+      currentUser.lang = resolvedLang;
       currentUser.isAuthenticated = true;
 
       // 1A (Best-Fit + FIFO Priority). Ưu tiên tìm phòng cùng mode đang chờ gom người (3/4 -> 2/4 chờ lâu nhất) TRƯỚC khi ghép người đứng lẻ 1/4 trong Queue!
       const existingRoom = findAvailableMatchmakingRoom(socket.id, resolvedMode);
       if (existingRoom) {
         const room = existingRoom;
+        if (!room.lang) room.lang = resolvedLang;
         const isHost = room.hostId === socket.id;
         sessionState.currentRoomId = room.id;
         sessionState.isSearchingMatch = false;
@@ -1078,6 +1200,7 @@ export function registerRoomHandlers(
           hostId: hostEntry.socket.id,
           hostUserId: hostEntry.userId,
           mode: resolvedMode,
+          lang: hostEntry.lang || resolvedLang,
           targetPlayers: resolvedTargetPlayers,
           members: new Map(),
           messages: [],
@@ -1161,7 +1284,8 @@ export function registerRoomHandlers(
             autoStart: effectiveAutoStart,
             difficulty: resolvedDiff || hostEntry.botDifficulty,
             acceptWaitMs: effectiveAcceptWaitMs,
-            requireAccept: effectiveRequireAccept
+            requireAccept: effectiveRequireAccept,
+            lang: room.lang
           });
 
           const membersList = getRoomMembersArray(room);
@@ -1350,6 +1474,7 @@ export function registerRoomHandlers(
         userId: resolvedUserId,
         userName: cleanName,
         avatar: cleanAvatar,
+        lang: resolvedLang,
         mode: resolvedMode,
         targetPlayers: resolvedTargetPlayers,
         botCount: resolvedBotCount,

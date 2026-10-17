@@ -21,6 +21,174 @@ import {
 export const challengeNonces = new Map<string, ChallengeRecord>(); // nonce -> { ip, createdAt }
 export const ipConnectionCounts = new Map<string, number>(); // ip -> active socket count
 
+export type SupportedLanguage = 'vi' | 'en' | 'ja' | 'ko' | 'th' | 'id' | 'es';
+
+// Kho 36 Avatar sinh động cho Người chơi & AI Bot (Không dùng '🤖' để Bot hiển thị tự nhiên như người thật)
+export const PLAYER_AVATAR_POOL: readonly string[] = [
+  '🎧', '🎤', '🎸', '🎹', '🎷', '🎺', '🥁', '🐱', '🐶',
+  '🦊', '🐼', '🐨', '🐯', '🦁', '🐸', '🐵', '🦄', '🐧',
+  '🦉', '🦋', '🦖', '🐙', '🐬', '🔥', '⚡', '🌟', '🌈',
+  '🍀', '🍕', '🍔', '🍓', '🥑', '🎮', '🚀', '🛹', '👑'
+];
+
+// Kho tên người chơi thật theo ngôn ngữ của App (Hoàn toàn KHÔNG có chữ "Bot" hay "AI")
+export const HUMAN_NAMES_BY_LANG: Record<SupportedLanguage, readonly string[]> = {
+  vi: [
+    'Minh Tuấn', 'Bảo Ngọc', 'Hoàng Nam', 'Khánh Linh', 'Đức Anh',
+    'Thảo Vy', 'Gia Huy', 'Phương Anh', 'Quốc Bảo', 'Thanh Trúc',
+    'Tuấn Kiệt', 'Mai Phương', 'Hải Đăng', 'Ngọc Hân', 'Nhật Minh',
+    'Lan Hương', 'Anh Khoa', 'Quỳnh Nhi', 'Thành Đạt', 'Yến Nhi',
+    'Bình Minh', 'Hà My', 'Đăng Khoa', 'Tường Vy', 'Hữu Phước',
+    'Trúc Lam', 'Việt Hoàng', 'Bích Phương', 'Trung Hiếu', 'Khánh Huyền',
+    'Phúc Khang', 'Diệu Linh', 'Hoàng Long', 'Minh Châu', 'Quang Vinh',
+    'Thiên Kim', 'Tuấn Anh', 'Bích Ngọc', 'Khôi Nguyên', 'Ngọc Ánh'
+  ],
+  en: [
+    'Alex Carter', 'Mia Evans', 'Liam Walker', 'Chloe Reed', 'Noah Brooks',
+    'Emma Hayes', 'Lucas Gray', 'Sophia Cole', 'Ethan Ross', 'Olivia Parker',
+    'Mason Kelly', 'Ava Morgan', 'Logan Price', 'Zoe Bennett', 'Leo Cooper',
+    'Lily Foster', 'Jack Sullivan', 'Maya Lin', 'Ryan Mitchell', 'Nora West',
+    'Owen Turner', 'Ruby Collins', 'Caleb Ward', 'Elena Vance', 'Kyle Rivera',
+    'Sam Miller', 'Nina Chen', 'Max Turner', 'Isla Rose', 'Theo James',
+    'Jake Harper', 'Aria Stone', 'Evan Cross', 'Luna Park', 'Cole Fox',
+    'Ivy Grant', 'Blake Cruz', 'Tessa Shaw', 'Dylan Page', 'Sienna Bell'
+  ],
+  ja: [
+    'Ren Sato', 'Yui Takahashi', 'Haruto Ito', 'Hina Watanabe', 'Sora Yamamoto',
+    'Aoi Nakamura', 'Kaito Kobayashi', 'Mei Kato', 'Riku Yoshida', 'Sakura Yamada',
+    'Yuto Sasaki', 'Mio Yamaguchi', 'Hinata Matsumoto', 'Koharu Inoue', 'Haruki Kimura',
+    'Riko Hayashi', 'Souta Shimizu', 'Yuna Yamazaki', 'Minato Mori', 'Akari Abe'
+  ],
+  ko: [
+    'Minjun Kim', 'Seoyeon Lee', 'Doyun Park', 'Hayoon Choi', 'Siwoo Jung',
+    'Jiwoo Kang', 'Joowon Cho', 'Seohyun Yoon', 'Jiho Jang', 'Haeun Lim',
+    'Junseo Han', 'Minseo Oh', 'Jimin Seo', 'Chaewon Shin', 'Hyunwoo Kwon',
+    'Yujin Hwang', 'Geonwoo Ahn', 'Sujin Song', 'Woojin Hong', 'Eunseo Jeon'
+  ],
+  th: [
+    'Niran', 'Malai', 'Arthit', 'Kanya', 'Tawan',
+    'Ploy', 'Winai', 'Suda', 'Chai', 'Nok',
+    'Preecha', 'Dao', 'Kiet', 'Bua', 'Somchai',
+    'Mali', 'Nattapong', 'Pimchanok', 'Thanawat', 'Supansa'
+  ],
+  id: [
+    'Rizky Pratama', 'Putri Ayu', 'Dimas Saputra', 'Nabila Sari', 'Budi Santoso',
+    'Siti Rahma', 'Fajar Nugroho', 'Dewi Lestari', 'Andi Wijaya', 'Aulia Putri',
+    'Reza Firmansyah', 'Citra Dewi', 'Bayu Setiawan', 'Intan Permata', 'Arif Hidayat',
+    'Nadia Kusuma', 'Galih Ramadhan', 'Rani Oktavia', 'Ilham Maulana', 'Tiara Anindya'
+  ],
+  es: [
+    'Mateo Silva', 'Valentina Rojas', 'Santiago Torres', 'Camila Flores', 'Lucas Gomez',
+    'Sofia Diaz', 'Diego Morales', 'Isabella Castro', 'Gabriel Santos', 'Mariana Costa',
+    'Daniel Herrera', 'Lucia Vargas', 'Samuel Romero', 'Victoria Medina', 'Nicolas Rios',
+    'Martina Cruz', 'Alejandro Ortiz', 'Emilia Reyes', 'SebastianNavarro', 'Renata Mendoza'
+  ]
+};
+
+const VIETNAMESE_CHAR_REGEX =
+  /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+
+/**
+ * Chuẩn hóa mã ngôn ngữ (hỗ trợ vi, en, ja, ko, th, id, es/pt; tự nhận diện dấu Tiếng Việt nếu không truyền mã)
+ */
+export function normalizeLanguageCode(
+  rawLang?: string | null,
+  sampleText?: string | null
+): SupportedLanguage {
+  const cleaned = String(rawLang || '')
+    .trim()
+    .toLowerCase();
+  if (cleaned) {
+    const primaryTag = cleaned.split(',')[0]?.trim().split(/[-_;]/)[0]?.trim() || '';
+    if (primaryTag === 'vi' || primaryTag === 'vn' || primaryTag === 'vie') return 'vi';
+    if (primaryTag === 'ja' || primaryTag === 'jp' || primaryTag === 'jpn') return 'ja';
+    if (primaryTag === 'ko' || primaryTag === 'kr' || primaryTag === 'kor') return 'ko';
+    if (primaryTag === 'th' || primaryTag === 'tha') return 'th';
+    if (primaryTag === 'id' || primaryTag === 'in' || primaryTag === 'ind' || primaryTag === 'ms') return 'id';
+    if (primaryTag === 'es' || primaryTag === 'pt' || primaryTag === 'spa' || primaryTag === 'por') return 'es';
+    if (primaryTag === 'en' || primaryTag === 'eng' || primaryTag === 'us' || primaryTag === 'gb') return 'en';
+  }
+  if (sampleText && VIETNAMESE_CHAR_REGEX.test(String(sampleText))) {
+    return 'vi';
+  }
+  return 'en';
+}
+
+/**
+ * Trích xuất ngôn ngữ của App/Client từ payload, Socket handshake hoặc HTTP headers
+ */
+export function extractClientLanguage(
+  reqOrSocket?: any,
+  explicitLang?: string | null,
+  sampleText?: string | null
+): SupportedLanguage {
+  if (explicitLang && String(explicitLang).trim()) {
+    return normalizeLanguageCode(explicitLang, sampleText);
+  }
+  if (reqOrSocket) {
+    const auth = reqOrSocket.handshake && reqOrSocket.handshake.auth;
+    const query = (reqOrSocket.handshake && reqOrSocket.handshake.query) || reqOrSocket.query;
+    const headers = (reqOrSocket.handshake && reqOrSocket.handshake.headers) || reqOrSocket.headers;
+    const candidate =
+      (auth && (auth.lang || auth.language || auth.locale)) ||
+      (query && (query.lang || query.language || query.locale)) ||
+      (reqOrSocket.sessionState && reqOrSocket.sessionState.lang) ||
+      (headers &&
+        (headers['x-app-language'] ||
+          headers['x-lang'] ||
+          headers['X-App-Language'] ||
+          headers['accept-language'] ||
+          headers['Accept-Language']));
+    if (candidate) {
+      const candidateStr = Array.isArray(candidate) ? candidate[0] : String(candidate);
+      return normalizeLanguageCode(candidateStr, sampleText);
+    }
+  }
+  return normalizeLanguageCode(null, sampleText);
+}
+
+/**
+ * Chọn ngẫu nhiên 1 Avatar bằng CSPRNG (`crypto.randomInt`) không bị trùng lặp giữa các thiết bị
+ */
+export function pickRandomAvatar(excludeAvatars?: Iterable<string>): string {
+  const excluded = new Set<string>(excludeAvatars ? Array.from(excludeAvatars) : []);
+  const available = PLAYER_AVATAR_POOL.filter(a => !excluded.has(a));
+  const pool = available.length > 0 ? available : PLAYER_AVATAR_POOL;
+  return pool[crypto.randomInt(0, pool.length)];
+}
+
+/**
+ * Sinh ngẫu nhiên hồ sơ tên như người thật + Avatar bằng CSPRNG (`crypto.randomInt`) theo ngôn ngữ của App
+ */
+export function generateRandomPlayerProfile(options: {
+  lang?: string | null;
+  sampleText?: string | null;
+  excludeNames?: Iterable<string>;
+  excludeAvatars?: Iterable<string>;
+} = {}): { userName: string; avatar: string; lang: SupportedLanguage } {
+  const lang = normalizeLanguageCode(options.lang, options.sampleText);
+  const namePool = HUMAN_NAMES_BY_LANG[lang] || HUMAN_NAMES_BY_LANG.en;
+  const excludedNames = new Set<string>(
+    options.excludeNames ? Array.from(options.excludeNames, n => String(n).trim().toLowerCase()) : []
+  );
+
+  const availableNames = namePool.filter(n => !excludedNames.has(n.toLowerCase()));
+  let chosenName: string;
+  if (availableNames.length > 0) {
+    chosenName = availableNames[crypto.randomInt(0, availableNames.length)];
+  } else {
+    const baseName = namePool[crypto.randomInt(0, namePool.length)];
+    chosenName = `${baseName} ${crypto.randomInt(10, 99)}`;
+  }
+
+  const chosenAvatar = pickRandomAvatar(options.excludeAvatars);
+  return {
+    userName: chosenName.slice(0, MAX_USERNAME_LENGTH),
+    avatar: chosenAvatar,
+    lang
+  };
+}
+
 /**
  * Chuẩn hóa tên người dùng (cắt giới hạn MAX_USERNAME_LENGTH)
  */

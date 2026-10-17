@@ -16,6 +16,7 @@ import {
   decodeBoundedBase64Audio
 } from '../services/audio.service';
 import { AiRemarkCode, ErrorCode, GameMessageCode } from '../config/messages';
+import { pickRandomAvatar } from '../services/auth.service';
 import { GAME_STATES, STATE_LABELS, SOUND_PACKS, AI_REMARKS } from './soundPacks';
 import {
   AudioStoreRecord,
@@ -108,7 +109,7 @@ export class MimicGameSession {
         socketId,
         userId,
         userName,
-        avatar: avatar || (isBot ? '🤖' : '🎧'),
+        avatar: avatar || pickRandomAvatar(),
         role,
         isBot: Boolean(isBot),
         botDifficulty: isBot ? normalizeBotDifficulty(botDifficulty) : null,

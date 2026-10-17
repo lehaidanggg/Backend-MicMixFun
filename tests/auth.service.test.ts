@@ -337,3 +337,42 @@ test('Auth Service — Decision Matrix: verifyFirebaseIdToken malformed/invalid 
     assert.equal(res, null, `[Matrix Fail] ${row.caseName}`);
   }
 });
+
+test('Auth Service — CSPRNG Random Profile & Multi-Language Human Names (No BOT prefix)', async () => {
+  const {
+    generateRandomPlayerProfile,
+    HUMAN_NAMES_BY_LANG,
+    normalizeLanguageCode
+  } = await import('../src/services/auth.service');
+
+  assert.equal(normalizeLanguageCode('vi-VN,vi;q=0.9,en-US;q=0.8'), 'vi');
+  assert.equal(normalizeLanguageCode('en_US'), 'en');
+  assert.equal(normalizeLanguageCode('ja-JP'), 'ja');
+  assert.equal(normalizeLanguageCode('ko-KR'), 'ko');
+
+  // Verify no name in any language pool contains "Bot"
+  for (const [langKey, pool] of Object.entries(HUMAN_NAMES_BY_LANG)) {
+    for (const name of pool) {
+      assert.equal(
+        /\bbot\b/i.test(name),
+        false,
+        `Language pool "${langKey}" must not contain "Bot" in name "${name}"`
+      );
+    }
+  }
+
+  // Simulate 20 devices generating random profiles in Vietnamese & English: must not all be identical
+  const viNames = new Set<string>();
+  const viAvatars = new Set<string>();
+  for (let i = 0; i < 20; i++) {
+    const p = generateRandomPlayerProfile({ lang: 'vi' });
+    assert.equal(p.lang, 'vi');
+    assert.ok(HUMAN_NAMES_BY_LANG.vi.includes(p.userName), `Expected VI human name, got ${p.userName}`);
+    assert.notEqual(p.avatar, '🤖');
+    viNames.add(p.userName);
+    viAvatars.add(p.avatar);
+  }
+  assert.ok(viNames.size > 5, 'CSPRNG must produce diverse Vietnamese names across devices');
+  assert.ok(viAvatars.size > 5, 'CSPRNG must produce diverse avatars across devices');
+});
+

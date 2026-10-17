@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Server, Socket } from 'socket.io';
 import {
   ROOM_CLEANUP_DELAY_MS,
@@ -14,7 +15,15 @@ import {
   MAX_CHAT_HISTORY_SIZE
 } from '../config/constants';
 import { ErrorCode, RoomCloseReasonCode, SystemMessageCode } from '../config/messages';
-import { challengeNonces, ipConnectionCounts, extractClientIp } from './auth.service';
+import {
+  challengeNonces,
+  ipConnectionCounts,
+  extractClientIp,
+  extractClientLanguage,
+  generateRandomPlayerProfile,
+  normalizeLanguageCode,
+  SupportedLanguage
+} from './auth.service';
 import { normalizeBotDifficulty } from './audio.service';
 import { MimicGameSession } from '../game/MimicGameSession';
 import { AuthenticatedSocket, BotDifficulty, GameModeType, MatchmakingQueueEntry, RoomData, RoomMember } from '../types';
@@ -50,17 +59,17 @@ export function cancelMatchmakingForSocket(socketId: string): MatchmakingQueueEn
 }
 
 export const BOT_PRESETS: Array<{ name: string; avatar: string }> = [
-  { name: 'Bot Alpha', avatar: '🤖' },
-  { name: 'Bot Meow', avatar: '🐱' },
-  { name: 'Bot Shib', avatar: '🐶' },
-  { name: 'Bot Cyber', avatar: '👾' },
-  { name: 'Bot DJ', avatar: '🎧' },
-  { name: 'Bot Panda', avatar: '🐼' },
-  { name: 'Bot Fox', avatar: '🦊' },
-  { name: 'Bot Dino', avatar: '🦖' },
-  { name: 'Bot Ninja', avatar: '🥷' },
-  { name: 'Bot Duck', avatar: '🦆' },
-  { name: 'Bot Astro', avatar: '🧑‍🚀' }
+  { name: 'Minh Tuấn', avatar: '🎧' },
+  { name: 'Bảo Ngọc', avatar: '🐱' },
+  { name: 'Hoàng Nam', avatar: '🐶' },
+  { name: 'Khánh Linh', avatar: '🦊' },
+  { name: 'Alex Carter', avatar: '🎸' },
+  { name: 'Mia Evans', avatar: '🐼' },
+  { name: 'Liam Walker', avatar: '🦁' },
+  { name: 'Chloe Reed', avatar: '🦄' },
+  { name: 'Noah Brooks', avatar: '🦖' },
+  { name: 'Emma Hayes', avatar: '🐧' },
+  { name: 'Lucas Gray', avatar: '🚀' }
 ];
 
 export function isBotMember(member?: Partial<RoomMember> | null): boolean {
@@ -87,11 +96,50 @@ export function countBotMembers(room?: RoomData | null): number {
 }
 
 /**
- * Thêm 1 AI Bot vào phòng chơi
+ * Xác định ngôn ngữ của phòng dựa trên tham số truyền vào, cấu hình phòng, ngôn ngữ của Host hoặc tên người chơi trong phòng
+ */
+export function resolveRoomLanguage(room: RoomData, explicitLang?: string | null): SupportedLanguage {
+  if (explicitLang && String(explicitLang).trim()) {
+    const resolved = normalizeLanguageCode(explicitLang, room.name);
+    room.lang = resolved;
+    return resolved;
+  }
+  if (room.lang) {
+    return normalizeLanguageCode(room.lang, room.name);
+  }
+
+  let sampleHumanNames = room.name || '';
+  for (const m of room.members.values()) {
+    if (!isBotMember(m)) {
+      if (m.lang) {
+        const resolved = normalizeLanguageCode(m.lang, m.userName);
+        room.lang = resolved;
+        return resolved;
+      }
+      sampleHumanNames += ` ${m.userName || ''}`;
+    }
+  }
+
+  if (ioInstance && room.hostId) {
+    const hostSocket = ioInstance.sockets?.sockets?.get(room.hostId);
+    if (hostSocket) {
+      const fromHost = extractClientLanguage(hostSocket, null, sampleHumanNames);
+      room.lang = fromHost;
+      return fromHost;
+    }
+  }
+
+  const fallback = normalizeLanguageCode(null, sampleHumanNames);
+  room.lang = fallback;
+  return fallback;
+}
+
+/**
+ * Thêm 1 AI Bot vào phòng chơi với tên như người thật theo ngôn ngữ App và Avatar ngẫu nhiên
  */
 export function addBotToRoom(
   roomId: string,
-  options: { difficulty?: BotDifficulty | string; botName?: string; avatar?: string } = {}
+  options: { difficulty?: BotDifficulty | string; botName?: string; avatar?: string; lang?: string } = {}
 ): {
   success: boolean;
   code?: ErrorCode;
@@ -130,26 +178,35 @@ export function addBotToRoom(
   }
 
   const difficulty: BotDifficulty = normalizeBotDifficulty(options.difficulty);
+  const roomLang = resolveRoomLanguage(room, options.lang);
 
-  const existingNames = new Set(Array.from(room.members.values()).map(m => m.userName));
-  const availablePreset =
-    BOT_PRESETS.find(p => !existingNames.has(p.name)) ||
-    BOT_PRESETS[room.members.size % BOT_PRESETS.length];
+  const existingNames = new Set<string>();
+  const existingAvatars = new Set<string>();
+  for (const m of room.members.values()) {
+    if (m.userName) existingNames.add(m.userName);
+    if (m.avatar) existingAvatars.add(m.avatar);
+  }
 
-  const uniqueSuffix = Math.random().toString(36).substring(2, 7);
+  const randomProfile = generateRandomPlayerProfile({
+    lang: roomLang,
+    sampleText: room.name,
+    excludeNames: existingNames,
+    excludeAvatars: existingAvatars
+  });
+
+  const uniqueSuffix = crypto.randomBytes(3).toString('hex').slice(0, 5);
   const botSocketId = `bot_${uniqueSuffix}`;
   const botName = options.botName
     ? String(options.botName).trim().slice(0, 24)
-    : existingNames.has(availablePreset.name)
-      ? `${availablePreset.name} #${room.members.size}`
-      : availablePreset.name;
-  const botAvatar = options.avatar || availablePreset.avatar || '🤖';
+    : randomProfile.userName;
+  const botAvatar = options.avatar || randomProfile.avatar;
 
   const botMember: RoomMember = {
     socketId: botSocketId,
     userId: botSocketId,
     userName: botName,
     avatar: botAvatar,
+    lang: roomLang,
     role: 'PLAYER',
     isReady: true,
     isBot: true,
@@ -185,7 +242,7 @@ export function addBotToRoom(
     ioInstance.to(targetId).emit('user_joined', payload);
   }
 
-  console.log(`[Bot] 🤖 Đã thêm ${botName} (${botSocketId} - ${difficulty}) vào phòng: ${targetId}`);
+  console.log(`[Bot] 🤖 Đã thêm ${botName} (${botSocketId} - ${difficulty} - lang=${roomLang}) vào phòng: ${targetId}`);
   return {
     success: true,
     bot: botMember,
@@ -273,6 +330,7 @@ export function fillRoomWithBots(
     botCount?: number;
     minPlayers?: number;
     difficulty?: BotDifficulty | string;
+    lang?: string;
   } = {}
 ): {
   botsAdded: number;
@@ -286,7 +344,12 @@ export function fillRoomWithBots(
     return { botsAdded: 0, addedBots: [], totalPlayers: 0, members: [] };
   }
 
+  if (options.lang) {
+    resolveRoomLanguage(room, options.lang);
+  }
+
   const difficultiesCycle: BotDifficulty[] = ['NORMAL', 'EASY', 'HARD'];
+  const startDiffOffset = crypto.randomInt(0, difficultiesCycle.length);
   const addedBots: RoomMember[] = [];
 
   let countToAdd = 0;
@@ -303,9 +366,9 @@ export function fillRoomWithBots(
   for (let i = 0; i < countToAdd; i++) {
     const diff: BotDifficulty = options.difficulty
       ? normalizeBotDifficulty(options.difficulty)
-      : difficultiesCycle[i % difficultiesCycle.length];
+      : difficultiesCycle[(startDiffOffset + i) % difficultiesCycle.length];
 
-    const res = addBotToRoom(targetId, { difficulty: diff });
+    const res = addBotToRoom(targetId, { difficulty: diff, lang: options.lang || room.lang });
     if (!res.success || !res.bot) break;
     addedBots.push(res.bot);
   }
@@ -606,6 +669,7 @@ export function finalizeRoomMatchmakingAndStart(
     difficulty?: BotDifficulty;
     acceptWaitMs?: number;
     requireAccept?: boolean;
+    lang?: string;
   } = {}
 ): {
   botsAdded: number;
@@ -618,6 +682,10 @@ export function finalizeRoomMatchmakingAndStart(
   const room = rooms.get(targetId);
   if (!room) {
     return { botsAdded: 0, autoStarted: false, acceptedCount: 0, totalPlayers: 0, allAccepted: false };
+  }
+
+  if (options.lang) {
+    resolveRoomLanguage(room, options.lang);
   }
 
   clearRoomMatchmakingTimers(room);
@@ -643,7 +711,8 @@ export function finalizeRoomMatchmakingAndStart(
   if (room.members.size < targetPlayers) {
     const filled = fillRoomWithBots(targetId, {
       minPlayers: targetPlayers,
-      difficulty: options.difficulty
+      difficulty: options.difficulty,
+      lang: options.lang || room.lang
     });
     botsAdded = filled.botsAdded;
   }

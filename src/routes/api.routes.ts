@@ -24,8 +24,12 @@ import { rooms, gameSessions, matchmakingQueue } from '../services/room.service'
 import {
   challengeNonces,
   ipConnectionCounts,
+  PLAYER_AVATAR_POOL,
   sanitizeUserName,
   extractClientIp,
+  extractClientLanguage,
+  generateRandomPlayerProfile,
+  pickRandomAvatar,
   computeClientFingerprint,
   createAuthChallenge,
   verifyAppChallenge,
@@ -49,10 +53,44 @@ export function registerApiRoutes(app: Express, io: Server): void {
     });
   });
 
+  // 0b. Sinh ngẫu nhiên Tên người thật (theo ngôn ngữ App) + Avatar (CSPRNG không trùng lặp giữa các thiết bị)
+  const handleRandomProfile = (req: Request, res: Response): void => {
+    const body = (req.body || {}) as Record<string, any>;
+    const rawLang =
+      body.lang ||
+      body.language ||
+      body.locale ||
+      (typeof req.query.lang === 'string' ? req.query.lang : undefined) ||
+      (typeof req.query.language === 'string' ? req.query.language : undefined);
+    const clientLang = extractClientLanguage(req, rawLang);
+    const profile = generateRandomPlayerProfile({ lang: clientLang });
+    res.json({
+      success: true,
+      userName: profile.userName,
+      avatar: profile.avatar,
+      lang: profile.lang,
+      avatars: PLAYER_AVATAR_POOL
+    });
+  };
+  app.get('/api/profile/random', handleRandomProfile);
+  app.post('/api/profile/random', handleRandomProfile);
+
   // 1. Xác thực qua Firebase Anonymous Authentication (Đổi Firebase ID Token lấy Session Token gắn Fingerprint)
   app.post('/api/auth/firebase', async (req: Request, res: Response) => {
     try {
-      const { firebaseIdToken, userName, avatar, deviceId, nonce, timestamp, appSignature } = req.body || {};
+      const {
+        firebaseIdToken,
+        userName,
+        avatar,
+        lang,
+        language,
+        locale,
+        randomProfile,
+        deviceId,
+        nonce,
+        timestamp,
+        appSignature
+      } = req.body || {};
       const rawToken = firebaseIdToken || req.headers.authorization;
       const fbDecoded = await verifyFirebaseIdToken(rawToken);
 
@@ -89,8 +127,13 @@ export function registerApiRoutes(app: Express, io: Server): void {
         userAgent: req.headers['user-agent'],
         deviceId
       });
-      const cleanName = sanitizeUserName(userName, fbDecoded.firebaseUid);
-      const cleanAvatar = avatar || '🎧';
+      const clientLang = extractClientLanguage(req, lang || language || locale, userName);
+      const randProf = generateRandomPlayerProfile({ lang: clientLang, sampleText: userName });
+      const rawTrimmedName = !randomProfile && userName ? String(userName).trim() : '';
+      const cleanName = rawTrimmedName
+        ? sanitizeUserName(rawTrimmedName, fbDecoded.firebaseUid)
+        : randProf.userName;
+      const cleanAvatar = !randomProfile && avatar ? String(avatar).trim() : randProf.avatar;
 
       const issued = issueAuthToken({
         userId: fbDecoded.uid,
@@ -108,11 +151,13 @@ export function registerApiRoutes(app: Express, io: Server): void {
         provider: issued.payload.provider,
         authToken: issued.token,
         expiresAt: issued.payload.exp,
+        lang: clientLang,
         user: {
           userId: issued.payload.uid,
           firebaseUid: fbDecoded.firebaseUid,
           userName: issued.payload.name,
-          avatar: issued.payload.avatar
+          avatar: issued.payload.avatar,
+          lang: clientLang
         }
       });
     } catch {
@@ -126,7 +171,17 @@ export function registerApiRoutes(app: Express, io: Server): void {
 
   // 2. Cấp mới hoặc làm mới Guest Session Token (Hỗ trợ kèm firebaseIdToken & Fingerprint Binding)
   app.post('/api/auth/guest', async (req: Request, res: Response) => {
-    const { userName, avatar, authToken, firebaseIdToken, deviceId } = req.body || {};
+    const {
+      userName,
+      avatar,
+      lang,
+      language,
+      locale,
+      randomProfile,
+      authToken,
+      firebaseIdToken,
+      deviceId
+    } = req.body || {};
     const clientIp = extractClientIp(req);
     const fp = computeClientFingerprint({
       ip: clientIp,
@@ -143,8 +198,15 @@ export function registerApiRoutes(app: Express, io: Server): void {
     const userId = fbDecoded
       ? fbDecoded.uid
       : (existing ? existing.uid : generateSecureUserId());
-    const cleanName = sanitizeUserName(userName || (existing && existing.name), userId);
-    const cleanAvatar = avatar || (existing && existing.avatar) || '🎧';
+    const clientLang = extractClientLanguage(req, lang || language || locale, userName || (existing && existing.name));
+    const randProf = generateRandomPlayerProfile({ lang: clientLang });
+
+    const candidateName = !randomProfile ? String(userName || (existing && existing.name) || '').trim() : '';
+    const cleanName = candidateName ? sanitizeUserName(candidateName, userId) : randProf.userName;
+    const cleanAvatar =
+      !randomProfile && (avatar || (existing && existing.avatar))
+        ? String(avatar || (existing && existing.avatar)).trim()
+        : randProf.avatar || pickRandomAvatar();
 
     const issued = issueAuthToken({
       userId,
@@ -162,11 +224,13 @@ export function registerApiRoutes(app: Express, io: Server): void {
       provider: issued.payload.provider,
       authToken: issued.token,
       expiresAt: issued.payload.exp,
+      lang: clientLang,
       user: {
         userId: issued.payload.uid,
         firebaseUid: issued.payload.fbUid,
         userName: issued.payload.name,
-        avatar: issued.payload.avatar
+        avatar: issued.payload.avatar,
+        lang: clientLang
       }
     });
   });
@@ -183,12 +247,13 @@ export function registerApiRoutes(app: Express, io: Server): void {
     if (!decoded) {
       const fb = await verifyFirebaseIdToken(token);
       if (fb) {
+        const randProf = generateRandomPlayerProfile({ lang: extractClientLanguage(req) });
         decoded = {
           uid: fb.uid,
           fbUid: fb.firebaseUid,
           provider: 'firebase_anonymous',
-          name: `User_${fb.firebaseUid.slice(0, 4)}`,
-          avatar: '🎧',
+          name: randProf.userName,
+          avatar: randProf.avatar,
           exp: fb.exp
         };
       }

@@ -173,6 +173,7 @@ export interface RoomMember {
   firebaseUid?: string | null;
   userName: string;
   avatar: string;
+  lang?: string;
   role?: UserRole;
   isReady?: boolean;
   isAccepted?: boolean;
@@ -198,6 +199,7 @@ export type GameModeType = 'QUICK_MATCH' | 'RACE_1V1' | 'CUSTOM_ROOM';
 export interface RoomData {
   id: string;
   name: string;
+  lang?: string;
   createdAt: number;
   lastActivityAt?: number;
   hostId: string;
@@ -226,6 +228,7 @@ export interface MatchmakingQueueEntry {
   userId: string;
   userName: string;
   avatar: string;
+  lang?: string;
   mode?: GameModeType;
   targetPlayers?: number;
   botCount: number;
@@ -245,6 +248,7 @@ export interface MatchmakingQueueEntry {
 export interface SocketSessionState {
   currentRoomId: string | null;
   currentUser: RoomMember;
+  lang?: string;
   isSearchingMatch?: boolean;
 }
 

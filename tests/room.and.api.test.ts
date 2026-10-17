@@ -261,5 +261,43 @@ test('Resource Guardrails — Zero-Residual Leak & Bounded Audio Decode Invarian
   leaveCurrentRoom(mockSock, qmRoomId);
   assert.equal(rooms.has(qmRoomId), false, 'QUICK_MATCH room must be destroyed immediately (0ms) when last human leaves');
   assert.equal(gameSessions.has(qmRoomId), false, 'QUICK_MATCH gameSession must not leak after last human leaves');
+
+  // 3. AI Bots phải được sinh tên người thật theo ngôn ngữ phòng (vi / en) và không có chữ "Bot" hay icon 🤖
+  const { addBotToRoom, fillRoomWithBots } = await import('../src/services/room.service');
+  const { HUMAN_NAMES_BY_LANG } = await import('../src/services/auth.service');
+  const viRoomId = 'VI_BOT_TEST_ROOM';
+  rooms.set(viRoomId, {
+    id: viRoomId,
+    name: 'Phòng Tiếng Việt',
+    createdAt: Date.now(),
+    lastActivityAt: Date.now(),
+    hostId: 'sock_vi_host',
+    hostUserId: 'u_vi_host',
+    mode: 'CUSTOM_ROOM',
+    lang: 'vi',
+    targetPlayers: 6,
+    members: new Map([
+      ['sock_vi_host', { socketId: 'sock_vi_host', userId: 'u_vi_host', userName: 'Minh Khôi', avatar: '🦊', role: 'HOST', isReady: true, lang: 'vi' }]
+    ]),
+    messages: [],
+    cleanupTimer: null
+  });
+
+  const fillRes = fillRoomWithBots(viRoomId, { minPlayers: 4, lang: 'vi' });
+  assert.equal(fillRes.botsAdded, 3);
+  const viBots = fillRes.members.filter(m => m.isBot);
+  assert.equal(viBots.length, 3);
+  for (const bot of viBots) {
+    assert.equal(/\bbot\b/i.test(bot.userName), false, `Bot name "${bot.userName}" must not contain "Bot"`);
+    assert.ok(HUMAN_NAMES_BY_LANG.vi.includes(bot.userName), `Bot name "${bot.userName}" should be a Vietnamese human name`);
+    assert.notEqual(bot.avatar, '🤖', 'Bot avatar must look like a real player avatar, not 🤖');
+  }
+  const { removeBotFromRoom } = await import('../src/services/room.service');
+  removeBotFromRoom(viRoomId, viBots[0].socketId);
+  const singleEnBot = addBotToRoom(viRoomId, { lang: 'en' });
+  assert.equal(singleEnBot.success, true);
+  assert.ok(singleEnBot.bot && HUMAN_NAMES_BY_LANG.en.includes(singleEnBot.bot.userName));
+  destroyRoomData(viRoomId);
 });
+
 
