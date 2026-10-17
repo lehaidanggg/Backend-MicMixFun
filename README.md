@@ -35,12 +35,13 @@ backend/
 ├── sounds/
 │   └── catalog.json                # Metadata (id, pack, duration, sha256) của 251 file .mp3 trên Cloudflare R2
 ├── tests/                          # Bộ Unit & Integration Tests (Auth, Audio, Game Session, Room/API, Socket)
-├── API_DOCS.md                     # Tài liệu chi tiết Tính năng, REST API & Socket.IO Events cho Client
-├── GAME_FLOW_DIAGRAMS.html         # Sơ đồ trực quan đầy đủ luồng 4 Chế Độ Chơi, 9 State Gameplay & AI Bot 1:1
-├── GAME_DESIGN_MODES.html          # Bản thiết kế chi tiết 4 Chế Độ Chơi & Smart Matchmaking Engine
-├── CLIENT_OPTIMIZATION_GUIDE.md    # Hướng dẫn tối ưu tải, streaming 4KB & bảo mật cho Client (Android / iOS / Web)
-├── ENUM_LOCALIZATION_GUIDE.md      # Bảng tra cứu mã Enum đa ngôn ngữ (VI / EN)
-├── BOT_SOUND_GENERATION_PLAN.md    # Thiết kế cơ chế tổng hợp & biến đổi âm thanh AI Bot theo 3 độ khó
+├── docs/                           # Thư mục tài liệu & sơ đồ thiết kế cho Client (Android / iOS / Web)
+│   ├── API_DOCS.md                 # Tài liệu chi tiết Tính năng, REST API & Socket.IO Events cho Client
+│   ├── CLIENT_OPTIMIZATION_GUIDE.md# Hướng dẫn tối ưu tải, streaming 4KB & bảo mật cho Client
+│   ├── ENUM_LOCALIZATION_GUIDE.md  # Bảng tra cứu mã Enum đa ngôn ngữ (VI / EN)
+│   ├── BOT_SOUND_GENERATION_PLAN.md# Thiết kế cơ chế tổng hợp & biến đổi âm thanh AI Bot theo 3 độ khó
+│   ├── GAME_FLOW_DIAGRAMS.html     # Sơ đồ trực quan đầy đủ luồng 4 Chế Độ Chơi, 9 State Gameplay & AI Bot 1:1
+│   └── GAME_DESIGN_MODES.html      # Bản thiết kế chi tiết 4 Chế Độ Chơi & Smart Matchmaking Engine
 ├── AGENTS.md                       # Quy tắc bất biến về kiến trúc, vòng đời phòng & hiệu năng bộ nhớ (Guardrails)
 ├── Dockerfile                      # Cấu hình đóng gói Docker container (node:20-alpine) cho Railway
 ├── tsconfig.json                   # Cấu hình biên dịch TypeScript
@@ -85,7 +86,7 @@ npm test         # Chạy toàn bộ bộ kiểm thử tự động
 ```
 
 ### Các đường dẫn chính:
-* **Tài liệu tích hợp đầy đủ cho Client**: Xem chi tiết tại **[API_DOCS.md](./API_DOCS.md)**
+* **Tài liệu tích hợp đầy đủ cho Client**: Xem chi tiết tại **[docs/API_DOCS.md](./docs/API_DOCS.md)**
 * **Production Server (Railway)**: `https://micmixfun.up.railway.app`
 * **Health Check API**: `GET https://micmixfun.up.railway.app/api/health`
 * **Cloudflare R2 Audio CDN**: `https://pub-2ec3726948d14e47babdc7ea12268a78.r2.dev`

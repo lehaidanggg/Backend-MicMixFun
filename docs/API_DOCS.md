@@ -1367,7 +1367,7 @@ Client cũng có thể gọi trực tiếp **`GET /api/enums`** (hoặc **`GET /
 > - Bản thiết kế trực quan 4 Chế Độ Chơi & Luồng Matchmaking: [`GAME_FLOW_DIAGRAMS.html`](./GAME_FLOW_DIAGRAMS.html) & [`GAME_DESIGN_MODES.html`](./GAME_DESIGN_MODES.html)
 > - Bảng tra cứu Enum đầy đủ: [`ENUM_LOCALIZATION_GUIDE.md`](./ENUM_LOCALIZATION_GUIDE.md)
 > - Thiết kế tổng hợp âm thanh AI Bot: [`BOT_SOUND_GENERATION_PLAN.md`](./BOT_SOUND_GENERATION_PLAN.md)
-> - Quy tắc kiến trúc & hiệu năng (Guardrails): [`AGENTS.md`](./AGENTS.md)
+> - Quy tắc kiến trúc & hiệu năng (Guardrails): [`AGENTS.md`](../AGENTS.md)
 
 ### 12.1. Tổng quan 4 Chế Độ Chơi & Smart Matchmaking Engine (`quick_match` vs `race_1v1` vs `CUSTOM_ROOM`)
 
